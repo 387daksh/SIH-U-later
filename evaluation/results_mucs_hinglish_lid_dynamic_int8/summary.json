@@ -1,0 +1,207 @@
+{
+  "overall": {
+    "samples": 3135,
+    "english_route_rate": 0.0009569377990430622,
+    "indic_route_rate": 0.999043062200957,
+    "mean_english_score": 0.0011308634820070094,
+    "mean_hindi_score": 0.943429151429918,
+    "lid_p50_ms": 123.13610001001507,
+    "lid_p95_ms": 249.31521000689807,
+    "audio_hours": 5.651144999999654,
+    "dominant_language_samples": 2938,
+    "dominant_group_agreement": 0.8601089176310415,
+    "english_score_spearman": 0.3517452655767507
+  },
+  "by_english_ratio": {
+    "0-5": {
+      "samples": 604,
+      "english_route_rate": 0.0,
+      "indic_route_rate": 1.0,
+      "mean_english_score": 0.0005952125827332604,
+      "mean_hindi_score": 0.9584677951485197,
+      "lid_p50_ms": 118.65404999116436,
+      "lid_p95_ms": 322.0544699928724
+    },
+    "5-10": {
+      "samples": 216,
+      "english_route_rate": 0.0,
+      "indic_route_rate": 1.0,
+      "mean_english_score": 0.00023284252258848491,
+      "mean_hindi_score": 0.9801057076374827,
+      "lid_p50_ms": 136.12355003715493,
+      "lid_p95_ms": 360.2791250013979
+    },
+    "10-15": {
+      "samples": 222,
+      "english_route_rate": 0.0045045045045045045,
+      "indic_route_rate": 0.9954954954954955,
+      "mean_english_score": 0.00220398822160938,
+      "mean_hindi_score": 0.9713172092194762,
+      "lid_p50_ms": 124.1870999801904,
+      "lid_p95_ms": 243.78427998744877
+    },
+    "15-20": {
+      "samples": 307,
+      "english_route_rate": 0.003257328990228013,
+      "indic_route_rate": 0.996742671009772,
+      "mean_english_score": 0.0014994205946299772,
+      "mean_hindi_score": 0.9684946051516634,
+      "lid_p50_ms": 122.89589998545125,
+      "lid_p95_ms": 215.9766800061334
+    },
+    "20-25": {
+      "samples": 257,
+      "english_route_rate": 0.0,
+      "indic_route_rate": 1.0,
+      "mean_english_score": 2.9266818253449593e-05,
+      "mean_hindi_score": 0.9703391512660201,
+      "lid_p50_ms": 131.25390000641346,
+      "lid_p95_ms": 213.29036001116017
+    },
+    "25-30": {
+      "samples": 227,
+      "english_route_rate": 0.0,
+      "indic_route_rate": 1.0,
+      "mean_english_score": 4.736911447460597e-05,
+      "mean_hindi_score": 0.9699920903612339,
+      "lid_p50_ms": 122.85729998257011,
+      "lid_p95_ms": 224.918390030507
+    },
+    "30-35": {
+      "samples": 237,
+      "english_route_rate": 0.0,
+      "indic_route_rate": 1.0,
+      "mean_english_score": 0.00021659663144772554,
+      "mean_hindi_score": 0.9412816908870694,
+      "lid_p50_ms": 126.24020001385361,
+      "lid_p95_ms": 212.62136000441384
+    },
+    "35-40": {
+      "samples": 243,
+      "english_route_rate": 0.0,
+      "indic_route_rate": 1.0,
+      "mean_english_score": 0.0008499445116655675,
+      "mean_hindi_score": 0.9393564318824146,
+      "lid_p50_ms": 122.55349999759346,
+      "lid_p95_ms": 213.99399999645533
+    },
+    "40-45": {
+      "samples": 148,
+      "english_route_rate": 0.0,
+      "indic_route_rate": 1.0,
+      "mean_english_score": 0.00016227525593752047,
+      "mean_hindi_score": 0.9509994375544626,
+      "lid_p50_ms": 132.49620000715367,
+      "lid_p95_ms": 233.13779999734837
+    },
+    "45-50": {
+      "samples": 264,
+      "english_route_rate": 0.0,
+      "indic_route_rate": 1.0,
+      "mean_english_score": 0.00027636334681678727,
+      "mean_hindi_score": 0.9279789871282198,
+      "lid_p50_ms": 119.62729998049326,
+      "lid_p95_ms": 206.25969001848716
+    },
+    "50-55": {
+      "samples": 46,
+      "english_route_rate": 0.0,
+      "indic_route_rate": 1.0,
+      "mean_english_score": 0.0007841554317162617,
+      "mean_hindi_score": 0.9691827200029207,
+      "lid_p50_ms": 160.8167000231333,
+      "lid_p95_ms": 256.35959998180624
+    },
+    "55-60": {
+      "samples": 140,
+      "english_route_rate": 0.0,
+      "indic_route_rate": 1.0,
+      "mean_english_score": 0.0009676349846212724,
+      "mean_hindi_score": 0.856628868421207,
+      "lid_p50_ms": 109.35780001454987,
+      "lid_p95_ms": 189.6571200020843
+    },
+    "60-65": {
+      "samples": 50,
+      "english_route_rate": 0.0,
+      "indic_route_rate": 1.0,
+      "mean_english_score": 0.00027003417489565503,
+      "mean_hindi_score": 0.9099582420289516,
+      "lid_p50_ms": 117.18200001632795,
+      "lid_p95_ms": 235.2541700005531
+    },
+    "65-70": {
+      "samples": 58,
+      "english_route_rate": 0.0,
+      "indic_route_rate": 1.0,
+      "mean_english_score": 0.0026609365697028713,
+      "mean_hindi_score": 0.7870477428338651,
+      "lid_p50_ms": 101.93360000266694,
+      "lid_p95_ms": 211.62993502512103
+    },
+    "70-75": {
+      "samples": 56,
+      "english_route_rate": 0.0,
+      "indic_route_rate": 1.0,
+      "mean_english_score": 0.0006533429682593272,
+      "mean_hindi_score": 0.7721937445956948,
+      "lid_p50_ms": 107.48519998742267,
+      "lid_p95_ms": 205.36199999332894
+    },
+    "75-80": {
+      "samples": 19,
+      "english_route_rate": 0.0,
+      "indic_route_rate": 1.0,
+      "mean_english_score": 0.0007688094989371244,
+      "mean_hindi_score": 0.8896913387273487,
+      "lid_p50_ms": 128.01099999342114,
+      "lid_p95_ms": 350.79853002680466
+    },
+    "80-85": {
+      "samples": 10,
+      "english_route_rate": 0.0,
+      "indic_route_rate": 1.0,
+      "mean_english_score": 0.00015551688385571084,
+      "mean_hindi_score": 0.8879951238632202,
+      "lid_p50_ms": 204.0347500005737,
+      "lid_p95_ms": 249.06098500068762
+    },
+    "85-90": {
+      "samples": 10,
+      "english_route_rate": 0.1,
+      "indic_route_rate": 0.9,
+      "mean_english_score": 0.0832226003049982,
+      "mean_hindi_score": 0.7660151029005646,
+      "lid_p50_ms": 120.96410000231117,
+      "lid_p95_ms": 298.6366199795156
+    },
+    "95-100": {
+      "samples": 21,
+      "english_route_rate": 0.0,
+      "indic_route_rate": 1.0,
+      "mean_english_score": 0.02801782603361162,
+      "mean_hindi_score": 0.7181628411635756,
+      "lid_p50_ms": 132.83279997995123,
+      "lid_p95_ms": 254.72539995098487
+    }
+  },
+  "top_labels": {
+    "hindi": 3029,
+    "telugu": 29,
+    "bengali": 21,
+    "gujarati": 20,
+    "kannada": 12,
+    "marathi": 11,
+    "tamil": 6,
+    "malayalam": 4,
+    "english": 3
+  },
+  "invalid_source_rows_excluded": 1,
+  "runtime": {
+    "load_seconds": 3.2722302000038326,
+    "wall_seconds": 443.2926676000352,
+    "rss_before_load_mib": 576.4921875,
+    "rss_after_load_mib": 793.09375,
+    "peak_process_mib": 2169.4921875
+  }
+}

@@ -36,8 +36,8 @@ def find_input_device():
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model-root", default="models")
-    parser.add_argument("--indic-dir")
+    parser.add_argument("--model-root", default="deployment_models/common")
+    parser.add_argument("--indic-dir", default="deployment_models/indic/fp32")
     parser.add_argument("--lid-only", action="store_true", help="load and test only VoxLingua LID")
     args = parser.parse_args()
 

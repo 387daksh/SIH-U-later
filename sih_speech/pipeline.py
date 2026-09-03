@@ -2,13 +2,13 @@
 
 import argparse
 import csv
-import importlib.util
 import json
 import os
 import re
 import time
 from collections import defaultdict
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 import soundfile as sf
@@ -36,11 +36,28 @@ def restrict_log_probabilities(log_probabilities, indices):
 
 
 def load_audio(path, sample_rate=16000):
-    audio, rate = sf.read(path, dtype="float32", always_2d=True)
+    source = path
+    if isinstance(path, (str, os.PathLike)):
+        source = Path(path)
+        if not source.is_file():
+            raise FileNotFoundError(f"Audio file not found: {source}")
+    audio, rate = sf.read(source, dtype="float32", always_2d=True)
     audio = audio.mean(axis=1)
+    if not len(audio) or not np.isfinite(audio).all():
+        raise ValueError(f"Audio is empty or contains non-finite samples: {path}")
     if rate != sample_rate:
         audio = resample_poly(audio, sample_rate, rate).astype("float32")
+    if len(audio) < sample_rate // 10:
+        raise ValueError(f"Audio is shorter than 100 ms: {path}")
+    if float(np.max(np.abs(audio))) <= 1e-7:
+        raise ValueError(f"Audio contains digital silence: {path}")
     return torch.from_numpy(audio)
+
+
+def dynamic_int8(model, device):
+    if device != "cpu":
+        raise ValueError("PyTorch dynamic INT8 is supported only for CPU in this pipeline")
+    return torch.ao.quantization.quantize_dynamic(model, {nn.Linear}, dtype=torch.qint8)
 
 
 def download_models(root):
@@ -143,10 +160,13 @@ def read_vox_indices(model_dir):
 class VoxLinguaCoarseLID:
     """Original 107-way model, restricted to English and its eight covered target Indic labels."""
 
-    def __init__(self, model_dir, device):
+    def __init__(self, model_dir, device, quantize=False):
         self.device = device
         self.extractor = FrozenECAPA(model_dir, device)
         self.classifier = load_vox_classifier(model_dir, device)
+        if quantize:
+            self.extractor = dynamic_int8(self.extractor, device)
+            self.classifier = dynamic_int8(self.classifier, device)
         indices = read_vox_indices(model_dir)
         self.labels = ["english", *(name for name in INDIC_CODES if name != "odia")]
         codes = ["en", *(INDIC_CODES[name] for name in self.labels[1:])]
@@ -171,21 +191,68 @@ class VoxLinguaCoarseLID:
         }
 
 
-def load_indic_model(model_dir):
-    import onnxruntime as ort
+class IndicCTCModel:
+    """Minimal loader for the only IndicConformer path used by this pipeline."""
 
-    module_path = Path(model_dir) / "model_onnx.py"
-    spec = importlib.util.spec_from_file_location("local_indic_conformer", module_path)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    has_ort_cuda = "CUDAExecutionProvider" in ort.get_available_providers()
-    cuda_available = module.torch.cuda.is_available
-    if not has_ort_cuda:
-        module.torch.cuda.is_available = lambda: False
-    try:
-        return module.IndicASRModel(module.IndicASRConfig(ts_folder=str(Path(model_dir).resolve())))
-    finally:
-        module.torch.cuda.is_available = cuda_available
+    def __init__(self, model_dir):
+        import onnxruntime as ort
+
+        root = Path(model_dir).resolve()
+        assets = root / "assets"
+        required = [
+            root / "config.json",
+            assets / "preprocessor.ts",
+            assets / "encoder.onnx",
+            assets / "ctc_decoder.onnx",
+            assets / "vocab.json",
+            assets / "language_masks.json",
+        ]
+        if missing := [str(path) for path in required if not path.is_file()]:
+            raise FileNotFoundError(f"Incomplete IndicConformer directory; missing: {missing}")
+
+        config = json.loads((root / "config.json").read_text(encoding="utf-8"))
+        available = ort.get_available_providers()
+        use_cuda = torch.cuda.is_available() and "CUDAExecutionProvider" in available
+        providers = ["CUDAExecutionProvider", "CPUExecutionProvider"] if use_cuda else ["CPUExecutionProvider"]
+        self.d = torch.device("cuda" if use_cuda else "cpu")
+        self.config = SimpleNamespace(BLANK_ID=int(config.get("BLANK_ID", 256)))
+        self.models = {
+            "preprocessor": torch.jit.load(str(assets / "preprocessor.ts"), map_location=self.d),
+            "encoder": ort.InferenceSession(str(assets / "encoder.onnx"), providers=providers),
+            "ctc_decoder": ort.InferenceSession(str(assets / "ctc_decoder.onnx"), providers=providers),
+        }
+        self.vocab = json.loads((assets / "vocab.json").read_text(encoding="utf-8"))
+        self.language_masks = json.loads((assets / "language_masks.json").read_text(encoding="utf-8"))
+
+    def encode(self, waveform):
+        length = torch.tensor([waveform.shape[-1]], device=self.d)
+        audio_signal, length = self.models["preprocessor"](
+            input_signal=waveform.to(self.d), length=length
+        )
+        return self.models["encoder"].run(
+            ["outputs", "encoded_lengths"],
+            {"audio_signal": audio_signal.cpu().numpy(), "length": length.cpu().numpy()},
+        )
+
+    def __call__(self, waveform, language, decoding="ctc"):
+        if decoding != "ctc":
+            raise ValueError("The SIH pipeline loads only the CTC decoder")
+        encoder_outputs, encoded_lengths = self.encode(waveform)
+        raw_logits = self.models["ctc_decoder"].run(
+            ["logprobs"], {"encoder_output": encoder_outputs}
+        )[0]
+        logits = torch.from_numpy(raw_logits[0, :int(encoded_lengths[0])])
+        mask = torch.tensor(self.language_masks[language], dtype=torch.bool)
+        path = torch.unique_consecutive(logits[:, mask].argmax(-1))
+        return "".join(
+            self.vocab[language][token]
+            for token in path.tolist()
+            if token != self.config.BLANK_ID
+        ).replace("▁", " ").strip()
+
+
+def load_indic_model(model_dir):
+    return IndicCTCModel(model_dir)
 
 
 class IndicASR:
@@ -248,12 +315,14 @@ class IndicASR:
 
 
 class WhisperASR:
-    def __init__(self, model_dir, device):
+    def __init__(self, model_dir, device, quantize=False):
         from transformers import AutoModelForSpeechSeq2Seq, AutoProcessor
 
         self.device = device
         self.processor = AutoProcessor.from_pretrained(model_dir, local_files_only=True)
         self.model = AutoModelForSpeechSeq2Seq.from_pretrained(model_dir, local_files_only=True).to(device).eval()
+        if quantize:
+            self.model = dynamic_int8(self.model, device)
 
     def transcribe(self, audio_path):
         audio = load_audio(audio_path).numpy()
@@ -265,14 +334,14 @@ class WhisperASR:
 
 
 class SpeechPipeline:
-    def __init__(self, model_root, device=None, indic_dir=None):
+    def __init__(self, model_root, device=None, indic_dir=None, quantize_lid=False, quantize_whisper=False):
         os.environ.setdefault("HF_HUB_OFFLINE", "1")
         os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
         self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
         root = Path(model_root)
-        self.lid = VoxLinguaCoarseLID(root / "lid", self.device)
+        self.lid = VoxLinguaCoarseLID(root / "lid", self.device, quantize=quantize_lid)
         self.indic = IndicASR(indic_dir or root / "indic")
-        self.whisper = WhisperASR(root / "whisper", self.device)
+        self.whisper = WhisperASR(root / "whisper", self.device, quantize=quantize_whisper)
 
     def transcribe(self, audio_path):
         lid = self.lid.predict(audio_path)
@@ -340,6 +409,8 @@ def add_runtime_arguments(parser):
     parser.add_argument("--model-root", default="models")
     parser.add_argument("--indic-dir")
     parser.add_argument("--device")
+    parser.add_argument("--quantize-lid", action="store_true")
+    parser.add_argument("--quantize-whisper", action="store_true")
 
 
 def main():
@@ -358,7 +429,13 @@ def main():
     if args.command == "download":
         download_models(args.model_root)
         return
-    pipeline = SpeechPipeline(args.model_root, args.device, args.indic_dir)
+    pipeline = SpeechPipeline(
+        args.model_root,
+        args.device,
+        args.indic_dir,
+        quantize_lid=args.quantize_lid,
+        quantize_whisper=args.quantize_whisper,
+    )
     if args.command == "transcribe":
         print(json.dumps(pipeline.transcribe(args.audio), ensure_ascii=False, indent=2))
     else:

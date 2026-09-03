@@ -1,0 +1,11 @@
+{
+  "dataset": "dianavdavidson/MUCS-Hinglish",
+  "revision": "3c66ee1",
+  "source_sha256": {
+    "test-00000-of-00002.parquet": "4cd48e997261c0952fb31c2867c2a90cc80ae311a078b120fe38f0dcd1835a67",
+    "test-00001-of-00002.parquet": "2dcb618f898fa009d2f48947059fd5ce416b99a81339a6c86f254cb3d54f513d"
+  },
+  "model_root": "E:\\SIH\\models",
+  "quantize_lid": false,
+  "script_sha256": "4ef3de51d6241df38e1fafb9ececa55b690d98dacb2988e9dfaa339cc30edf9e"
+}

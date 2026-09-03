@@ -1,0 +1,23 @@
+{
+  "python": "3.10.11 (tags/v3.10.11:7d4cc5a, Apr  5 2023, 00:38:17) [MSC v.1929 64 bit (AMD64)]",
+  "platform": "Windows-10-10.0.26200-SP0",
+  "logical_cpus": 16,
+  "ram_total_mib": 15654.87109375,
+  "torch_version": "2.12.0+cu132",
+  "onnxruntime_version": "1.23.2",
+  "onnxruntime_providers": [
+    "AzureExecutionProvider",
+    "CPUExecutionProvider"
+  ],
+  "pipeline_load_seconds": 14.382863899983931,
+  "invocation_wall_seconds": 572.1697581000044,
+  "rss_before_load_mib": 567.91015625,
+  "rss_after_load_mib": 1674.3125,
+  "peak_process_mib": 3943.24609375,
+  "model_sizes": {
+    "lid_directory_mib": 82.39786052703857,
+    "whisper_directory_mib": 580.6495456695557,
+    "indic_directory_mib": 737.0339632034302,
+    "total_directory_mib": 1400.0813694000244
+  }
+}

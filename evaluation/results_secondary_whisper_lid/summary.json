@@ -1,0 +1,55 @@
+{
+  "samples": 4135,
+  "thresholds": [
+    {
+      "threshold": 0.1,
+      "fleurs_accuracy": 0.973,
+      "fleurs_english_recall": 1.0,
+      "fleurs_indic_specificity": 0.97,
+      "mucs_english_majority_route_rate": 0.4975609756097561,
+      "mucs_hindi_majority_indic_rate": 0.9165348101265823
+    },
+    {
+      "threshold": 0.2,
+      "fleurs_accuracy": 0.991,
+      "fleurs_english_recall": 1.0,
+      "fleurs_indic_specificity": 0.99,
+      "mucs_english_majority_route_rate": 0.33902439024390246,
+      "mucs_hindi_majority_indic_rate": 0.9513449367088608
+    },
+    {
+      "threshold": 0.3,
+      "fleurs_accuracy": 0.999,
+      "fleurs_english_recall": 1.0,
+      "fleurs_indic_specificity": 0.9988888888888889,
+      "mucs_english_majority_route_rate": 0.26097560975609757,
+      "mucs_hindi_majority_indic_rate": 0.9707278481012658
+    },
+    {
+      "threshold": 0.5,
+      "fleurs_accuracy": 1.0,
+      "fleurs_english_recall": 1.0,
+      "fleurs_indic_specificity": 1.0,
+      "mucs_english_majority_route_rate": 0.15609756097560976,
+      "mucs_hindi_majority_indic_rate": 0.9881329113924051
+    }
+  ],
+  "fleurs_english_score_by_language": {
+    "bengali": 0.003875920631708141,
+    "english": 0.9893333888053895,
+    "gujarati": 0.01843598274572287,
+    "hindi": 0.0166095853105071,
+    "kannada": 0.027918140513356775,
+    "malayalam": 0.034065749930450695,
+    "marathi": 0.028667732612229883,
+    "odia": 0.00790216062641548,
+    "tamil": 0.01656472682938329,
+    "telugu": 0.028310848827823067
+  },
+  "latency_ms": {
+    "p50": 162.63539995998144,
+    "p95": 172.0234800130129
+  },
+  "load_seconds": 0.3325621000258252,
+  "peak_process_mib": 1249.56640625
+}
