@@ -324,24 +324,58 @@ class WhisperASR:
         if quantize:
             self.model = dynamic_int8(self.model, device)
 
-    def transcribe(self, audio_path):
+    def _transcribe(self, audio_path, with_confidence):
         audio = load_audio(audio_path).numpy()
         inputs = self.processor(audio, sampling_rate=16000, return_tensors="pt", return_attention_mask=True)
         inputs = {key: value.to(self.device) for key, value in inputs.items()}
         with torch.inference_mode():
-            tokens = self.model.generate(**inputs, language="en", task="transcribe")
-        return self.processor.batch_decode(tokens, skip_special_tokens=True)[0].strip()
+            output = self.model.generate(**inputs, language="en", task="transcribe", **(
+                {"output_scores": True, "return_dict_in_generate": True} if with_confidence else {}
+            ))
+        sequences = output.sequences if with_confidence else output
+        text = self.processor.batch_decode(sequences, skip_special_tokens=True)[0].strip()
+        return {"text": text, "confidence": whisper_confidence(output)} if with_confidence else text
+
+    def transcribe(self, audio_path):
+        return self._transcribe(audio_path, False)
+
+    def transcribe_with_confidence(self, audio_path):
+        return self._transcribe(audio_path, True)
+
+
+def whisper_confidence(generate_output):
+    """Mean per-token probability of the tokens Whisper actually emitted."""
+    if not generate_output.scores:
+        return 0.0
+    step_log_probs = torch.stack(generate_output.scores, dim=1).log_softmax(-1)
+    generated_tokens = generate_output.sequences[:, -step_log_probs.shape[1]:]
+    token_log_probs = step_log_probs.gather(-1, generated_tokens.unsqueeze(-1)).squeeze(-1)
+    return token_log_probs.exp().mean().item()
 
 
 class SpeechPipeline:
-    def __init__(self, model_root, device=None, indic_dir=None, quantize_lid=False, quantize_whisper=False):
+    def __init__(
+        self, model_root, device=None, indic_dir=None, quantize_lid=False,
+        quantize_whisper=False, lid_confidence_threshold=None,
+    ):
         os.environ.setdefault("HF_HUB_OFFLINE", "1")
         os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
         self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
+        self.lid_confidence_threshold = lid_confidence_threshold
         root = Path(model_root)
         self.lid = VoxLinguaCoarseLID(root / "lid", self.device, quantize=quantize_lid)
         self.indic = IndicASR(indic_dir or root / "indic")
         self.whisper = WhisperASR(root / "whisper", self.device, quantize=quantize_whisper)
+
+    def _english_result(self, whisper_result, decision):
+        return {
+            "language": "english", "text": whisper_result["text"],
+            "model": WHISPER_ID, "indic_total_ms": 0.0, "candidates": [],
+            "asr_confidence": whisper_result["confidence"], "decision": decision,
+        }
+
+    def _indic_result(self, indic_result, decision):
+        return {**indic_result, "asr_confidence": indic_result["confidence"], "decision": decision}
 
     def transcribe(self, audio_path):
         lid = self.lid.predict(audio_path)
@@ -351,14 +385,26 @@ class SpeechPipeline:
             "lid_scores": lid["scores"],
             "lid_latency_ms": lid["latency_ms"],
         }
-        if lid["coarse_group"] == "english":
-            return {
-                "language": "english", "text": self.whisper.transcribe(audio_path),
-                "model": WHISPER_ID, "indic_total_ms": 0.0, "candidates": [],
-                **routing,
-            }
-        result = self.indic.transcribe_all(audio_path)
-        return {**result, **routing}
+
+        # A single short/noisy-audio LID call is not reliable enough to be the sole
+        # router (VoxLingua107 confidence on ~2s real mic clips can collapse to
+        # near-chance). Trust it only when it's actually confident; otherwise run
+        # both engines and let the ASR that is more confident about its own output win.
+        if self.lid_confidence_threshold is None or lid["confidence"] >= self.lid_confidence_threshold:
+            decision = f"lid-confident({lid['confidence']:.2f})"
+            if lid["coarse_group"] == "english":
+                whisper_result = {"text": self.whisper.transcribe(audio_path), "confidence": None}
+                return {**self._english_result(whisper_result, decision), **routing}
+            return {**self._indic_result(self.indic.transcribe_all(audio_path), decision), **routing}
+
+        # ponytail: ASR confidence scales are uncalibrated; keep this opt-in until
+        # a representative routing set supports a calibrated comparison.
+        whisper_result = self.whisper.transcribe_with_confidence(audio_path)
+        indic_result = self.indic.transcribe_all(audio_path)
+        decision = f"lid-ambiguous({lid['confidence']:.2f})"
+        if whisper_result["confidence"] >= indic_result["confidence"]:
+            return {**self._english_result(whisper_result, f"{decision}-whisper-won"), **routing}
+        return {**self._indic_result(indic_result, f"{decision}-indic-won"), **routing}
 
 
 def evaluate(manifest, pipeline, output=None):
@@ -411,6 +457,7 @@ def add_runtime_arguments(parser):
     parser.add_argument("--device")
     parser.add_argument("--quantize-lid", action="store_true")
     parser.add_argument("--quantize-whisper", action="store_true")
+    parser.add_argument("--lid-threshold", type=float)
 
 
 def main():
@@ -435,6 +482,7 @@ def main():
         args.indic_dir,
         quantize_lid=args.quantize_lid,
         quantize_whisper=args.quantize_whisper,
+        lid_confidence_threshold=args.lid_threshold,
     )
     if args.command == "transcribe":
         print(json.dumps(pipeline.transcribe(args.audio), ensure_ascii=False, indent=2))

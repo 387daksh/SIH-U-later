@@ -12,9 +12,13 @@ def main():
     parser.add_argument("audio", type=Path, help="Path to a WAV, FLAC, MP3, or other soundfile-readable file")
     parser.add_argument("--model-root", type=Path, default=Path("deployment_models/common"))
     parser.add_argument("--indic-dir", type=Path, default=Path("deployment_models/indic/fp32"))
+    parser.add_argument("--lid-threshold", type=float)
     args = parser.parse_args()
 
-    pipeline = SpeechPipeline(args.model_root, device="cpu", indic_dir=args.indic_dir)
+    pipeline = SpeechPipeline(
+        args.model_root, device="cpu", indic_dir=args.indic_dir,
+        lid_confidence_threshold=args.lid_threshold,
+    )
     started = time.perf_counter()
     result = pipeline.transcribe(args.audio)
     print(f"Detected language: {result['language']}")

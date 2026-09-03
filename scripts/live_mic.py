@@ -39,6 +39,7 @@ def main():
     parser.add_argument("--model-root", default="deployment_models/common")
     parser.add_argument("--indic-dir", default="deployment_models/indic/fp32")
     parser.add_argument("--lid-only", action="store_true", help="load and test only VoxLingua LID")
+    parser.add_argument("--lid-threshold", type=float, help="opt in to dual-ASR tie-breaking below this LID confidence")
     args = parser.parse_args()
 
     input_device = find_input_device()
@@ -51,7 +52,10 @@ def main():
         print("Ready. Scores are relative within the restricted target-language set.\n")
     else:
         print("Loading the real LID + IndicConformer + Whisper pipeline on CPU...")
-        pipeline = SpeechPipeline(args.model_root, device="cpu", indic_dir=args.indic_dir)
+        pipeline = SpeechPipeline(
+            args.model_root, device="cpu", indic_dir=args.indic_dir,
+            lid_confidence_threshold=args.lid_threshold,
+        )
         print("Ready. English uses Whisper; Indic speech uses IndicConformer.\n")
 
     wav_path = Path("artifacts/recordings/last_mic.wav").resolve()
@@ -123,6 +127,9 @@ def main():
         print("Vox top scores:    " + ", ".join(f"{name}={score:.1%}" for name, score in scores[:4]))
         print(f"Detected language: {result['language']}")
         print(f"ASR backend:       {result['model']}")
+        confidence = result.get("asr_confidence")
+        suffix = f" (asr_confidence={confidence:.3f})" if confidence is not None else ""
+        print(f"Routing decision:  {result['decision']}{suffix}")
         print(f"Transcribed text:  {result['text']}")
         print(f"Stop-to-text time: {latency:.2f} seconds\n")
 
