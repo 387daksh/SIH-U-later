@@ -1,0 +1,17 @@
+.venv/
+.vscode/
+__pycache__/
+*.py[cod]
+
+# Downloaded models and generated conversions
+models/
+indic-conformer-600m-int8-onnx/
+indic-conformer-600m-int8-onnx-patched/
+quantized/
+
+# Downloaded corpora, generated audio, and resumable raw benchmark output
+artifacts/
+evaluation/fleurs_source/
+evaluation/fleurs_test_*/
+evaluation/**/samples.jsonl
+evaluation/**/samples.csv
