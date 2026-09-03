@@ -123,6 +123,7 @@ def main():
         print("Vox top scores:    " + ", ".join(f"{name}={score:.1%}" for name, score in scores[:4]))
         print(f"Detected language: {result['language']}")
         print(f"ASR backend:       {result['model']}")
+        print(f"Routing decision:  {result['decision']} (asr_confidence={result['asr_confidence']:.3f})")
         print(f"Transcribed text:  {result['text']}")
         print(f"Stop-to-text time: {latency:.2f} seconds\n")
 

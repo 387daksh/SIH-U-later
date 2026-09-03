@@ -138,7 +138,7 @@ def run_benchmark(manifest, model_root, indic_dir, output_dir):
                         oracle_text = routed["text"]
                     else:
                         started = time.perf_counter()
-                        oracle_text = pipeline.whisper.transcribe(audio_path)
+                        oracle_text = pipeline.whisper.transcribe(audio_path)["text"]
                         oracle_extra_ms = (time.perf_counter() - started) * 1000
                 else:
                     if indic_result is None:
