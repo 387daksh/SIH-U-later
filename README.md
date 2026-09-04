@@ -13,7 +13,8 @@ tools/legacy/     synthetic smoke tools (not evaluation evidence)
 models/           downloaded LID and Whisper models
 evaluation/       real manifests, audio subsets, and benchmark reports
 artifacts/        local microphone and synthetic recordings
-android/          native Kotlin/ONNX Runtime microphone demo
+android/           preferred Kotlin/ONNX Runtime app with USB-staged models and TTS
+android-colleague/ incoming Android test prototype preserved from commit 8c6c0f1
 ```
 
 The original root commands remain as compatibility launchers. The downloaded Indic model directories and completed evaluation artifacts intentionally retain their existing paths so old reports remain reproducible.

@@ -13,6 +13,9 @@ android/local.properties
 android/.gradle/
 android/**/build/
 android/app/src/main/assets/models/
+android-colleague/local.properties
+android-colleague/.gradle/
+android-colleague/**/build/
 .android-sdk/
 .android-user/
 dist/*.apk
