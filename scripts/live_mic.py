@@ -40,6 +40,9 @@ def main():
     parser.add_argument("--indic-dir", default="deployment_models/indic/fp32")
     parser.add_argument("--lid-only", action="store_true", help="load and test only VoxLingua LID")
     parser.add_argument("--lid-threshold", type=float, help="opt in to dual-ASR tie-breaking below this LID confidence")
+    parser.add_argument("--lid-head", type=Path, help="trained Indian-English-vs-Indic ECAPA head")
+    parser.add_argument("--whisper-lid-threshold", type=float, help="verify binary LID candidates with Whisper")
+    parser.add_argument("--lid-candidate-threshold", type=float, default=0.3)
     args = parser.parse_args()
 
     input_device = find_input_device()
@@ -47,7 +50,7 @@ def main():
     print(f"Microphone: {microphone} (16 kHz mono)")
     if args.lid_only:
         print("Loading VoxLingua LID only on CPU...")
-        lid = VoxLinguaCoarseLID(Path(args.model_root) / "lid", "cpu")
+        lid = VoxLinguaCoarseLID(Path(args.model_root) / "lid", "cpu", binary_head=args.lid_head)
         pipeline = None
         print("Ready. Scores are relative within the restricted target-language set.\n")
     else:
@@ -55,6 +58,9 @@ def main():
         pipeline = SpeechPipeline(
             args.model_root, device="cpu", indic_dir=args.indic_dir,
             lid_confidence_threshold=args.lid_threshold,
+            lid_head=args.lid_head,
+            whisper_lid_threshold=args.whisper_lid_threshold,
+            lid_candidate_threshold=args.lid_candidate_threshold,
         )
         print("Ready. English uses Whisper; Indic speech uses IndicConformer.\n")
 
@@ -109,7 +115,9 @@ def main():
             print(f"Saved recording:   {wav_path}")
             print(f"Top LID label:     {result['legacy_language']} ({result['confidence']:.1%})")
             print(f"English score:     {result['scores']['english']:.1%}")
-            print(f"Hindi score:       {result['scores']['hindi']:.1%}")
+            indic_label = "Indic" if "indic" in result["scores"] else "Hindi"
+            indic_score = result["scores"].get("indic", result["scores"].get("hindi", 0.0))
+            print(f"{indic_label} score:       {indic_score:.1%}")
             print("Top scores:        " + ", ".join(f"{name}={score:.1%}" for name, score in scores[:4]))
             print(f"Routing decision:  {result['coarse_group']} -> {backend}")
             print(f"LID inference:     {result['latency_ms']:.0f} ms")
@@ -123,8 +131,8 @@ def main():
         latency = time.perf_counter() - stopped
         scores = sorted(result["lid_scores"].items(), key=lambda item: item[1], reverse=True)
         print(f"Saved recording:   {wav_path}")
-        print(f"Vox coarse guess:  {result['legacy_language']} ({result['lid_confidence']:.1%})")
-        print("Vox top scores:    " + ", ".join(f"{name}={score:.1%}" for name, score in scores[:4]))
+        print(f"Coarse LID guess:  {result['legacy_language']} ({result['lid_confidence']:.1%})")
+        print("Coarse scores:     " + ", ".join(f"{name}={score:.1%}" for name, score in scores[:4]))
         print(f"Detected language: {result['language']}")
         print(f"ASR backend:       {result['model']}")
         confidence = result.get("asr_confidence")

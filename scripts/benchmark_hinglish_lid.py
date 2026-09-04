@@ -59,7 +59,9 @@ def aggregate(rows):
         "english_route_rate": english_routes / len(rows) if rows else 0.0,
         "indic_route_rate": 1 - english_routes / len(rows) if rows else 0.0,
         "mean_english_score": statistics.fmean(row["scores"]["english"] for row in rows) if rows else 0.0,
-        "mean_hindi_score": statistics.fmean(row["scores"]["hindi"] for row in rows) if rows else 0.0,
+        "mean_indic_score": statistics.fmean(
+            row["scores"].get("indic", row["scores"].get("hindi", 0.0)) for row in rows
+        ) if rows else 0.0,
         "lid_p50_ms": percentile([row["latency_ms"] for row in rows], 50),
         "lid_p95_ms": percentile([row["latency_ms"] for row in rows], 95),
     }
@@ -86,13 +88,13 @@ def write_report(summary, path):
         "",
         "## Routing by annotated English-word ratio",
         "",
-        "| English ratio | N | English route | Mean English score | Mean Hindi score |",
+        "| English ratio | N | English route | Mean English score | Mean Indic score |",
         "|---|---:|---:|---:|---:|",
     ]
     for bucket, value in summary["by_english_ratio"].items():
         lines.append(
             f"| {bucket}% | {value['samples']} | {value['english_route_rate']:.2%} | "
-            f"{value['mean_english_score']:.2%} | {value['mean_hindi_score']:.2%} |"
+            f"{value['mean_english_score']:.2%} | {value['mean_indic_score']:.2%} |"
         )
     lines.extend([
         "",
@@ -111,7 +113,7 @@ def write_report(summary, path):
     Path(path).write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
-def run(source_dir, model_root, output_dir, quantize):
+def run(source_dir, model_root, output_dir, quantize, lid_head=None, device="cpu"):
     started = time.perf_counter()
     source_paths = sorted(Path(source_dir).glob("data/test-*.parquet"))
     if len(source_paths) != 2:
@@ -125,11 +127,15 @@ def run(source_dir, model_root, output_dir, quantize):
         "source_sha256": {path.name: sha256(path) for path in source_paths},
         "model_root": str(Path(model_root).resolve()),
         "quantize_lid": quantize,
+        "lid_head": str(Path(lid_head).resolve()) if lid_head else None,
         "script_sha256": sha256(__file__),
     }
     meta_path = output_dir / "benchmark_meta.json"
-    if meta_path.exists() and json.loads(meta_path.read_text(encoding="utf-8")) != meta:
-        raise ValueError(f"{output_dir} contains a different benchmark configuration")
+    if meta_path.exists():
+        previous = json.loads(meta_path.read_text(encoding="utf-8"))
+        stable = lambda values: {key: value for key, value in values.items() if key != "script_sha256"}
+        if stable(previous) != stable(meta):
+            raise ValueError(f"{output_dir} contains a different benchmark configuration")
     meta_path.write_text(json.dumps(meta, indent=2), encoding="utf-8")
 
     completed = set()
@@ -142,7 +148,9 @@ def run(source_dir, model_root, output_dir, quantize):
     process = psutil.Process()
     rss_before = process.memory_info().rss / 2**20
     load_started = time.perf_counter()
-    lid = VoxLinguaCoarseLID(Path(model_root) / "lid", "cpu", quantize=quantize)
+    lid = VoxLinguaCoarseLID(
+        Path(model_root) / "lid", device, quantize=quantize, binary_head=lid_head,
+    )
     load_seconds = time.perf_counter() - load_started
     rss_after = process.memory_info().rss / 2**20
 
@@ -218,8 +226,10 @@ def main():
     parser.add_argument("--model-root", default="models")
     parser.add_argument("--output-dir", default="evaluation/results_mucs_hinglish_lid_fp32")
     parser.add_argument("--quantize", action="store_true")
+    parser.add_argument("--lid-head")
+    parser.add_argument("--device", default="cpu")
     args = parser.parse_args()
-    run(args.source_dir, args.model_root, args.output_dir, args.quantize)
+    run(args.source_dir, args.model_root, args.output_dir, args.quantize, args.lid_head, args.device)
 
 
 if __name__ == "__main__":

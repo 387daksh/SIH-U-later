@@ -131,6 +131,17 @@ class FrozenECAPA(nn.Module):
         return self.embedding(self.normalize(self.features(waveforms), lengths), lengths).squeeze(1)
 
 
+def ecapa_utterance_embedding(extractor, waveform, device, chunk_samples=48_000):
+    """Average 3-second ECAPA chunks, matching the pretrained recipe's segment length."""
+    chunks = list(waveform.split(chunk_samples))
+    longest = max(map(len, chunks))
+    batch = torch.zeros(len(chunks), longest, dtype=waveform.dtype, device=device)
+    lengths = torch.tensor([len(chunk) / longest for chunk in chunks], device=device)
+    for index, chunk in enumerate(chunks):
+        batch[index, :len(chunk)] = chunk.to(device)
+    return extractor(batch, lengths).mean(0)
+
+
 def load_vox_classifier(model_dir, device):
     _, _, Classifier, _ = speechbrain_imports()
     classifier = Classifier(
@@ -158,27 +169,43 @@ def read_vox_indices(model_dir):
 
 
 class VoxLinguaCoarseLID:
-    """Original 107-way model, restricted to English and its eight covered target Indic labels."""
+    """Frozen VoxLingua ECAPA with either its legacy classifier or a binary head."""
 
-    def __init__(self, model_dir, device, quantize=False):
+    def __init__(self, model_dir, device, quantize=False, binary_head=None):
         self.device = device
         self.extractor = FrozenECAPA(model_dir, device)
-        self.classifier = load_vox_classifier(model_dir, device)
+        self.binary_head = None
+        if binary_head:
+            self.binary_head = torch.load(binary_head, map_location=device, weights_only=True)
+            if self.binary_head.get("format_version") != 1:
+                raise ValueError(f"Unsupported binary LID head: {binary_head}")
+            self.classifier = None
+            self.labels = ["english", "indic"]
+        else:
+            self.classifier = load_vox_classifier(model_dir, device)
         if quantize:
             self.extractor = dynamic_int8(self.extractor, device)
-            self.classifier = dynamic_int8(self.classifier, device)
-        indices = read_vox_indices(model_dir)
-        self.labels = ["english", *(name for name in INDIC_CODES if name != "odia")]
-        codes = ["en", *(INDIC_CODES[name] for name in self.labels[1:])]
-        self.indices = torch.tensor([indices[code] for code in codes], device=device)
+            if self.classifier:
+                self.classifier = dynamic_int8(self.classifier, device)
+        if not self.binary_head:
+            indices = read_vox_indices(model_dir)
+            self.labels = ["english", *(name for name in INDIC_CODES if name != "odia")]
+            codes = ["en", *(INDIC_CODES[name] for name in self.labels[1:])]
+            self.indices = torch.tensor([indices[code] for code in codes], device=device)
 
     def predict(self, audio_path):
         waveform = load_audio(audio_path).unsqueeze(0).to(self.device)
         start = time.perf_counter()
         with torch.inference_mode():
-            embedding = self.extractor(waveform, torch.ones(1, device=self.device))
-            log_probabilities = self.classifier(embedding.unsqueeze(1))[0, 0]
-            restricted = restrict_log_probabilities(log_probabilities, self.indices)
+            if self.binary_head:
+                embedding = ecapa_utterance_embedding(self.extractor, waveform[0], self.device)
+                normalized = (embedding - self.binary_head["mean"]) / self.binary_head["scale"]
+                english = torch.sigmoid(normalized @ self.binary_head["weight"] + self.binary_head["bias"])
+                restricted = torch.stack((english, 1 - english))
+            else:
+                embedding = self.extractor(waveform, torch.ones(1, device=self.device))
+                log_probabilities = self.classifier(embedding.unsqueeze(1))[0, 0]
+                restricted = restrict_log_probabilities(log_probabilities, self.indices)
         elapsed_ms = (time.perf_counter() - start) * 1000
         index = restricted.argmax().item()
         legacy_language = self.labels[index]
@@ -342,6 +369,25 @@ class WhisperASR:
     def transcribe_with_confidence(self, audio_path):
         return self._transcribe(audio_path, True)
 
+    def english_probability(self, audio_path):
+        """Return Whisper's English language-token probability without decoding text."""
+        started = time.perf_counter()
+        if not hasattr(self, "_language_token_ids"):
+            pairs = []
+            for token in self.processor.tokenizer.all_special_tokens:
+                if match := re.fullmatch(r"<\|([a-z]{2,3})\|>", token):
+                    pairs.append((match.group(1), self.processor.tokenizer.convert_tokens_to_ids(token)))
+            self._language_codes, ids = zip(*pairs)
+            self._language_token_ids = torch.tensor(ids, device=self.device)
+        audio = load_audio(audio_path).numpy()
+        inputs = self.processor(audio, sampling_rate=16000, return_tensors="pt", return_attention_mask=True)
+        inputs = {key: value.to(self.device) for key, value in inputs.items()}
+        decoder = torch.tensor([[self.model.config.decoder_start_token_id]], device=self.device)
+        with torch.inference_mode():
+            logits = self.model(**inputs, decoder_input_ids=decoder).logits[0, -1, self._language_token_ids]
+            probability = logits.softmax(-1)[self._language_codes.index("en")].item()
+        return probability, (time.perf_counter() - started) * 1000
+
 
 def whisper_confidence(generate_output):
     """Mean per-token probability of the tokens Whisper actually emitted."""
@@ -356,14 +402,27 @@ def whisper_confidence(generate_output):
 class SpeechPipeline:
     def __init__(
         self, model_root, device=None, indic_dir=None, quantize_lid=False,
-        quantize_whisper=False, lid_confidence_threshold=None,
+        quantize_whisper=False, lid_confidence_threshold=None, lid_head=None,
+        whisper_lid_threshold=None, lid_candidate_threshold=0.3,
     ):
         os.environ.setdefault("HF_HUB_OFFLINE", "1")
         os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
         self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
         self.lid_confidence_threshold = lid_confidence_threshold
+        self.whisper_lid_threshold = whisper_lid_threshold
+        self.lid_candidate_threshold = lid_candidate_threshold
+        if whisper_lid_threshold is not None and lid_head is None:
+            raise ValueError("whisper_lid_threshold requires a trained binary lid_head")
+        if whisper_lid_threshold is not None and lid_confidence_threshold is not None:
+            raise ValueError("Use either whisper_lid_threshold or the legacy lid_confidence_threshold")
+        if whisper_lid_threshold is not None and not 0 <= whisper_lid_threshold <= 1:
+            raise ValueError("whisper_lid_threshold must be between 0 and 1")
+        if not 0 <= lid_candidate_threshold <= 1:
+            raise ValueError("lid_candidate_threshold must be between 0 and 1")
         root = Path(model_root)
-        self.lid = VoxLinguaCoarseLID(root / "lid", self.device, quantize=quantize_lid)
+        self.lid = VoxLinguaCoarseLID(
+            root / "lid", self.device, quantize=quantize_lid, binary_head=lid_head,
+        )
         self.indic = IndicASR(indic_dir or root / "indic")
         self.whisper = WhisperASR(root / "whisper", self.device, quantize=quantize_whisper)
 
@@ -385,6 +444,20 @@ class SpeechPipeline:
             "lid_scores": lid["scores"],
             "lid_latency_ms": lid["latency_ms"],
         }
+
+        if getattr(self, "whisper_lid_threshold", None) is not None:
+            english_score = lid["scores"]["english"]
+            if english_score < self.lid_candidate_threshold:
+                decision = f"binary-lid-indic({english_score:.2f})"
+                return {**self._indic_result(self.indic.transcribe_all(audio_path), decision), **routing}
+            whisper_score, whisper_lid_ms = self.whisper.english_probability(audio_path)
+            routing.update({"whisper_lid_score": whisper_score, "whisper_lid_ms": whisper_lid_ms})
+            if whisper_score >= self.whisper_lid_threshold:
+                result = {"text": self.whisper.transcribe(audio_path), "confidence": None}
+                decision = f"binary+whisper-english({english_score:.2f},{whisper_score:.2f})"
+                return {**self._english_result(result, decision), **routing}
+            decision = f"binary+whisper-indic({english_score:.2f},{whisper_score:.2f})"
+            return {**self._indic_result(self.indic.transcribe_all(audio_path), decision), **routing}
 
         # A single short/noisy-audio LID call is not reliable enough to be the sole
         # router (VoxLingua107 confidence on ~2s real mic clips can collapse to
@@ -458,6 +531,9 @@ def add_runtime_arguments(parser):
     parser.add_argument("--quantize-lid", action="store_true")
     parser.add_argument("--quantize-whisper", action="store_true")
     parser.add_argument("--lid-threshold", type=float)
+    parser.add_argument("--lid-head", help="trained Indian-English-vs-Indic ECAPA head")
+    parser.add_argument("--whisper-lid-threshold", type=float, help="verify binary LID candidates with Whisper")
+    parser.add_argument("--lid-candidate-threshold", type=float, default=0.3)
 
 
 def main():
@@ -483,6 +559,9 @@ def main():
         quantize_lid=args.quantize_lid,
         quantize_whisper=args.quantize_whisper,
         lid_confidence_threshold=args.lid_threshold,
+        lid_head=args.lid_head,
+        whisper_lid_threshold=args.whisper_lid_threshold,
+        lid_candidate_threshold=args.lid_candidate_threshold,
     )
     if args.command == "transcribe":
         print(json.dumps(pipeline.transcribe(args.audio), ensure_ascii=False, indent=2))

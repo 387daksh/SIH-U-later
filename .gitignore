@@ -9,11 +9,23 @@ indic-conformer-600m-int8-onnx/
 indic-conformer-600m-int8-onnx-patched/
 quantized/
 deployment_models/
+android/local.properties
+android/.gradle/
+android/**/build/
+android/app/src/main/assets/models/
+.android-sdk/
+.android-user/
+dist/*.apk
 
 # Downloaded corpora, generated audio, and resumable raw benchmark output
-artifacts/
+artifacts/*
+!artifacts/lid/
+artifacts/lid/*
+!artifacts/lid/indian_english_head.pt
+!artifacts/lid/indian_english_head.json
 evaluation/fleurs_source/
 evaluation/fleurs_test_*/
+evaluation/lid_pilot_data/
 evaluation/mucs_hinglish_source/
 evaluation/results_smoke_*/
 evaluation/**/samples.jsonl

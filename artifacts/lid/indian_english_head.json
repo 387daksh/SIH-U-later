@@ -1,0 +1,47 @@
+{
+  "model": "speechbrain/lang-id-voxlingua107-ecapa frozen embedding + logistic head",
+  "sources": [
+    "google/fleurs",
+    "ishands/commonvoice-indian_accent"
+  ],
+  "training_samples": 1800,
+  "validation": {
+    "samples": 540,
+    "accuracy": 0.9925925925925926,
+    "balanced_accuracy": 0.9925925925925926,
+    "roc_auc": 0.9986556927297668,
+    "indic_recall": 0.9925925925925926,
+    "english_recall": 0.9925925925925926,
+    "confusion_indic_english": [
+      [
+        268,
+        2
+      ],
+      [
+        2,
+        268
+      ]
+    ]
+  },
+  "selected_raw_threshold": 0.31999999999999995,
+  "test": {
+    "samples": 250,
+    "accuracy": 0.988,
+    "balanced_accuracy": null,
+    "roc_auc": null,
+    "indic_recall": null,
+    "english_recall": 0.988,
+    "confusion_indic_english": [
+      [
+        0,
+        0
+      ],
+      [
+        3,
+        247
+      ]
+    ]
+  },
+  "head_bytes": 5589,
+  "manifest_sha256": "935da7e4e82ec5e59d104b9daa87503a99a45e90d69583f1af6820a7341b5fdd"
+}

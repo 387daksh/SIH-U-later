@@ -48,6 +48,10 @@ class FakeASR:
             "candidates": [],
         }
 
+    def english_probability(self, *args):
+        self.calls.append(args)
+        return 0.9, 2.0
+
 
 log_scores = torch.tensor([-0.758, -0.791, -6.7])
 restricted = restrict_log_probabilities(log_scores, torch.tensor([0, 1, 2]))
@@ -84,6 +88,22 @@ pipeline.whisper = FakeASR("english")
 pipeline.lid_confidence_threshold = 0.6
 result = pipeline.transcribe("sample.wav")
 assert result["model"] == WHISPER_ID and "ambiguous" in result["decision"]
+
+# The robust binary router runs Whisper's language-token check only for
+# plausible English candidates.
+pipeline = SpeechPipeline.__new__(SpeechPipeline)
+pipeline.lid = FakeLID("english")
+pipeline.lid.predict = lambda _: {
+    "coarse_group": "english", "legacy_language": "english", "confidence": 0.7,
+    "scores": {"english": 0.7, "indic": 0.3}, "latency_ms": 1.0,
+}
+pipeline.indic = FakeASR("hindi")
+pipeline.whisper = FakeASR("english")
+pipeline.lid_confidence_threshold = None
+pipeline.whisper_lid_threshold = 0.3
+pipeline.lid_candidate_threshold = 0.3
+result = pipeline.transcribe("sample.wav")
+assert result["model"] == WHISPER_ID and result["whisper_lid_score"] == 0.9
 
 decoder = IndicASR.__new__(IndicASR)
 decoder.model = SimpleNamespace(
