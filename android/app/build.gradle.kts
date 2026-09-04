@@ -11,12 +11,11 @@ android {
         applicationId = "org.sih.offlinespeech"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1"
-    }
-
-    androidResources {
-        noCompress += "onnx"
+        versionCode = 2
+        versionName = "0.2"
+        ndk {
+            abiFilters += "arm64-v8a"
+        }
     }
 
     compileOptions {

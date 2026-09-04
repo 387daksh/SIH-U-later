@@ -16,6 +16,8 @@ android/app/src/main/assets/models/
 .android-sdk/
 .android-user/
 dist/*.apk
+.claude/
+SIH2026_Context_Reference (2).md
 
 # Downloaded corpora, generated audio, and resumable raw benchmark output
 artifacts/*
@@ -24,6 +26,7 @@ artifacts/lid/*
 !artifacts/lid/indian_english_head.pt
 !artifacts/lid/indian_english_head.json
 evaluation/fleurs_source/
+evaluation/fleurs_calibration_30/
 evaluation/fleurs_test_*/
 evaluation/lid_pilot_data/
 evaluation/mucs_hinglish_source/

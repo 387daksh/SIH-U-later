@@ -7,13 +7,13 @@ import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.MediaRecorder
 import android.os.Bundle
-import android.os.StatFs
+import android.speech.tts.TextToSpeech
 import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.TextView
 import java.io.ByteArrayOutputStream
 import java.io.File
-import java.io.FileOutputStream
+import java.util.Locale
 import java.util.concurrent.Executors
 
 class MainActivity : Activity() {
@@ -21,23 +21,38 @@ class MainActivity : Activity() {
     private lateinit var status: TextView
     private lateinit var result: TextView
     private lateinit var button: Button
+    private lateinit var speakButton: Button
     private var recorder: MicRecorder? = null
     private var pipeline: OfflineSpeechPipeline? = null
+    private var tts: TextToSpeech? = null
+    private var lastText = ""
+    private var lastLanguage = "english"
 
     override fun onCreate(state: Bundle?) {
         super.onCreate(state)
-        val modelDir = File(getExternalFilesDir(null), "models")
+        val modelDir = File(filesDir, "models")
         status = TextView(this).apply { text = "Model folder:\n$modelDir"; textSize = 15f }
         result = TextView(this).apply { textSize = 20f; setPadding(0, 32, 0, 32) }
         button = Button(this).apply { text = "Start recording"; setOnClickListener { toggleRecording() } }
+        speakButton = Button(this).apply {
+            text = "Speak result"; isEnabled = false; setOnClickListener { speakResult() }
+        }
         setContentView(LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(32, 64, 32, 32)
-            addView(status); addView(result); addView(button)
+            addView(status); addView(result); addView(button); addView(speakButton)
         })
+        tts = TextToSpeech(this) { code ->
+            if (code != TextToSpeech.SUCCESS) runOnUiThread { status.append("\nTTS unavailable") }
+        }
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED)
             requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), 1)
-        if (!File(modelDir, "manifest.json").isFile) installEmbeddedModels(modelDir)
+        if (!File(modelDir, "manifest.json").isFile) {
+            button.isEnabled = false
+            status.text = "Models missing. Install the APK and copy artifacts/android_models over USB.\n$modelDir"
+        } else {
+            status.text = "Models ready. Tap Start recording."
+        }
     }
 
     private fun toggleRecording() {
@@ -57,10 +72,13 @@ class MainActivity : Activity() {
         worker.execute {
             try {
                 val audio = active.stop()
-                val models = File(getExternalFilesDir(null), "models")
+                val models = File(filesDir, "models")
                 val engine = pipeline ?: OfflineSpeechPipeline(models).also { pipeline = it }
                 val answer = engine.transcribe(audio)
                 runOnUiThread {
+                    lastText = answer.text
+                    lastLanguage = answer.language
+                    speakButton.isEnabled = answer.text.isNotBlank()
                     result.text = "${answer.language} · ${answer.backend}\n${answer.text}"
                     status.text = "Stop-to-text: %.2f s".format(answer.milliseconds / 1000.0)
                 }
@@ -72,46 +90,23 @@ class MainActivity : Activity() {
         }
     }
 
-    private fun installEmbeddedModels(target: File) {
-        button.isEnabled = false
-        status.text = "Installing offline models on first run…"
-        worker.execute {
-            try {
-                require(StatFs(filesDir.path).availableBytes > 850L * 1024 * 1024) {
-                    "At least 850 MiB free space is required to install the offline models"
-                }
-                val temporary = File(target.parentFile, "models.installing")
-                temporary.deleteRecursively(); temporary.mkdirs()
-                copyAssetDirectory("models", temporary)
-                require(File(temporary, "manifest.json").isFile) { "Embedded model bundle is incomplete" }
-                if (target.exists()) target.deleteRecursively()
-                require(temporary.renameTo(target)) { "Could not finish model installation" }
-                runOnUiThread { status.text = "Models ready. Tap Start recording."; button.isEnabled = true }
-            } catch (error: Exception) {
-                runOnUiThread { status.text = "Model install failed: ${error.message}" }
-            }
+    private fun speakResult() {
+        val engine = tts ?: return
+        val tag = mapOf(
+            "english" to "en-IN", "hindi" to "hi-IN", "gujarati" to "gu-IN",
+            "marathi" to "mr-IN", "kannada" to "kn-IN", "malayalam" to "ml-IN",
+            "tamil" to "ta-IN", "telugu" to "te-IN", "odia" to "or-IN",
+            "bengali" to "bn-IN",
+        ).getValue(lastLanguage)
+        if (engine.setLanguage(Locale.forLanguageTag(tag)) < TextToSpeech.LANG_AVAILABLE) {
+            status.text = "No installed TTS voice for $lastLanguage"
+            return
         }
-    }
-
-    private fun copyAssetDirectory(assetPath: String, destination: File) {
-        val children = assets.list(assetPath).orEmpty()
-        require(children.isNotEmpty()) { "No embedded models found in APK" }
-        for (name in children) {
-            val childPath = "$assetPath/$name"
-            val nested = assets.list(childPath).orEmpty()
-            val output = File(destination, name)
-            if (nested.isNotEmpty()) {
-                output.mkdirs(); copyAssetDirectory(childPath, output)
-            } else {
-                assets.open(childPath).use { input ->
-                    FileOutputStream(output).use { stream -> input.copyTo(stream, 1024 * 1024) }
-                }
-            }
-        }
+        engine.speak(lastText, TextToSpeech.QUEUE_FLUSH, null, "transcription")
     }
 
     override fun onDestroy() {
-        recorder?.stop(); worker.shutdownNow(); pipeline?.close(); super.onDestroy()
+        recorder?.stop(); worker.shutdownNow(); pipeline?.close(); tts?.shutdown(); super.onDestroy()
     }
 }
 
