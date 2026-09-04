@@ -36,9 +36,10 @@ def find_input_device():
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model-root", default="deployment_models/common")
-    parser.add_argument("--indic-dir", default="deployment_models/indic/fp32")
+    parser.add_argument("--model-root", default="models")
+    parser.add_argument("--indic-dir")
     parser.add_argument("--lid-only", action="store_true", help="load and test only VoxLingua LID")
+    parser.add_argument("--no-lid", action="store_true", help="skip LID; route by cross-model ASR confidence only")
     args = parser.parse_args()
 
     input_device = find_input_device()
@@ -50,8 +51,10 @@ def main():
         pipeline = None
         print("Ready. Scores are relative within the restricted target-language set.\n")
     else:
-        print("Loading the real LID + IndicConformer + Whisper pipeline on CPU...")
-        pipeline = SpeechPipeline(args.model_root, device="cpu", indic_dir=args.indic_dir)
+        label = "IndicConformer + Whisper (no LID, uncalibrated confidence routing)" if args.no_lid \
+            else "LID + IndicConformer + Whisper"
+        print(f"Loading the real {label} pipeline on CPU...")
+        pipeline = SpeechPipeline(args.model_root, device="cpu", indic_dir=args.indic_dir, use_lid=not args.no_lid)
         print("Ready. English uses Whisper; Indic speech uses IndicConformer.\n")
 
     wav_path = Path("artifacts/recordings/last_mic.wav").resolve()
@@ -117,12 +120,14 @@ def main():
             print(f"Pipeline failed: {error}\n")
             continue
         latency = time.perf_counter() - stopped
-        scores = sorted(result["lid_scores"].items(), key=lambda item: item[1], reverse=True)
         print(f"Saved recording:   {wav_path}")
-        print(f"Vox coarse guess:  {result['legacy_language']} ({result['lid_confidence']:.1%})")
-        print("Vox top scores:    " + ", ".join(f"{name}={score:.1%}" for name, score in scores[:4]))
+        if result["lid_confidence"] is not None:
+            scores = sorted(result["lid_scores"].items(), key=lambda item: item[1], reverse=True)
+            print(f"Vox coarse guess:  {result['legacy_language']} ({result['lid_confidence']:.1%})")
+            print("Vox top scores:    " + ", ".join(f"{name}={score:.1%}" for name, score in scores[:4]))
         print(f"Detected language: {result['language']}")
         print(f"ASR backend:       {result['model']}")
+        print(f"Routing decision:  {result['decision']} (asr_confidence={result['asr_confidence']:.3f})")
         print(f"Transcribed text:  {result['text']}")
         print(f"Stop-to-text time: {latency:.2f} seconds\n")
 

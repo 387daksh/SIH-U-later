@@ -8,13 +8,12 @@ models/
 indic-conformer-600m-int8-onnx/
 indic-conformer-600m-int8-onnx-patched/
 quantized/
-deployment_models/
 
 # Downloaded corpora, generated audio, and resumable raw benchmark output
 artifacts/
 evaluation/fleurs_source/
 evaluation/fleurs_test_*/
-evaluation/mucs_hinglish_source/
-evaluation/results_smoke_*/
 evaluation/**/samples.jsonl
 evaluation/**/samples.csv
+SIH2026_Context_Reference (2).md
+.claude/

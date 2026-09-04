@@ -6,9 +6,7 @@ import hashlib
 import json
 import math
 import os
-import platform
 import statistics
-import sys
 import time
 import unicodedata
 from collections import Counter, defaultdict
@@ -17,7 +15,6 @@ from pathlib import Path
 import numpy as np
 import psutil
 import soundfile as sf
-import torch
 
 os.environ.setdefault("TRANSFORMERS_VERBOSITY", "error")
 
@@ -30,11 +27,6 @@ def file_sha256(path):
         for chunk in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
-
-
-def directory_mib(path):
-    path = Path(path)
-    return sum(item.stat().st_size for item in path.rglob("*") if item.is_file()) / 2**20
 
 
 def normalize(text):
@@ -106,39 +98,18 @@ def load_completed(path):
     return completed
 
 
-def run_benchmark(
-    manifest,
-    model_root,
-    indic_dir,
-    output_dir,
-    quantize_lid=False,
-    quantize_whisper=False,
-    languages=None,
-):
-    invocation_started = time.perf_counter()
-    process = psutil.Process()
-    rss_before_load_mib = process.memory_info().rss / 2**20
-    rss_after_load_mib = None
-    pipeline_load_seconds = None
+def run_benchmark(manifest, model_root, indic_dir, output_dir):
     manifest, output_dir = Path(manifest), Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     result_path = output_dir / "samples.jsonl"
     rows = read_rows(manifest)
-    if languages:
-        rows = [row for row in rows if row["language_label"] in languages]
-        if not rows:
-            raise ValueError(f"No manifest rows match languages: {sorted(languages)}")
     completed = load_completed(result_path)
     meta = {
         "manifest": str(manifest.resolve()),
         "manifest_sha256": file_sha256(manifest),
         "model_root": str(Path(model_root).resolve()),
         "indic_dir": str(Path(indic_dir).resolve()),
-        "quantize_lid": quantize_lid,
-        "quantize_whisper": quantize_whisper,
-        "languages": sorted(languages) if languages else None,
         "pipeline_sha256": file_sha256("sih_speech/pipeline.py"),
-        "benchmark_sha256": file_sha256("scripts/benchmark.py"),
         "device": "cpu",
     }
     meta_path = output_dir / "benchmark_meta.json"
@@ -151,16 +122,8 @@ def run_benchmark(
     if pending:
         print(f"Loading pipeline; {len(pending)} of {len(rows)} samples remain...", flush=True)
         load_started = time.perf_counter()
-        pipeline = SpeechPipeline(
-            model_root,
-            device="cpu",
-            indic_dir=indic_dir,
-            quantize_lid=quantize_lid,
-            quantize_whisper=quantize_whisper,
-        )
-        pipeline_load_seconds = time.perf_counter() - load_started
-        rss_after_load_mib = process.memory_info().rss / 2**20
-        print(f"Pipeline loaded in {pipeline_load_seconds:.2f}s.", flush=True)
+        pipeline = SpeechPipeline(model_root, device="cpu", indic_dir=indic_dir)
+        print(f"Pipeline loaded in {time.perf_counter() - load_started:.2f}s.", flush=True)
         with result_path.open("a", encoding="utf-8") as output:
             for index, row in enumerate(pending, len(completed) + 1):
                 audio_path, expected = row["audio_path"], row["language_label"]
@@ -175,7 +138,7 @@ def run_benchmark(
                         oracle_text = routed["text"]
                     else:
                         started = time.perf_counter()
-                        oracle_text = pipeline.whisper.transcribe(audio_path)
+                        oracle_text = pipeline.whisper.transcribe(audio_path)["text"]
                         oracle_extra_ms = (time.perf_counter() - started) * 1000
                 else:
                     if indic_result is None:
@@ -216,28 +179,7 @@ def run_benchmark(
                     f"WER={sample_wer:.2f} {routed_ms:.0f}ms",
                     flush=True,
                 )
-    summary = summarize(list(completed.values()), output_dir)
-    model_sizes = {
-        "lid_directory_mib": directory_mib(Path(model_root) / "lid"),
-        "whisper_directory_mib": directory_mib(Path(model_root) / "whisper"),
-        "indic_directory_mib": directory_mib(indic_dir),
-    }
-    runtime = {
-        "python": sys.version,
-        "platform": platform.platform(),
-        "logical_cpus": os.cpu_count(),
-        "ram_total_mib": psutil.virtual_memory().total / 2**20,
-        "torch_version": torch.__version__,
-        "onnxruntime_version": __import__("onnxruntime").__version__,
-        "onnxruntime_providers": __import__("onnxruntime").get_available_providers(),
-        "pipeline_load_seconds": pipeline_load_seconds,
-        "invocation_wall_seconds": time.perf_counter() - invocation_started,
-        "rss_before_load_mib": rss_before_load_mib,
-        "rss_after_load_mib": rss_after_load_mib,
-        "peak_process_mib": summary["process_memory_mib"].get("peak_wset"),
-        "model_sizes": {**model_sizes, "total_directory_mib": sum(model_sizes.values())},
-    }
-    (output_dir / "runtime.json").write_text(json.dumps(runtime, indent=2), encoding="utf-8")
+    summarize(list(completed.values()), output_dir)
 
 
 def ratio(numerator, denominator):
@@ -304,7 +246,7 @@ def aggregate(rows):
     return result
 
 
-def classification(rows, evaluated_languages):
+def classification(rows):
     matrix = {expected: {predicted: 0 for predicted in LANGUAGES} for expected in LANGUAGES}
     for row in rows:
         matrix[row["language_label"]][row["predicted_language"]] += 1
@@ -322,7 +264,7 @@ def classification(rows, evaluated_languages):
             "support": true_positive + false_negative,
         }
     metrics["macro"] = {
-        key: statistics.fmean(metrics[language][key] for language in evaluated_languages)
+        key: statistics.fmean(metrics[language][key] for language in LANGUAGES)
         for key in ("precision", "recall", "f1")
     }
     return matrix, metrics
@@ -346,13 +288,9 @@ def expected_calibration_error(rows, bins=10):
 
 def summarize(rows, output_dir):
     rows.sort(key=lambda row: (LANGUAGES.index(row["language_label"]), row["audio_path"]))
-    evaluated_languages = [
-        language for language in LANGUAGES
-        if any(row["language_label"] == language for row in rows)
-    ]
     per_language = {
         language: aggregate([row for row in rows if row["language_label"] == language])
-        for language in evaluated_languages
+        for language in LANGUAGES
     }
     overall = aggregate(rows)
     overall["macro_routed_wer"] = statistics.fmean(value["routed_wer"] for value in per_language.values())
@@ -371,7 +309,7 @@ def summarize(rows, output_dir):
     previous_memory = previous_summary.get("process_memory_mib", {})
     if previous_memory.get("peak_wset", 0) > memory_bytes.get("peak_wset", 0):
         memory_bytes = previous_memory
-    matrix, class_metrics = classification(rows, evaluated_languages)
+    matrix, class_metrics = classification(rows)
     genders = {
         gender: aggregate([row for row in rows if row.get("gender") == gender])
         for gender in sorted({row.get("gender") for row in rows})
@@ -389,7 +327,6 @@ def summarize(rows, output_dir):
     write_csv(rows, output_dir / "samples.csv")
     write_report(summary, output_dir / "REPORT.md")
     print(f"Report: {(output_dir / 'REPORT.md').resolve()}")
-    return summary
 
 
 def write_csv(rows, path):
@@ -431,7 +368,7 @@ def write_report(summary, path):
         "## Per-language results", "",
         "| Language | Legacy Vox acc. | Final LID acc. | Routed WER | Routed CER | Oracle WER | Oracle CER | P50 ms | P95 ms |", "|---|---:|---:|---:|---:|---:|---:|---:|---:|",
     ]
-    for language in summary["per_language"]:
+    for language in LANGUAGES:
         value = summary["per_language"][language]
         lines.append(
             f"| {language} | {percent(value['legacy_accuracy'])} | {percent(value['language_accuracy'])} | {percent(value['routed_wer'])} | "
@@ -439,13 +376,13 @@ def write_report(summary, path):
             f"{value['routed_latency_ms']['p50']:.0f} | {value['routed_latency_ms']['p95']:.0f} |"
         )
     lines.extend(["", "## Language classification", "", "| Language | Precision | Recall | F1 | N |", "|---|---:|---:|---:|---:|"])
-    for language in summary["per_language"]:
+    for language in LANGUAGES:
         value = summary["classification"][language]
         lines.append(f"| {language} | {percent(value['precision'])} | {percent(value['recall'])} | {percent(value['f1'])} | {value['support']} |")
     lines.extend(["", "## Final-language confusion matrix", "", "Rows are references; columns are predictions.", ""])
     lines.append("| ref \\ pred | " + " | ".join(LANGUAGES) + " |")
     lines.append("|---|" + "---:|" * len(LANGUAGES))
-    for expected in summary["per_language"]:
+    for expected in LANGUAGES:
         lines.append(f"| {expected} | " + " | ".join(str(summary["confusion_matrix"][expected][predicted]) for predicted in LANGUAGES) + " |")
     lines.extend([
         "", "## Timing", "",
@@ -475,20 +412,8 @@ def main():
     parser.add_argument("--model-root", default="models")
     parser.add_argument("--indic-dir", default="indic-conformer-600m-int8-onnx-patched")
     parser.add_argument("--output-dir", default="evaluation/results_fleurs_test_100")
-    parser.add_argument("--quantize-lid", action="store_true")
-    parser.add_argument("--quantize-whisper", action="store_true")
-    parser.add_argument("--languages", help="comma-separated manifest languages to benchmark")
     args = parser.parse_args()
-    languages = {item.strip() for item in args.languages.split(",")} if args.languages else None
-    run_benchmark(
-        args.manifest,
-        args.model_root,
-        args.indic_dir,
-        args.output_dir,
-        quantize_lid=args.quantize_lid,
-        quantize_whisper=args.quantize_whisper,
-        languages=languages,
-    )
+    run_benchmark(args.manifest, args.model_root, args.indic_dir, args.output_dir)
 
 
 if __name__ == "__main__":
