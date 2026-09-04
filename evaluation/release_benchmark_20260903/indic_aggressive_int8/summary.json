@@ -1,0 +1,838 @@
+{
+  "overall": {
+    "samples": 900,
+    "audio_hours": 3.148383333333333,
+    "routed_word_errors": 3635,
+    "routed_word_substitutions": 2724,
+    "routed_word_deletions": 400,
+    "routed_word_insertions": 511,
+    "routed_character_errors": 8557,
+    "routed_character_substitutions": 2905,
+    "routed_character_deletions": 1717,
+    "routed_character_insertions": 3935,
+    "routed_wer": 0.21597053056859367,
+    "routed_cer": 0.08278831269349846,
+    "routed_ser": 0.9188888888888889,
+    "routed_reference_words": 16831,
+    "oracle_word_errors": 3563,
+    "oracle_word_substitutions": 2662,
+    "oracle_word_deletions": 402,
+    "oracle_word_insertions": 499,
+    "oracle_character_errors": 8124,
+    "oracle_character_substitutions": 2479,
+    "oracle_character_deletions": 1703,
+    "oracle_character_insertions": 3942,
+    "oracle_wer": 0.2116927098805775,
+    "oracle_cer": 0.07859907120743034,
+    "oracle_ser": 0.9188888888888889,
+    "oracle_reference_words": 16831,
+    "language_accuracy": 0.9922222222222222,
+    "language_accuracy_95ci": [
+      0.9840329829987713,
+      0.9962274281091976
+    ],
+    "legacy_accuracy": 0.8766666666666667,
+    "coarse_accuracy": 1.0,
+    "routed_latency_ms": {
+      "mean": 624.7001540001171,
+      "p50": 585.4419500101358,
+      "p95": 1001.2780900462529,
+      "max": 3320.4932000371628
+    },
+    "lid_latency_ms": {
+      "mean": 195.26906533257312,
+      "p50": 183.56994999339804,
+      "p95": 318.1863149889977
+    },
+    "routed_asr_latency_ms": {
+      "mean": 429.43108866754403,
+      "p50": 401.17614998598583,
+      "p95": 679.6594550105507
+    },
+    "aggregate_rtf": 0.04960483586815328,
+    "macro_routed_wer": 0.21894777736124083,
+    "macro_routed_cer": 0.08181286270235387,
+    "macro_oracle_wer": 0.2150136670999781,
+    "macro_oracle_cer": 0.07728048980973014,
+    "legacy_lid_ece": 0.06450643622212947
+  },
+  "per_language": {
+    "hindi": {
+      "samples": 100,
+      "audio_hours": 0.31239999999999984,
+      "routed_word_errors": 352,
+      "routed_word_substitutions": 284,
+      "routed_word_deletions": 30,
+      "routed_word_insertions": 38,
+      "routed_character_errors": 635,
+      "routed_character_substitutions": 239,
+      "routed_character_deletions": 189,
+      "routed_character_insertions": 207,
+      "routed_wer": 0.1438496117695137,
+      "routed_cer": 0.0648356136410047,
+      "routed_ser": 0.95,
+      "routed_reference_words": 2447,
+      "oracle_word_errors": 352,
+      "oracle_word_substitutions": 284,
+      "oracle_word_deletions": 30,
+      "oracle_word_insertions": 38,
+      "oracle_character_errors": 635,
+      "oracle_character_substitutions": 239,
+      "oracle_character_deletions": 189,
+      "oracle_character_insertions": 207,
+      "oracle_wer": 0.1438496117695137,
+      "oracle_cer": 0.0648356136410047,
+      "oracle_ser": 0.95,
+      "oracle_reference_words": 2447,
+      "language_accuracy": 1.0,
+      "language_accuracy_95ci": [
+        0.9630065017930143,
+        1.0
+      ],
+      "legacy_accuracy": 0.98,
+      "coarse_accuracy": 1.0,
+      "routed_latency_ms": {
+        "mean": 570.7790369936265,
+        "p50": 529.5704499876592,
+        "p95": 902.6806249981745,
+        "max": 1525.1671000150964
+      },
+      "lid_latency_ms": {
+        "mean": 176.3364729983732,
+        "p50": 166.6792999894824,
+        "p95": 292.98146498331334
+      },
+      "routed_asr_latency_ms": {
+        "mean": 394.4425639952533,
+        "p50": 366.13929996383376,
+        "p95": 644.5587699592579
+      },
+      "aggregate_rtf": 0.050752155089061994
+    },
+    "gujarati": {
+      "samples": 100,
+      "audio_hours": 0.28870000000000007,
+      "routed_word_errors": 446,
+      "routed_word_substitutions": 343,
+      "routed_word_deletions": 43,
+      "routed_word_insertions": 60,
+      "routed_character_errors": 1001,
+      "routed_character_substitutions": 589,
+      "routed_character_deletions": 106,
+      "routed_character_insertions": 306,
+      "routed_wer": 0.21197718631178708,
+      "routed_cer": 0.09740196555415004,
+      "routed_ser": 0.93,
+      "routed_reference_words": 2104,
+      "oracle_word_errors": 397,
+      "oracle_word_substitutions": 303,
+      "oracle_word_deletions": 43,
+      "oracle_word_insertions": 51,
+      "oracle_character_errors": 730,
+      "oracle_character_substitutions": 315,
+      "oracle_character_deletions": 103,
+      "oracle_character_insertions": 312,
+      "oracle_wer": 0.18868821292775664,
+      "oracle_cer": 0.07103240245207745,
+      "oracle_ser": 0.93,
+      "oracle_reference_words": 2104,
+      "language_accuracy": 0.96,
+      "language_accuracy_95ci": [
+        0.9016292856411208,
+        0.9843366960084523
+      ],
+      "legacy_accuracy": 0.99,
+      "coarse_accuracy": 1.0,
+      "routed_latency_ms": {
+        "mean": 527.4732149997726,
+        "p50": 531.2352999753784,
+        "p95": 787.8195699770002,
+        "max": 927.2774999844842
+      },
+      "lid_latency_ms": {
+        "mean": 163.18562800181098,
+        "p50": 165.50030000507832,
+        "p95": 246.85965001117435
+      },
+      "routed_asr_latency_ms": {
+        "mean": 364.2875869979616,
+        "p50": 362.16909997165203,
+        "p95": 545.5810999847017
+      },
+      "aggregate_rtf": 0.05075176220988459
+    },
+    "marathi": {
+      "samples": 100,
+      "audio_hours": 0.3956666666666666,
+      "routed_word_errors": 402,
+      "routed_word_substitutions": 311,
+      "routed_word_deletions": 28,
+      "routed_word_insertions": 63,
+      "routed_character_errors": 851,
+      "routed_character_substitutions": 313,
+      "routed_character_deletions": 120,
+      "routed_character_insertions": 418,
+      "routed_wer": 0.20948410630536737,
+      "routed_cer": 0.07573195692800569,
+      "routed_ser": 0.92,
+      "routed_reference_words": 1919,
+      "oracle_word_errors": 402,
+      "oracle_word_substitutions": 311,
+      "oracle_word_deletions": 28,
+      "oracle_word_insertions": 63,
+      "oracle_character_errors": 851,
+      "oracle_character_substitutions": 313,
+      "oracle_character_deletions": 120,
+      "oracle_character_insertions": 418,
+      "oracle_wer": 0.20948410630536737,
+      "oracle_cer": 0.07573195692800569,
+      "oracle_ser": 0.92,
+      "oracle_reference_words": 1919,
+      "language_accuracy": 1.0,
+      "language_accuracy_95ci": [
+        0.9630065017930143,
+        1.0
+      ],
+      "legacy_accuracy": 0.97,
+      "coarse_accuracy": 1.0,
+      "routed_latency_ms": {
+        "mean": 693.9030450035352,
+        "p50": 639.373300014995,
+        "p95": 1121.627130033448,
+        "max": 1726.9539999542758
+      },
+      "lid_latency_ms": {
+        "mean": 218.37804999842774,
+        "p50": 203.0901000252925,
+        "p95": 354.3246149667538
+      },
+      "routed_asr_latency_ms": {
+        "mean": 475.5249950051075,
+        "p50": 437.74255001335405,
+        "p95": 775.2687400643479
+      },
+      "aggregate_rtf": 0.04871546230016395
+    },
+    "kannada": {
+      "samples": 100,
+      "audio_hours": 0.3640833333333332,
+      "routed_word_errors": 320,
+      "routed_word_substitutions": 253,
+      "routed_word_deletions": 21,
+      "routed_word_insertions": 46,
+      "routed_character_errors": 706,
+      "routed_character_substitutions": 221,
+      "routed_character_deletions": 120,
+      "routed_character_insertions": 365,
+      "routed_wer": 0.19863438857852267,
+      "routed_cer": 0.05932274598773212,
+      "routed_ser": 0.83,
+      "routed_reference_words": 1611,
+      "oracle_word_errors": 320,
+      "oracle_word_substitutions": 253,
+      "oracle_word_deletions": 21,
+      "oracle_word_insertions": 46,
+      "oracle_character_errors": 706,
+      "oracle_character_substitutions": 221,
+      "oracle_character_deletions": 120,
+      "oracle_character_insertions": 365,
+      "oracle_wer": 0.19863438857852267,
+      "oracle_cer": 0.05932274598773212,
+      "oracle_ser": 0.83,
+      "oracle_reference_words": 1611,
+      "language_accuracy": 1.0,
+      "language_accuracy_95ci": [
+        0.9630065017930143,
+        1.0
+      ],
+      "legacy_accuracy": 1.0,
+      "coarse_accuracy": 1.0,
+      "routed_latency_ms": {
+        "mean": 639.1918139986228,
+        "p50": 602.5897999934386,
+        "p95": 953.4928550216137,
+        "max": 1456.0366999940015
+      },
+      "lid_latency_ms": {
+        "mean": 200.96012899884954,
+        "p50": 193.28319997293875,
+        "p95": 300.99473504524207
+      },
+      "routed_asr_latency_ms": {
+        "mean": 438.2316849997733,
+        "p50": 410.4974999791011,
+        "p95": 651.7478799214587
+      },
+      "aggregate_rtf": 0.048767209429970475
+    },
+    "malayalam": {
+      "samples": 100,
+      "audio_hours": 0.42373333333333324,
+      "routed_word_errors": 355,
+      "routed_word_substitutions": 294,
+      "routed_word_deletions": 40,
+      "routed_word_insertions": 21,
+      "routed_character_errors": 883,
+      "routed_character_substitutions": 259,
+      "routed_character_deletions": 128,
+      "routed_character_insertions": 496,
+      "routed_wer": 0.22383354350567466,
+      "routed_cer": 0.06426024306819009,
+      "routed_ser": 0.93,
+      "routed_reference_words": 1586,
+      "oracle_word_errors": 355,
+      "oracle_word_substitutions": 294,
+      "oracle_word_deletions": 40,
+      "oracle_word_insertions": 21,
+      "oracle_character_errors": 883,
+      "oracle_character_substitutions": 259,
+      "oracle_character_deletions": 128,
+      "oracle_character_insertions": 496,
+      "oracle_wer": 0.22383354350567466,
+      "oracle_cer": 0.06426024306819009,
+      "oracle_ser": 0.93,
+      "oracle_reference_words": 1586,
+      "language_accuracy": 1.0,
+      "language_accuracy_95ci": [
+        0.9630065017930143,
+        1.0
+      ],
+      "legacy_accuracy": 0.99,
+      "coarse_accuracy": 1.0,
+      "routed_latency_ms": {
+        "mean": 736.6026910045184,
+        "p50": 691.1101000150666,
+        "p95": 1203.926179962582,
+        "max": 1950.2366000087932
+      },
+      "lid_latency_ms": {
+        "mean": 232.37268499680795,
+        "p50": 215.11699998518452,
+        "p95": 379.139959992608
+      },
+      "routed_asr_latency_ms": {
+        "mean": 504.2300060077105,
+        "p50": 470.7180500263348,
+        "p95": 824.7862199699738
+      },
+      "aggregate_rtf": 0.04828788356176045
+    },
+    "tamil": {
+      "samples": 100,
+      "audio_hours": 0.3665555555555556,
+      "routed_word_errors": 517,
+      "routed_word_substitutions": 334,
+      "routed_word_deletions": 46,
+      "routed_word_insertions": 137,
+      "routed_character_errors": 1754,
+      "routed_character_substitutions": 321,
+      "routed_character_deletions": 171,
+      "routed_character_insertions": 1262,
+      "routed_wer": 0.2961053837342497,
+      "routed_cer": 0.1258339909606141,
+      "routed_ser": 0.97,
+      "routed_reference_words": 1746,
+      "oracle_word_errors": 517,
+      "oracle_word_substitutions": 334,
+      "oracle_word_deletions": 46,
+      "oracle_word_insertions": 137,
+      "oracle_character_errors": 1754,
+      "oracle_character_substitutions": 321,
+      "oracle_character_deletions": 171,
+      "oracle_character_insertions": 1262,
+      "oracle_wer": 0.2961053837342497,
+      "oracle_cer": 0.1258339909606141,
+      "oracle_ser": 0.97,
+      "oracle_reference_words": 1746,
+      "language_accuracy": 1.0,
+      "language_accuracy_95ci": [
+        0.9630065017930143,
+        1.0
+      ],
+      "legacy_accuracy": 0.97,
+      "coarse_accuracy": 1.0,
+      "routed_latency_ms": {
+        "mean": 663.3064660022501,
+        "p50": 569.2514999827836,
+        "p95": 1062.6420149957992,
+        "max": 3320.4932000371628
+      },
+      "lid_latency_ms": {
+        "mean": 205.62573799979873,
+        "p50": 180.99229998188093,
+        "p95": 350.85421999101527
+      },
+      "routed_asr_latency_ms": {
+        "mean": 457.68072800245136,
+        "p50": 396.7211499984842,
+        "p95": 720.2597049821633
+      },
+      "aggregate_rtf": 0.05026572188559033
+    },
+    "telugu": {
+      "samples": 100,
+      "audio_hours": 0.3049833333333333,
+      "routed_word_errors": 424,
+      "routed_word_substitutions": 331,
+      "routed_word_deletions": 48,
+      "routed_word_insertions": 45,
+      "routed_character_errors": 909,
+      "routed_character_substitutions": 366,
+      "routed_character_deletions": 136,
+      "routed_character_insertions": 407,
+      "routed_wer": 0.24551244933410538,
+      "routed_cer": 0.07955539996499213,
+      "routed_ser": 0.88,
+      "routed_reference_words": 1727,
+      "oracle_word_errors": 424,
+      "oracle_word_substitutions": 331,
+      "oracle_word_deletions": 48,
+      "oracle_word_insertions": 45,
+      "oracle_character_errors": 909,
+      "oracle_character_substitutions": 366,
+      "oracle_character_deletions": 136,
+      "oracle_character_insertions": 407,
+      "oracle_wer": 0.24551244933410538,
+      "oracle_cer": 0.07955539996499213,
+      "oracle_ser": 0.88,
+      "oracle_reference_words": 1727,
+      "language_accuracy": 1.0,
+      "language_accuracy_95ci": [
+        0.9630065017930143,
+        1.0
+      ],
+      "legacy_accuracy": 0.99,
+      "coarse_accuracy": 1.0,
+      "routed_latency_ms": {
+        "mean": 557.5428579986328,
+        "p50": 539.8492500244174,
+        "p95": 823.7687700340756,
+        "max": 1161.955899966415
+      },
+      "lid_latency_ms": {
+        "mean": 173.19601199764293,
+        "p50": 172.91415002546273,
+        "p95": 261.92079501634
+      },
+      "routed_asr_latency_ms": {
+        "mean": 384.3468460009899,
+        "p50": 368.2474500092212,
+        "p95": 567.1864700329023
+      },
+      "aggregate_rtf": 0.0507808129769052
+    },
+    "odia": {
+      "samples": 100,
+      "audio_hours": 0.33387777777777794,
+      "routed_word_errors": 507,
+      "routed_word_substitutions": 332,
+      "routed_word_deletions": 121,
+      "routed_word_insertions": 54,
+      "routed_character_errors": 1234,
+      "routed_character_substitutions": 370,
+      "routed_character_deletions": 639,
+      "routed_character_insertions": 225,
+      "routed_wer": 0.2671232876712329,
+      "routed_cer": 0.10985489183655302,
+      "routed_ser": 0.95,
+      "routed_reference_words": 1898,
+      "oracle_word_errors": 484,
+      "oracle_word_substitutions": 310,
+      "oracle_word_deletions": 123,
+      "oracle_word_insertions": 51,
+      "oracle_character_errors": 1072,
+      "oracle_character_substitutions": 218,
+      "oracle_character_deletions": 628,
+      "oracle_character_insertions": 226,
+      "oracle_wer": 0.25500526870389884,
+      "oracle_cer": 0.09543309890501202,
+      "oracle_ser": 0.95,
+      "oracle_reference_words": 1898,
+      "language_accuracy": 0.97,
+      "language_accuracy_95ci": [
+        0.9154806357094724,
+        0.9897454759759611
+      ],
+      "legacy_accuracy": 0.0,
+      "coarse_accuracy": 1.0,
+      "routed_latency_ms": {
+        "mean": 596.6421159997117,
+        "p50": 562.6814500137698,
+        "p95": 918.1330100051126,
+        "max": 1222.7490000077523
+      },
+      "lid_latency_ms": {
+        "mean": 186.22340999892913,
+        "p50": 177.18084997613914,
+        "p95": 290.8362749731168
+      },
+      "routed_asr_latency_ms": {
+        "mean": 410.41870600078255,
+        "p50": 386.89970000996254,
+        "p95": 627.2967350319958
+      },
+      "aggregate_rtf": 0.04963909913805047
+    },
+    "bengali": {
+      "samples": 100,
+      "audio_hours": 0.3583833333333334,
+      "routed_word_errors": 312,
+      "routed_word_substitutions": 242,
+      "routed_word_deletions": 23,
+      "routed_word_insertions": 47,
+      "routed_character_errors": 584,
+      "routed_character_substitutions": 227,
+      "routed_character_deletions": 108,
+      "routed_character_insertions": 249,
+      "routed_wer": 0.17401003904071388,
+      "routed_cer": 0.05951895637994293,
+      "routed_ser": 0.91,
+      "routed_reference_words": 1793,
+      "oracle_word_errors": 312,
+      "oracle_word_substitutions": 242,
+      "oracle_word_deletions": 23,
+      "oracle_word_insertions": 47,
+      "oracle_character_errors": 584,
+      "oracle_character_substitutions": 227,
+      "oracle_character_deletions": 108,
+      "oracle_character_insertions": 249,
+      "oracle_wer": 0.17401003904071388,
+      "oracle_cer": 0.05951895637994293,
+      "oracle_ser": 0.91,
+      "oracle_reference_words": 1793,
+      "language_accuracy": 1.0,
+      "language_accuracy_95ci": [
+        0.9630065017930143,
+        1.0
+      ],
+      "legacy_accuracy": 1.0,
+      "coarse_accuracy": 1.0,
+      "routed_latency_ms": {
+        "mean": 636.860144000384,
+        "p50": 610.3371500212234,
+        "p95": 973.4741199790732,
+        "max": 1511.7486000526696
+      },
+      "lid_latency_ms": {
+        "mean": 201.14346300251782,
+        "p50": 192.19640002120286,
+        "p95": 318.23726998991333
+      },
+      "routed_asr_latency_ms": {
+        "mean": 435.7166809978662,
+        "p50": 417.7777999721002,
+        "p95": 667.433989982237
+      },
+      "aggregate_rtf": 0.049362115673811706
+    }
+  },
+  "classification": {
+    "hindi": {
+      "precision": 0.9433962264150944,
+      "recall": 1.0,
+      "f1": 0.970873786407767,
+      "support": 100
+    },
+    "gujarati": {
+      "precision": 1.0,
+      "recall": 0.96,
+      "f1": 0.9795918367346939,
+      "support": 100
+    },
+    "marathi": {
+      "precision": 0.9900990099009901,
+      "recall": 1.0,
+      "f1": 0.9950248756218906,
+      "support": 100
+    },
+    "kannada": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "support": 100
+    },
+    "malayalam": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "support": 100
+    },
+    "tamil": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "support": 100
+    },
+    "telugu": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "support": 100
+    },
+    "odia": {
+      "precision": 1.0,
+      "recall": 0.97,
+      "f1": 0.9847715736040609,
+      "support": 100
+    },
+    "bengali": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "support": 100
+    },
+    "english": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0,
+      "support": 0
+    },
+    "macro": {
+      "precision": 0.9926105818128982,
+      "recall": 0.9922222222222222,
+      "f1": 0.9922513413742681
+    }
+  },
+  "confusion_matrix": {
+    "hindi": {
+      "hindi": 100,
+      "gujarati": 0,
+      "marathi": 0,
+      "kannada": 0,
+      "malayalam": 0,
+      "tamil": 0,
+      "telugu": 0,
+      "odia": 0,
+      "bengali": 0,
+      "english": 0
+    },
+    "gujarati": {
+      "hindi": 4,
+      "gujarati": 96,
+      "marathi": 0,
+      "kannada": 0,
+      "malayalam": 0,
+      "tamil": 0,
+      "telugu": 0,
+      "odia": 0,
+      "bengali": 0,
+      "english": 0
+    },
+    "marathi": {
+      "hindi": 0,
+      "gujarati": 0,
+      "marathi": 100,
+      "kannada": 0,
+      "malayalam": 0,
+      "tamil": 0,
+      "telugu": 0,
+      "odia": 0,
+      "bengali": 0,
+      "english": 0
+    },
+    "kannada": {
+      "hindi": 0,
+      "gujarati": 0,
+      "marathi": 0,
+      "kannada": 100,
+      "malayalam": 0,
+      "tamil": 0,
+      "telugu": 0,
+      "odia": 0,
+      "bengali": 0,
+      "english": 0
+    },
+    "malayalam": {
+      "hindi": 0,
+      "gujarati": 0,
+      "marathi": 0,
+      "kannada": 0,
+      "malayalam": 100,
+      "tamil": 0,
+      "telugu": 0,
+      "odia": 0,
+      "bengali": 0,
+      "english": 0
+    },
+    "tamil": {
+      "hindi": 0,
+      "gujarati": 0,
+      "marathi": 0,
+      "kannada": 0,
+      "malayalam": 0,
+      "tamil": 100,
+      "telugu": 0,
+      "odia": 0,
+      "bengali": 0,
+      "english": 0
+    },
+    "telugu": {
+      "hindi": 0,
+      "gujarati": 0,
+      "marathi": 0,
+      "kannada": 0,
+      "malayalam": 0,
+      "tamil": 0,
+      "telugu": 100,
+      "odia": 0,
+      "bengali": 0,
+      "english": 0
+    },
+    "odia": {
+      "hindi": 2,
+      "gujarati": 0,
+      "marathi": 1,
+      "kannada": 0,
+      "malayalam": 0,
+      "tamil": 0,
+      "telugu": 0,
+      "odia": 97,
+      "bengali": 0,
+      "english": 0
+    },
+    "bengali": {
+      "hindi": 0,
+      "gujarati": 0,
+      "marathi": 0,
+      "kannada": 0,
+      "malayalam": 0,
+      "tamil": 0,
+      "telugu": 0,
+      "odia": 0,
+      "bengali": 100,
+      "english": 0
+    },
+    "english": {
+      "hindi": 0,
+      "gujarati": 0,
+      "marathi": 0,
+      "kannada": 0,
+      "malayalam": 0,
+      "tamil": 0,
+      "telugu": 0,
+      "odia": 0,
+      "bengali": 0,
+      "english": 0
+    }
+  },
+  "per_gender": {
+    "female": {
+      "samples": 499,
+      "audio_hours": 1.801466666666665,
+      "routed_word_errors": 2051,
+      "routed_word_substitutions": 1476,
+      "routed_word_deletions": 272,
+      "routed_word_insertions": 303,
+      "routed_character_errors": 5022,
+      "routed_character_substitutions": 1544,
+      "routed_character_deletions": 1194,
+      "routed_character_insertions": 2284,
+      "routed_wer": 0.22259604948990666,
+      "routed_cer": 0.08500338524035206,
+      "routed_ser": 0.9238476953907816,
+      "routed_reference_words": 9214,
+      "oracle_word_errors": 1998,
+      "oracle_word_substitutions": 1432,
+      "oracle_word_deletions": 274,
+      "oracle_word_insertions": 292,
+      "oracle_character_errors": 4718,
+      "oracle_character_substitutions": 1250,
+      "oracle_character_deletions": 1180,
+      "oracle_character_insertions": 2288,
+      "oracle_wer": 0.2168439331452138,
+      "oracle_cer": 0.07985781990521328,
+      "oracle_ser": 0.9238476953907816,
+      "oracle_reference_words": 9214,
+      "language_accuracy": 0.9899799599198397,
+      "language_accuracy_95ci": [
+        0.9767608564891886,
+        0.9957126566273388
+      ],
+      "legacy_accuracy": 0.7895791583166333,
+      "coarse_accuracy": 1.0,
+      "routed_latency_ms": {
+        "mean": 642.6792250501034,
+        "p50": 592.9412000114098,
+        "p95": 1048.5781300114465,
+        "max": 3320.4932000371628
+      },
+      "lid_latency_ms": {
+        "mean": 200.83961943710383,
+        "p50": 187.32959998305887,
+        "p95": 344.74384996574366
+      },
+      "routed_asr_latency_ms": {
+        "mean": 441.8396056129995,
+        "p50": 405.85199999623,
+        "p95": 715.2418099984061
+      },
+      "aggregate_rtf": 0.04944997491241732
+    },
+    "male": {
+      "samples": 401,
+      "audio_hours": 1.3469166666666665,
+      "routed_word_errors": 1584,
+      "routed_word_substitutions": 1248,
+      "routed_word_deletions": 128,
+      "routed_word_insertions": 208,
+      "routed_character_errors": 3535,
+      "routed_character_substitutions": 1361,
+      "routed_character_deletions": 523,
+      "routed_character_insertions": 1651,
+      "routed_wer": 0.20795588814493896,
+      "routed_cer": 0.07983288166214995,
+      "routed_ser": 0.912718204488778,
+      "routed_reference_words": 7617,
+      "oracle_word_errors": 1565,
+      "oracle_word_substitutions": 1230,
+      "oracle_word_deletions": 128,
+      "oracle_word_insertions": 207,
+      "oracle_character_errors": 3406,
+      "oracle_character_substitutions": 1229,
+      "oracle_character_deletions": 523,
+      "oracle_character_insertions": 1654,
+      "oracle_wer": 0.20546146776946303,
+      "oracle_cer": 0.07691960252935863,
+      "oracle_ser": 0.912718204488778,
+      "oracle_reference_words": 7617,
+      "language_accuracy": 0.9950124688279302,
+      "language_accuracy_95ci": [
+        0.9819996192224749,
+        0.9986311717949856
+      ],
+      "legacy_accuracy": 0.9850374064837906,
+      "coarse_accuracy": 1.0,
+      "routed_latency_ms": {
+        "mean": 602.3271952621044,
+        "p50": 571.6325999819674,
+        "p95": 882.5060999952257,
+        "max": 1511.7486000526696
+      },
+      "lid_latency_ms": {
+        "mean": 188.337128928182,
+        "p50": 178.45799995120615,
+        "p95": 285.9395999694243
+      },
+      "routed_asr_latency_ms": {
+        "mean": 413.9900663339224,
+        "p50": 393.4257999644615,
+        "p95": 621.3272999739274
+      },
+      "aggregate_rtf": 0.04981195844420464
+    }
+  },
+  "process_memory_mib": {
+    "rss": 4061.67578125,
+    "vms": 5938.8125,
+    "peak_wset": 4076.765625,
+    "wset": 4061.67578125,
+    "peak_paged_pool": 7.2949981689453125,
+    "paged_pool": 6.795906066894531,
+    "peak_nonpaged_pool": 0.21593475341796875,
+    "nonpaged_pool": 0.21567535400390625,
+    "pagefile": 5938.8125,
+    "peak_pagefile": 5986.9375,
+    "private": 5938.8125
+  },
+  "process_page_faults": 10080194
+}

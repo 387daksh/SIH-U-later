@@ -1,0 +1,22 @@
+{
+  "manifest": "E:\\SIH\\evaluation\\fleurs_test_100\\manifest.csv",
+  "manifest_sha256": "2b27225030af409a0c855701a6e075ac0d36afbd9b1d53b9f82e99a1552025bf",
+  "model_root": "E:\\SIH\\models",
+  "indic_dir": "C:\\Users\\hp\\.cache\\torch\\NeMo\\NeMo_3.0.0\\hf_hub_cache\\ai4bharat\\indic-conformer-600m-multilingual\\2c09f2f07843894b71e1e7c198038693",
+  "quantize_lid": false,
+  "quantize_whisper": false,
+  "languages": [
+    "bengali",
+    "gujarati",
+    "hindi",
+    "kannada",
+    "malayalam",
+    "marathi",
+    "odia",
+    "tamil",
+    "telugu"
+  ],
+  "pipeline_sha256": "c19fe5743b81c579e50e58ab774f25eb98bc9e2fb2c717396e38921a90e90473",
+  "benchmark_sha256": "98695504c72fa492158838242c0fcf7fe7f012edea037b50d5442ec52c141e3f",
+  "device": "cpu"
+}
