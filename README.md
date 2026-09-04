@@ -14,6 +14,7 @@ models/           downloaded LID and Whisper models
 evaluation/       real manifests, audio subsets, and benchmark reports
 artifacts/        local microphone and synthetic recordings
 android/           preferred Kotlin/ONNX Runtime app with USB-staged models and TTS
+android-bundled/   self-contained 800+ MiB APK variant; generated models stay untracked
 android-colleague/ incoming Android test prototype preserved from commit 8c6c0f1
 ```
 

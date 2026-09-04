@@ -16,6 +16,10 @@ android/app/src/main/assets/models/
 android-colleague/local.properties
 android-colleague/.gradle/
 android-colleague/**/build/
+android-bundled/local.properties
+android-bundled/.gradle/
+android-bundled/**/build/
+android-bundled/app/src/main/assets/models/
 .android-sdk/
 .android-user/
 dist/*.apk
