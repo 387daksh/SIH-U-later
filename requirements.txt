@@ -1,0 +1,12 @@
+# Runtime and evaluation dependencies
+speechbrain==1.0.3
+transformers==4.48.3
+huggingface_hub==0.28.1
+onnxruntime-gpu==1.20.1
+onnx==1.17.0
+onnxconverter-common==1.14.0
+soundfile>=0.12
+sounddevice>=0.4
+scipy>=1.10
+psutil>=5.9
+safetensors>=0.4

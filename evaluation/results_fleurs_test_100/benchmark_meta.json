@@ -1,0 +1,8 @@
+{
+  "manifest": "E:\\SIH\\evaluation\\fleurs_test_100\\manifest.csv",
+  "manifest_sha256": "2b27225030af409a0c855701a6e075ac0d36afbd9b1d53b9f82e99a1552025bf",
+  "model_root": "E:\\SIH\\models",
+  "indic_dir": "E:\\SIH\\indic-conformer-600m-int8-onnx-patched",
+  "pipeline_sha256": "46ff4777a4778fc2cc6a6847cc18635d7e77bbf9682776c2657aaf8e4e6f0f17",
+  "device": "cpu"
+}

@@ -1,0 +1,8 @@
+{
+  "manifest": "E:\\SIH\\evaluation\\fleurs_smoke_1\\manifest.csv",
+  "manifest_sha256": "e89ccdd1304fade7f3a893371cb3c1905e56af0af30333447ba8a01488aa7cf8",
+  "model_root": "E:\\SIH\\models",
+  "indic_dir": "E:\\SIH\\indic-conformer-600m-int8-onnx-patched",
+  "pipeline_sha256": "46ff4777a4778fc2cc6a6847cc18635d7e77bbf9682776c2657aaf8e4e6f0f17",
+  "device": "cpu"
+}

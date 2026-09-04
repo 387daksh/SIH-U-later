@@ -1,0 +1,3002 @@
+[
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/hindi/11063307654961399321.wav",
+    "expected": "hindi",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9996675252914429,
+    "whisper_confidence": 0.40513846278190613,
+    "indic_confidence": 0.17610405098336437,
+    "indic_predicted_language": "hindi"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/hindi/11803471848521041631.wav",
+    "expected": "hindi",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9999876022338867,
+    "whisper_confidence": 0.27520161867141724,
+    "indic_confidence": 0.18976739229213807,
+    "indic_predicted_language": "hindi"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/hindi/11847046500833945297.wav",
+    "expected": "hindi",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.8901915550231934,
+    "whisper_confidence": 0.24707677960395813,
+    "indic_confidence": 0.1968607540454781,
+    "indic_predicted_language": "hindi"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/hindi/1236616481434986.wav",
+    "expected": "hindi",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.985713005065918,
+    "whisper_confidence": 0.3644552230834961,
+    "indic_confidence": 0.1831275079942619,
+    "indic_predicted_language": "hindi"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/hindi/13000818536285454239.wav",
+    "expected": "hindi",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.999796450138092,
+    "whisper_confidence": 0.2538953721523285,
+    "indic_confidence": 0.19487025898278637,
+    "indic_predicted_language": "hindi"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/hindi/15100264608554334458.wav",
+    "expected": "hindi",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9998430013656616,
+    "whisper_confidence": 0.4513314366340637,
+    "indic_confidence": 0.17717417390620122,
+    "indic_predicted_language": "hindi"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/hindi/15659339096358030201.wav",
+    "expected": "hindi",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9999862909317017,
+    "whisper_confidence": 0.4635801315307617,
+    "indic_confidence": 0.1665735383106109,
+    "indic_predicted_language": "hindi"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/hindi/15862862082216857049.wav",
+    "expected": "hindi",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9979040622711182,
+    "whisper_confidence": 0.16513580083847046,
+    "indic_confidence": 0.15356873160333567,
+    "indic_predicted_language": "hindi"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/hindi/16547884853064265471.wav",
+    "expected": "hindi",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9699106812477112,
+    "whisper_confidence": 0.2253040373325348,
+    "indic_confidence": 0.20567291146920372,
+    "indic_predicted_language": "hindi"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/hindi/16674359696770797961.wav",
+    "expected": "hindi",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.934464156627655,
+    "whisper_confidence": 0.4191167652606964,
+    "indic_confidence": 0.21343818265278408,
+    "indic_predicted_language": "hindi"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/hindi/16717707103762877759.wav",
+    "expected": "hindi",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9712436199188232,
+    "whisper_confidence": 0.45827993750572205,
+    "indic_confidence": 0.1474679611478146,
+    "indic_predicted_language": "hindi"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/hindi/16985526409501635751.wav",
+    "expected": "hindi",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9999994039535522,
+    "whisper_confidence": 0.40947225689888,
+    "indic_confidence": 0.11755173129495233,
+    "indic_predicted_language": "hindi"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/hindi/17127945247681772175.wav",
+    "expected": "hindi",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9999902248382568,
+    "whisper_confidence": 0.33963170647621155,
+    "indic_confidence": 0.1828608800006925,
+    "indic_predicted_language": "hindi"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/hindi/17261544602668503036.wav",
+    "expected": "hindi",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9999111890792847,
+    "whisper_confidence": 0.36476191878318787,
+    "indic_confidence": 0.1969765293284912,
+    "indic_predicted_language": "hindi"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/hindi/17538987337957377962.wav",
+    "expected": "hindi",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9945120811462402,
+    "whisper_confidence": 0.5227439403533936,
+    "indic_confidence": 0.21974758718760662,
+    "indic_predicted_language": "hindi"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/hindi/17735119275738595727.wav",
+    "expected": "hindi",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9999922513961792,
+    "whisper_confidence": 0.9072821140289307,
+    "indic_confidence": 0.18930270498642673,
+    "indic_predicted_language": "hindi"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/hindi/17757682103941428900.wav",
+    "expected": "hindi",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.3176515996456146,
+    "whisper_confidence": 0.23331958055496216,
+    "indic_confidence": 0.10138844379356929,
+    "indic_predicted_language": "hindi"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/hindi/18086279104706512403.wav",
+    "expected": "hindi",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9697297215461731,
+    "whisper_confidence": 0.3172830641269684,
+    "indic_confidence": 0.21234609662011886,
+    "indic_predicted_language": "hindi"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/hindi/3588621217293213129.wav",
+    "expected": "hindi",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9958630800247192,
+    "whisper_confidence": 0.8942486643791199,
+    "indic_confidence": 0.17237406622107124,
+    "indic_predicted_language": "hindi"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/hindi/4571326740361085221.wav",
+    "expected": "hindi",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9999910593032837,
+    "whisper_confidence": 0.37978994846343994,
+    "indic_confidence": 0.20134570829218207,
+    "indic_predicted_language": "hindi"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/hindi/5049455666856947610.wav",
+    "expected": "hindi",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9900451302528381,
+    "whisper_confidence": 0.2481618970632553,
+    "indic_confidence": 0.1629939409579302,
+    "indic_predicted_language": "hindi"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/hindi/5710197895832272669.wav",
+    "expected": "hindi",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9998935461044312,
+    "whisper_confidence": 0.29695966839790344,
+    "indic_confidence": 0.16353872871026398,
+    "indic_predicted_language": "hindi"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/hindi/7037862691881688112.wav",
+    "expected": "hindi",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.3034067451953888,
+    "whisper_confidence": 0.2835136950016022,
+    "indic_confidence": 0.1232446241560147,
+    "indic_predicted_language": "hindi"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/hindi/7485834244311469203.wav",
+    "expected": "hindi",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9995569586753845,
+    "whisper_confidence": 0.46632251143455505,
+    "indic_confidence": 0.15622593110310845,
+    "indic_predicted_language": "hindi"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/hindi/7742172348084742883.wav",
+    "expected": "hindi",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.8812901377677917,
+    "whisper_confidence": 0.4351949989795685,
+    "indic_confidence": 0.11164273276517633,
+    "indic_predicted_language": "hindi"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/hindi/7810041577325288574.wav",
+    "expected": "hindi",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9999935626983643,
+    "whisper_confidence": 0.341880738735199,
+    "indic_confidence": 0.1416749986574838,
+    "indic_predicted_language": "hindi"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/hindi/8216373510737489857.wav",
+    "expected": "hindi",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9814203381538391,
+    "whisper_confidence": 0.24120929837226868,
+    "indic_confidence": 0.19343288590271884,
+    "indic_predicted_language": "hindi"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/hindi/9702619691119109001.wav",
+    "expected": "hindi",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9999833106994629,
+    "whisper_confidence": 0.25684770941734314,
+    "indic_confidence": 0.23742849217337925,
+    "indic_predicted_language": "hindi"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/hindi/9805131275579198539.wav",
+    "expected": "hindi",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9995126724243164,
+    "whisper_confidence": 0.21732446551322937,
+    "indic_confidence": 0.23592302818886107,
+    "indic_predicted_language": "hindi"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/hindi/9897512237411090753.wav",
+    "expected": "hindi",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9953699707984924,
+    "whisper_confidence": 0.25038108229637146,
+    "indic_confidence": 0.18374497796697864,
+    "indic_predicted_language": "hindi"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/gujarati/10051332836083130420.wav",
+    "expected": "gujarati",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9999700784683228,
+    "whisper_confidence": 0.3601474165916443,
+    "indic_confidence": 0.16736294658578657,
+    "indic_predicted_language": "gujarati"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/gujarati/11070043153178687923.wav",
+    "expected": "gujarati",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9940769672393799,
+    "whisper_confidence": 0.37752968072891235,
+    "indic_confidence": 0.16384623625294067,
+    "indic_predicted_language": "gujarati"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/gujarati/11924907222855676062.wav",
+    "expected": "gujarati",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9968405961990356,
+    "whisper_confidence": 0.4637351930141449,
+    "indic_confidence": 0.1459051268263105,
+    "indic_predicted_language": "gujarati"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/gujarati/11995071142259557900.wav",
+    "expected": "gujarati",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9969301819801331,
+    "whisper_confidence": 0.2517651319503784,
+    "indic_confidence": 0.2221901252427522,
+    "indic_predicted_language": "gujarati"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/gujarati/12585569315432202351.wav",
+    "expected": "gujarati",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.96454918384552,
+    "whisper_confidence": 0.8623173236846924,
+    "indic_confidence": 0.19607228465521565,
+    "indic_predicted_language": "gujarati"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/gujarati/12741527171260769457.wav",
+    "expected": "gujarati",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9999899864196777,
+    "whisper_confidence": 0.42509329319000244,
+    "indic_confidence": 0.20122951801264813,
+    "indic_predicted_language": "gujarati"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/gujarati/13611030355521740161.wav",
+    "expected": "gujarati",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9999297857284546,
+    "whisper_confidence": 0.8790656924247742,
+    "indic_confidence": 0.21646798621205723,
+    "indic_predicted_language": "gujarati"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/gujarati/1416836897012749999.wav",
+    "expected": "gujarati",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9999967813491821,
+    "whisper_confidence": 0.27597692608833313,
+    "indic_confidence": 0.24563499662003274,
+    "indic_predicted_language": "gujarati"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/gujarati/14465662658652657961.wav",
+    "expected": "gujarati",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.895642876625061,
+    "whisper_confidence": 0.2813854515552521,
+    "indic_confidence": 0.24017158137231143,
+    "indic_predicted_language": "gujarati"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/gujarati/14497554843935476925.wav",
+    "expected": "gujarati",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.999998927116394,
+    "whisper_confidence": 0.40011999011039734,
+    "indic_confidence": 0.2529896143259424,
+    "indic_predicted_language": "gujarati"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/gujarati/1466289430293893713.wav",
+    "expected": "gujarati",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9999566078186035,
+    "whisper_confidence": 0.4207182228565216,
+    "indic_confidence": 0.27849652364643085,
+    "indic_predicted_language": "gujarati"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/gujarati/14993894329815140071.wav",
+    "expected": "gujarati",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.999782145023346,
+    "whisper_confidence": 0.31779906153678894,
+    "indic_confidence": 0.22018782495770875,
+    "indic_predicted_language": "gujarati"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/gujarati/15017590804237070630.wav",
+    "expected": "gujarati",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9996765851974487,
+    "whisper_confidence": 0.27740639448165894,
+    "indic_confidence": 0.16172880884867324,
+    "indic_predicted_language": "hindi"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/gujarati/15325178367905827689.wav",
+    "expected": "gujarati",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9996209144592285,
+    "whisper_confidence": 0.5117341876029968,
+    "indic_confidence": 0.1722628545817421,
+    "indic_predicted_language": "gujarati"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/gujarati/15562419633026889732.wav",
+    "expected": "gujarati",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9999099969863892,
+    "whisper_confidence": 0.879158079624176,
+    "indic_confidence": 0.24832063419803693,
+    "indic_predicted_language": "gujarati"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/gujarati/16660404420257749637.wav",
+    "expected": "gujarati",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9995298385620117,
+    "whisper_confidence": 0.359535813331604,
+    "indic_confidence": 0.19964954955503345,
+    "indic_predicted_language": "gujarati"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/gujarati/17314960923151370207.wav",
+    "expected": "gujarati",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9988436698913574,
+    "whisper_confidence": 0.4465118944644928,
+    "indic_confidence": 0.20542426197248143,
+    "indic_predicted_language": "gujarati"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/gujarati/17759062648856838534.wav",
+    "expected": "gujarati",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9944781064987183,
+    "whisper_confidence": 0.18013042211532593,
+    "indic_confidence": 0.2052452124000804,
+    "indic_predicted_language": "gujarati"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/gujarati/18005513911890656345.wav",
+    "expected": "gujarati",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9996150732040405,
+    "whisper_confidence": 0.3939974009990692,
+    "indic_confidence": 0.24600321035056064,
+    "indic_predicted_language": "gujarati"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/gujarati/2874270480593437077.wav",
+    "expected": "gujarati",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9721535444259644,
+    "whisper_confidence": 0.16154983639717102,
+    "indic_confidence": 0.09109466053642236,
+    "indic_predicted_language": "gujarati"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/gujarati/3498062311011965858.wav",
+    "expected": "gujarati",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.914462149143219,
+    "whisper_confidence": 0.5333266258239746,
+    "indic_confidence": 0.19164194599274667,
+    "indic_predicted_language": "gujarati"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/gujarati/3900757017582181594.wav",
+    "expected": "gujarati",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9995145797729492,
+    "whisper_confidence": 0.4589987099170685,
+    "indic_confidence": 0.14566042491120018,
+    "indic_predicted_language": "gujarati"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/gujarati/3955081194618838859.wav",
+    "expected": "gujarati",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.999970555305481,
+    "whisper_confidence": 0.33296066522598267,
+    "indic_confidence": 0.21383074187421394,
+    "indic_predicted_language": "gujarati"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/gujarati/4265709247595594970.wav",
+    "expected": "gujarati",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9998080134391785,
+    "whisper_confidence": 0.36063945293426514,
+    "indic_confidence": 0.23405302023658386,
+    "indic_predicted_language": "gujarati"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/gujarati/4978757542562746526.wav",
+    "expected": "gujarati",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.5245388150215149,
+    "whisper_confidence": 0.86680006980896,
+    "indic_confidence": 0.18244122634229215,
+    "indic_predicted_language": "gujarati"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/gujarati/513341951677399945.wav",
+    "expected": "gujarati",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9999996423721313,
+    "whisper_confidence": 0.5087586045265198,
+    "indic_confidence": 0.20928011069042704,
+    "indic_predicted_language": "gujarati"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/gujarati/8540110083700669843.wav",
+    "expected": "gujarati",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9999861717224121,
+    "whisper_confidence": 0.3370315134525299,
+    "indic_confidence": 0.25640710613261614,
+    "indic_predicted_language": "gujarati"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/gujarati/9354883659394379025.wav",
+    "expected": "gujarati",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9994077682495117,
+    "whisper_confidence": 0.24822452664375305,
+    "indic_confidence": 0.21130148411656802,
+    "indic_predicted_language": "gujarati"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/gujarati/9640230941399455246.wav",
+    "expected": "gujarati",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9999163150787354,
+    "whisper_confidence": 0.13965746760368347,
+    "indic_confidence": 0.17115564270903474,
+    "indic_predicted_language": "gujarati"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/gujarati/9962939815550671931.wav",
+    "expected": "gujarati",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9994057416915894,
+    "whisper_confidence": 0.8902477025985718,
+    "indic_confidence": 0.16943902644561604,
+    "indic_predicted_language": "gujarati"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/marathi/11471240170763395441.wav",
+    "expected": "marathi",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9083113670349121,
+    "whisper_confidence": 0.5541611909866333,
+    "indic_confidence": 0.20344458915816063,
+    "indic_predicted_language": "marathi"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/marathi/11601958178903124513.wav",
+    "expected": "marathi",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9999321699142456,
+    "whisper_confidence": 0.3225019872188568,
+    "indic_confidence": 0.22477315644786325,
+    "indic_predicted_language": "marathi"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/marathi/12300459472126863180.wav",
+    "expected": "marathi",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9979708790779114,
+    "whisper_confidence": 0.6102671027183533,
+    "indic_confidence": 0.21955291279265088,
+    "indic_predicted_language": "marathi"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/marathi/12350418356730366903.wav",
+    "expected": "marathi",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9589284062385559,
+    "whisper_confidence": 0.4284443259239197,
+    "indic_confidence": 0.2803812068221824,
+    "indic_predicted_language": "marathi"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/marathi/12361163331037120285.wav",
+    "expected": "marathi",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.999913215637207,
+    "whisper_confidence": 0.2496117204427719,
+    "indic_confidence": 0.1410752056081864,
+    "indic_predicted_language": "marathi"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/marathi/1242926998504875300.wav",
+    "expected": "marathi",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.44549697637557983,
+    "whisper_confidence": 0.33093029260635376,
+    "indic_confidence": 0.23392001384908848,
+    "indic_predicted_language": "marathi"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/marathi/12483675282232922203.wav",
+    "expected": "marathi",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9841517210006714,
+    "whisper_confidence": 0.8741387724876404,
+    "indic_confidence": 0.2730352722213978,
+    "indic_predicted_language": "marathi"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/marathi/13146866717204611884.wav",
+    "expected": "marathi",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.3481981158256531,
+    "whisper_confidence": 0.2484106719493866,
+    "indic_confidence": 0.18357273569951454,
+    "indic_predicted_language": "marathi"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/marathi/13269882553162821862.wav",
+    "expected": "marathi",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9989425539970398,
+    "whisper_confidence": 0.5098883509635925,
+    "indic_confidence": 0.2862459565254135,
+    "indic_predicted_language": "marathi"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/marathi/15076216780554761198.wav",
+    "expected": "marathi",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9989368319511414,
+    "whisper_confidence": 0.36710023880004883,
+    "indic_confidence": 0.23324213315936504,
+    "indic_predicted_language": "marathi"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/marathi/15512763094885329752.wav",
+    "expected": "marathi",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9496814012527466,
+    "whisper_confidence": 0.8831109404563904,
+    "indic_confidence": 0.2871964932751975,
+    "indic_predicted_language": "marathi"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/marathi/15696436584239664697.wav",
+    "expected": "marathi",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.6094896197319031,
+    "whisper_confidence": 0.17986148595809937,
+    "indic_confidence": 0.21126017249882856,
+    "indic_predicted_language": "marathi"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/marathi/16818193612411185045.wav",
+    "expected": "marathi",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9996001124382019,
+    "whisper_confidence": 0.4218835234642029,
+    "indic_confidence": 0.26664014125307056,
+    "indic_predicted_language": "marathi"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/marathi/1705707798390926508.wav",
+    "expected": "marathi",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9507055282592773,
+    "whisper_confidence": 0.2937786877155304,
+    "indic_confidence": 0.20659430890322425,
+    "indic_predicted_language": "marathi"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/marathi/1772295372432823859.wav",
+    "expected": "marathi",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9717811346054077,
+    "whisper_confidence": 0.366893470287323,
+    "indic_confidence": 0.2594716119655997,
+    "indic_predicted_language": "marathi"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/marathi/1775666781612869825.wav",
+    "expected": "marathi",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.8849241137504578,
+    "whisper_confidence": 0.2525336444377899,
+    "indic_confidence": 0.27869751679274857,
+    "indic_predicted_language": "marathi"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/marathi/2373039707511861800.wav",
+    "expected": "marathi",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.985788881778717,
+    "whisper_confidence": 0.8837968707084656,
+    "indic_confidence": 0.33165721280070454,
+    "indic_predicted_language": "marathi"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/marathi/2590363119244550487.wav",
+    "expected": "marathi",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9964300990104675,
+    "whisper_confidence": 0.381156861782074,
+    "indic_confidence": 0.19028501898388972,
+    "indic_predicted_language": "marathi"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/marathi/2704709076703558654.wav",
+    "expected": "marathi",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9536961317062378,
+    "whisper_confidence": 0.6178252696990967,
+    "indic_confidence": 0.14629847291102516,
+    "indic_predicted_language": "marathi"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/marathi/2943840026921169.wav",
+    "expected": "marathi",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9894418716430664,
+    "whisper_confidence": 0.4476904273033142,
+    "indic_confidence": 0.19772795161330387,
+    "indic_predicted_language": "marathi"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/marathi/317363729384131143.wav",
+    "expected": "marathi",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9802730083465576,
+    "whisper_confidence": 0.5028239488601685,
+    "indic_confidence": 0.1923768542726169,
+    "indic_predicted_language": "marathi"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/marathi/3247475748866263729.wav",
+    "expected": "marathi",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9995893836021423,
+    "whisper_confidence": 0.8906094431877136,
+    "indic_confidence": 0.18779916904697364,
+    "indic_predicted_language": "marathi"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/marathi/4554719190374337585.wav",
+    "expected": "marathi",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.8294376134872437,
+    "whisper_confidence": 0.502453088760376,
+    "indic_confidence": 0.21974954701198096,
+    "indic_predicted_language": "marathi"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/marathi/4981123113244877951.wav",
+    "expected": "marathi",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9995998740196228,
+    "whisper_confidence": 0.31483030319213867,
+    "indic_confidence": 0.20617876425857032,
+    "indic_predicted_language": "marathi"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/marathi/575040650599394295.wav",
+    "expected": "marathi",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.959152340888977,
+    "whisper_confidence": 0.4626045227050781,
+    "indic_confidence": 0.21048182817175984,
+    "indic_predicted_language": "marathi"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/marathi/7468434553441098586.wav",
+    "expected": "marathi",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9982642531394958,
+    "whisper_confidence": 0.49095988273620605,
+    "indic_confidence": 0.3643064556850327,
+    "indic_predicted_language": "marathi"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/marathi/8921394327269512169.wav",
+    "expected": "marathi",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.554265022277832,
+    "whisper_confidence": 0.9090122580528259,
+    "indic_confidence": 0.2622495508251282,
+    "indic_predicted_language": "marathi"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/marathi/9145935590532454841.wav",
+    "expected": "marathi",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.8196890950202942,
+    "whisper_confidence": 0.251078724861145,
+    "indic_confidence": 0.2415252618673371,
+    "indic_predicted_language": "marathi"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/marathi/9549389059183649807.wav",
+    "expected": "marathi",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9041383266448975,
+    "whisper_confidence": 0.031443241983652115,
+    "indic_confidence": 0.3280395989334493,
+    "indic_predicted_language": "marathi"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/marathi/9655784556641039324.wav",
+    "expected": "marathi",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9550918340682983,
+    "whisper_confidence": 0.21416941285133362,
+    "indic_confidence": 0.1751877986379478,
+    "indic_predicted_language": "marathi"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/kannada/10470689903085774565.wav",
+    "expected": "kannada",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9919271469116211,
+    "whisper_confidence": 0.7181994318962097,
+    "indic_confidence": 0.1736058364150739,
+    "indic_predicted_language": "kannada"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/kannada/10679794124825621209.wav",
+    "expected": "kannada",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9980887770652771,
+    "whisper_confidence": 0.24008189141750336,
+    "indic_confidence": 0.24657996132459847,
+    "indic_predicted_language": "kannada"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/kannada/11068347071756166499.wav",
+    "expected": "kannada",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9914262294769287,
+    "whisper_confidence": 0.45114195346832275,
+    "indic_confidence": 0.19578174184009964,
+    "indic_predicted_language": "kannada"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/kannada/11650253518812001031.wav",
+    "expected": "kannada",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9975346326828003,
+    "whisper_confidence": 0.31822535395622253,
+    "indic_confidence": 0.28853770392015576,
+    "indic_predicted_language": "kannada"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/kannada/11932744597661148039.wav",
+    "expected": "kannada",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9983114004135132,
+    "whisper_confidence": 0.5658265352249146,
+    "indic_confidence": 0.2717803929668121,
+    "indic_predicted_language": "kannada"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/kannada/12112325412413561985.wav",
+    "expected": "kannada",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9932070374488831,
+    "whisper_confidence": 0.8922079205513,
+    "indic_confidence": 0.19927455774101782,
+    "indic_predicted_language": "kannada"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/kannada/12150325508667237258.wav",
+    "expected": "kannada",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9998726844787598,
+    "whisper_confidence": 0.8259212970733643,
+    "indic_confidence": 0.24821911807707014,
+    "indic_predicted_language": "kannada"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/kannada/12502959870096015808.wav",
+    "expected": "kannada",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.998456597328186,
+    "whisper_confidence": 0.415420264005661,
+    "indic_confidence": 0.3397863597526927,
+    "indic_predicted_language": "kannada"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/kannada/12790516342754996893.wav",
+    "expected": "kannada",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9999897480010986,
+    "whisper_confidence": 0.33490240573883057,
+    "indic_confidence": 0.3542762677323945,
+    "indic_predicted_language": "kannada"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/kannada/13053490214293446160.wav",
+    "expected": "kannada",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.999256432056427,
+    "whisper_confidence": 0.30203303694725037,
+    "indic_confidence": 0.2335205010401652,
+    "indic_predicted_language": "kannada"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/kannada/13402650700478994802.wav",
+    "expected": "kannada",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9962936043739319,
+    "whisper_confidence": 0.9358617663383484,
+    "indic_confidence": 0.2250371492373642,
+    "indic_predicted_language": "kannada"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/kannada/13663327002629317633.wav",
+    "expected": "kannada",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9997432827949524,
+    "whisper_confidence": 0.5607205629348755,
+    "indic_confidence": 0.25363981142183956,
+    "indic_predicted_language": "kannada"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/kannada/14301610683019814804.wav",
+    "expected": "kannada",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9937940835952759,
+    "whisper_confidence": 0.42300111055374146,
+    "indic_confidence": 0.2817189051836197,
+    "indic_predicted_language": "kannada"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/kannada/16715430509731514718.wav",
+    "expected": "kannada",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9926819205284119,
+    "whisper_confidence": 0.6112921237945557,
+    "indic_confidence": 0.1412207023927667,
+    "indic_predicted_language": "kannada"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/kannada/17704461705218040242.wav",
+    "expected": "kannada",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.999954104423523,
+    "whisper_confidence": 0.3507257103919983,
+    "indic_confidence": 0.27481867748730143,
+    "indic_predicted_language": "kannada"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/kannada/18292800115452990850.wav",
+    "expected": "kannada",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9999455213546753,
+    "whisper_confidence": 0.31292659044265747,
+    "indic_confidence": 0.29593134445271324,
+    "indic_predicted_language": "kannada"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/kannada/2371416690076199752.wav",
+    "expected": "kannada",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9997792840003967,
+    "whisper_confidence": 0.48194462060928345,
+    "indic_confidence": 0.2274285283706644,
+    "indic_predicted_language": "kannada"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/kannada/2537789504259154617.wav",
+    "expected": "kannada",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9995119571685791,
+    "whisper_confidence": 0.8160213232040405,
+    "indic_confidence": 0.24610555348380542,
+    "indic_predicted_language": "kannada"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/kannada/349539681516673959.wav",
+    "expected": "kannada",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9999902248382568,
+    "whisper_confidence": 0.3690078854560852,
+    "indic_confidence": 0.300713972470095,
+    "indic_predicted_language": "kannada"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/kannada/3712438333721578636.wav",
+    "expected": "kannada",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9999938011169434,
+    "whisper_confidence": 0.4397416412830353,
+    "indic_confidence": 0.31673996883698485,
+    "indic_predicted_language": "kannada"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/kannada/4102452529264125818.wav",
+    "expected": "kannada",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.99922776222229,
+    "whisper_confidence": 0.8366813063621521,
+    "indic_confidence": 0.3105695773352017,
+    "indic_predicted_language": "kannada"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/kannada/4201507264565068578.wav",
+    "expected": "kannada",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9999822378158569,
+    "whisper_confidence": 0.25286945700645447,
+    "indic_confidence": 0.23677245978994862,
+    "indic_predicted_language": "kannada"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/kannada/4218873256811294285.wav",
+    "expected": "kannada",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9892585873603821,
+    "whisper_confidence": 0.16964945197105408,
+    "indic_confidence": 0.22597434353511567,
+    "indic_predicted_language": "kannada"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/kannada/5812793181329902511.wav",
+    "expected": "kannada",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.999836802482605,
+    "whisper_confidence": 0.34631267189979553,
+    "indic_confidence": 0.16166138838637958,
+    "indic_predicted_language": "kannada"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/kannada/6257858107436144229.wav",
+    "expected": "kannada",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9998443126678467,
+    "whisper_confidence": 0.3280760943889618,
+    "indic_confidence": 0.40625352917337104,
+    "indic_predicted_language": "kannada"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/kannada/6323310760832229065.wav",
+    "expected": "kannada",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9999744892120361,
+    "whisper_confidence": 0.8574598431587219,
+    "indic_confidence": 0.24196518835125733,
+    "indic_predicted_language": "kannada"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/kannada/6872412877388841913.wav",
+    "expected": "kannada",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9992820620536804,
+    "whisper_confidence": 0.31244391202926636,
+    "indic_confidence": 0.23674028864170008,
+    "indic_predicted_language": "kannada"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/kannada/7600898595267131975.wav",
+    "expected": "kannada",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9968008995056152,
+    "whisper_confidence": 0.23823359608650208,
+    "indic_confidence": 0.2938914243732729,
+    "indic_predicted_language": "kannada"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/kannada/8068811139227785017.wav",
+    "expected": "kannada",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9951091408729553,
+    "whisper_confidence": 0.24698752164840698,
+    "indic_confidence": 0.2668050666574702,
+    "indic_predicted_language": "kannada"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/kannada/9415066775142968262.wav",
+    "expected": "kannada",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9926608800888062,
+    "whisper_confidence": 0.39936619997024536,
+    "indic_confidence": 0.2735190253741549,
+    "indic_predicted_language": "kannada"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/malayalam/1052387600293027010.wav",
+    "expected": "malayalam",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9648429751396179,
+    "whisper_confidence": 0.28846052289009094,
+    "indic_confidence": 0.39590136364548123,
+    "indic_predicted_language": "malayalam"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/malayalam/11072451921522310827.wav",
+    "expected": "malayalam",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.8464205265045166,
+    "whisper_confidence": 0.9228665232658386,
+    "indic_confidence": 0.34215908861231237,
+    "indic_predicted_language": "malayalam"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/malayalam/12245444975748870264.wav",
+    "expected": "malayalam",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9937564134597778,
+    "whisper_confidence": 0.8935949206352234,
+    "indic_confidence": 0.2947993863709882,
+    "indic_predicted_language": "malayalam"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/malayalam/1278001927331749797.wav",
+    "expected": "malayalam",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9793668389320374,
+    "whisper_confidence": 0.16322731971740723,
+    "indic_confidence": 0.33358298574990414,
+    "indic_predicted_language": "malayalam"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/malayalam/13048395670651110455.wav",
+    "expected": "malayalam",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9985818862915039,
+    "whisper_confidence": 0.49722856283187866,
+    "indic_confidence": 0.21286345940704146,
+    "indic_predicted_language": "malayalam"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/malayalam/13311819380054970222.wav",
+    "expected": "malayalam",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9940297603607178,
+    "whisper_confidence": 0.3538890480995178,
+    "indic_confidence": 0.3144204790703952,
+    "indic_predicted_language": "malayalam"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/malayalam/13694083456839483083.wav",
+    "expected": "malayalam",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9982979893684387,
+    "whisper_confidence": 0.45022380352020264,
+    "indic_confidence": 0.3654713512453086,
+    "indic_predicted_language": "malayalam"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/malayalam/15644713560873563428.wav",
+    "expected": "malayalam",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9999450445175171,
+    "whisper_confidence": 0.2347845584154129,
+    "indic_confidence": 0.2078012537652588,
+    "indic_predicted_language": "malayalam"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/malayalam/15773882255508580943.wav",
+    "expected": "malayalam",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9999916553497314,
+    "whisper_confidence": 0.24954330921173096,
+    "indic_confidence": 0.31873645477897516,
+    "indic_predicted_language": "malayalam"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/malayalam/15905540657214474340.wav",
+    "expected": "malayalam",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9972944855690002,
+    "whisper_confidence": 0.3501671254634857,
+    "indic_confidence": 0.4572030325868615,
+    "indic_predicted_language": "malayalam"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/malayalam/16912735635808315842.wav",
+    "expected": "malayalam",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9998878240585327,
+    "whisper_confidence": 0.9048088788986206,
+    "indic_confidence": 0.3179704614586252,
+    "indic_predicted_language": "malayalam"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/malayalam/16960705945427520000.wav",
+    "expected": "malayalam",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9668457508087158,
+    "whisper_confidence": 0.5224239826202393,
+    "indic_confidence": 0.4274674266632093,
+    "indic_predicted_language": "malayalam"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/malayalam/16987564472360758591.wav",
+    "expected": "malayalam",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9999322891235352,
+    "whisper_confidence": 0.1928006410598755,
+    "indic_confidence": 0.3104176608277327,
+    "indic_predicted_language": "malayalam"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/malayalam/17881261997222338572.wav",
+    "expected": "malayalam",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.999836802482605,
+    "whisper_confidence": 0.24566353857517242,
+    "indic_confidence": 0.2658970498551543,
+    "indic_predicted_language": "malayalam"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/malayalam/18164361059779033166.wav",
+    "expected": "malayalam",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9288887977600098,
+    "whisper_confidence": 0.4508852958679199,
+    "indic_confidence": 0.35135541421671707,
+    "indic_predicted_language": "malayalam"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/malayalam/18396705476501358404.wav",
+    "expected": "malayalam",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.999998927116394,
+    "whisper_confidence": 0.8241917490959167,
+    "indic_confidence": 0.3667205559661385,
+    "indic_predicted_language": "malayalam"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/malayalam/1924560741812435319.wav",
+    "expected": "malayalam",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9508025050163269,
+    "whisper_confidence": 0.5093879699707031,
+    "indic_confidence": 0.2987186740288829,
+    "indic_predicted_language": "malayalam"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/malayalam/2617498729350814357.wav",
+    "expected": "malayalam",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9999891519546509,
+    "whisper_confidence": 0.48937365412712097,
+    "indic_confidence": 0.41873989067971706,
+    "indic_predicted_language": "malayalam"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/malayalam/2963602967050959977.wav",
+    "expected": "malayalam",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.8094808459281921,
+    "whisper_confidence": 0.45005398988723755,
+    "indic_confidence": 0.2168719011231088,
+    "indic_predicted_language": "malayalam"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/malayalam/3606159531904374029.wav",
+    "expected": "malayalam",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9999903440475464,
+    "whisper_confidence": 0.2828689515590668,
+    "indic_confidence": 0.41843242989853024,
+    "indic_predicted_language": "malayalam"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/malayalam/4163423965130120556.wav",
+    "expected": "malayalam",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9999910593032837,
+    "whisper_confidence": 0.1321662813425064,
+    "indic_confidence": 0.29526165458757775,
+    "indic_predicted_language": "malayalam"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/malayalam/5537327491330919528.wav",
+    "expected": "malayalam",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9999916553497314,
+    "whisper_confidence": 0.37570592761039734,
+    "indic_confidence": 0.3820355314280042,
+    "indic_predicted_language": "malayalam"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/malayalam/5596866873254289948.wav",
+    "expected": "malayalam",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9999874830245972,
+    "whisper_confidence": 0.4691237211227417,
+    "indic_confidence": 0.3582817327155363,
+    "indic_predicted_language": "malayalam"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/malayalam/6540859416224679400.wav",
+    "expected": "malayalam",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9932246804237366,
+    "whisper_confidence": 0.3900676965713501,
+    "indic_confidence": 0.28892233142687473,
+    "indic_predicted_language": "malayalam"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/malayalam/6590274764561819424.wav",
+    "expected": "malayalam",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9906304478645325,
+    "whisper_confidence": 0.36594900488853455,
+    "indic_confidence": 0.20913482196019254,
+    "indic_predicted_language": "malayalam"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/malayalam/7296321800123617089.wav",
+    "expected": "malayalam",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9905303120613098,
+    "whisper_confidence": 0.5460602641105652,
+    "indic_confidence": 0.327080965153468,
+    "indic_predicted_language": "malayalam"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/malayalam/7338899867848424963.wav",
+    "expected": "malayalam",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.99934321641922,
+    "whisper_confidence": 0.2685792148113251,
+    "indic_confidence": 0.34000150075205315,
+    "indic_predicted_language": "malayalam"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/malayalam/863190312011865352.wav",
+    "expected": "malayalam",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.8459851741790771,
+    "whisper_confidence": 0.5732402205467224,
+    "indic_confidence": 0.21000527555976684,
+    "indic_predicted_language": "malayalam"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/malayalam/8718318539328055210.wav",
+    "expected": "malayalam",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.6073063015937805,
+    "whisper_confidence": 0.8251491785049438,
+    "indic_confidence": 0.27279695774118107,
+    "indic_predicted_language": "malayalam"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/malayalam/9174328769206611919.wav",
+    "expected": "malayalam",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9954367280006409,
+    "whisper_confidence": 0.9709384441375732,
+    "indic_confidence": 0.2643565453056778,
+    "indic_predicted_language": "malayalam"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/tamil/11400701504589769018.wav",
+    "expected": "tamil",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9968769550323486,
+    "whisper_confidence": 0.40728700160980225,
+    "indic_confidence": 0.37711495901749004,
+    "indic_predicted_language": "tamil"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/tamil/11585899890579104256.wav",
+    "expected": "tamil",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.8529195785522461,
+    "whisper_confidence": 0.25049251317977905,
+    "indic_confidence": 0.30470139211684,
+    "indic_predicted_language": "tamil"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/tamil/12611958937849322337.wav",
+    "expected": "tamil",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.998229444026947,
+    "whisper_confidence": 0.3114617168903351,
+    "indic_confidence": 0.4201183167614919,
+    "indic_predicted_language": "tamil"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/tamil/13438225715790713376.wav",
+    "expected": "tamil",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.999995231628418,
+    "whisper_confidence": 0.8943731188774109,
+    "indic_confidence": 0.3473902511856674,
+    "indic_predicted_language": "tamil"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/tamil/14031757979423558338.wav",
+    "expected": "tamil",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.8785130381584167,
+    "whisper_confidence": 0.2700608968734741,
+    "indic_confidence": 0.3307652026172969,
+    "indic_predicted_language": "tamil"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/tamil/14071723180666975093.wav",
+    "expected": "tamil",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9999748468399048,
+    "whisper_confidence": 0.9171342849731445,
+    "indic_confidence": 0.3115878412616439,
+    "indic_predicted_language": "tamil"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/tamil/14325165028827868201.wav",
+    "expected": "tamil",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9255288243293762,
+    "whisper_confidence": 0.7693628668785095,
+    "indic_confidence": 0.26022746402579616,
+    "indic_predicted_language": "tamil"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/tamil/15140409662775495448.wav",
+    "expected": "tamil",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.999931812286377,
+    "whisper_confidence": 0.2551257312297821,
+    "indic_confidence": 0.36378508547129923,
+    "indic_predicted_language": "tamil"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/tamil/15246360601390463779.wav",
+    "expected": "tamil",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.999548614025116,
+    "whisper_confidence": 0.881120502948761,
+    "indic_confidence": 0.3611207645455444,
+    "indic_predicted_language": "tamil"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/tamil/15744033116023605335.wav",
+    "expected": "tamil",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.992439866065979,
+    "whisper_confidence": 0.14530767500400543,
+    "indic_confidence": 0.4706619100438224,
+    "indic_predicted_language": "tamil"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/tamil/15863917474440756255.wav",
+    "expected": "tamil",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9980334639549255,
+    "whisper_confidence": 0.8850130438804626,
+    "indic_confidence": 0.3627929965732619,
+    "indic_predicted_language": "tamil"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/tamil/1669155477897835926.wav",
+    "expected": "tamil",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.5192448496818542,
+    "whisper_confidence": 0.908540666103363,
+    "indic_confidence": 0.411160324551705,
+    "indic_predicted_language": "tamil"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/tamil/17189865394932145687.wav",
+    "expected": "tamil",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9810700416564941,
+    "whisper_confidence": 0.4492246210575104,
+    "indic_confidence": 0.3023978854596083,
+    "indic_predicted_language": "tamil"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/tamil/17308264966616880419.wav",
+    "expected": "tamil",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9996684789657593,
+    "whisper_confidence": 0.25211572647094727,
+    "indic_confidence": 0.3970257473525171,
+    "indic_predicted_language": "tamil"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/tamil/17482485160251891549.wav",
+    "expected": "tamil",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9997866749763489,
+    "whisper_confidence": 0.5063124299049377,
+    "indic_confidence": 0.5028773243192266,
+    "indic_predicted_language": "tamil"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/tamil/17750527529788840736.wav",
+    "expected": "tamil",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.999994158744812,
+    "whisper_confidence": 0.9403645992279053,
+    "indic_confidence": 0.4841954641823852,
+    "indic_predicted_language": "tamil"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/tamil/17811546511635952024.wav",
+    "expected": "tamil",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9757311940193176,
+    "whisper_confidence": 0.22461393475532532,
+    "indic_confidence": 0.5408122405941997,
+    "indic_predicted_language": "tamil"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/tamil/18238487740525218230.wav",
+    "expected": "tamil",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9999943971633911,
+    "whisper_confidence": 0.3044883608818054,
+    "indic_confidence": 0.5383809674882664,
+    "indic_predicted_language": "tamil"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/tamil/18285618859825720189.wav",
+    "expected": "tamil",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.7364650368690491,
+    "whisper_confidence": 0.9060021638870239,
+    "indic_confidence": 0.30803278934429673,
+    "indic_predicted_language": "tamil"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/tamil/2328495334087888975.wav",
+    "expected": "tamil",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.7410499453544617,
+    "whisper_confidence": 0.9410867691040039,
+    "indic_confidence": 0.21700871878133063,
+    "indic_predicted_language": "tamil"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/tamil/240132210819960447.wav",
+    "expected": "tamil",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9989225268363953,
+    "whisper_confidence": 0.9073855876922607,
+    "indic_confidence": 0.4066834517669949,
+    "indic_predicted_language": "tamil"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/tamil/278206598558591818.wav",
+    "expected": "tamil",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.4756457209587097,
+    "whisper_confidence": 0.28276169300079346,
+    "indic_confidence": 0.33241930145052184,
+    "indic_predicted_language": "tamil"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/tamil/2899343015276141736.wav",
+    "expected": "tamil",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9990233182907104,
+    "whisper_confidence": 0.17051748931407928,
+    "indic_confidence": 0.30529425333325677,
+    "indic_predicted_language": "tamil"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/tamil/4349135402594591195.wav",
+    "expected": "tamil",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9999957084655762,
+    "whisper_confidence": 0.3359759449958801,
+    "indic_confidence": 0.47317668986751843,
+    "indic_predicted_language": "tamil"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/tamil/5479833402523153873.wav",
+    "expected": "tamil",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9903167486190796,
+    "whisper_confidence": 0.2396204024553299,
+    "indic_confidence": 0.4581856761313975,
+    "indic_predicted_language": "tamil"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/tamil/5888884242299205154.wav",
+    "expected": "tamil",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.984288215637207,
+    "whisper_confidence": 0.19541028141975403,
+    "indic_confidence": 0.35746528488100293,
+    "indic_predicted_language": "tamil"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/tamil/7717561074363186898.wav",
+    "expected": "tamil",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.6300492882728577,
+    "whisper_confidence": 0.21865899860858917,
+    "indic_confidence": 0.3309931749695792,
+    "indic_predicted_language": "tamil"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/tamil/7743550698169507459.wav",
+    "expected": "tamil",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9999638795852661,
+    "whisper_confidence": 0.23303531110286713,
+    "indic_confidence": 0.4598116413235846,
+    "indic_predicted_language": "tamil"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/tamil/8116940228345284709.wav",
+    "expected": "tamil",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9974721074104309,
+    "whisper_confidence": 0.3063691556453705,
+    "indic_confidence": 0.4493250510153862,
+    "indic_predicted_language": "tamil"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/tamil/8260248828104080476.wav",
+    "expected": "tamil",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9798744320869446,
+    "whisper_confidence": 0.2630821466445923,
+    "indic_confidence": 0.34057382624596355,
+    "indic_predicted_language": "tamil"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/telugu/11343877899980638969.wav",
+    "expected": "telugu",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.999829888343811,
+    "whisper_confidence": 0.03666453808546066,
+    "indic_confidence": 0.3613207732621384,
+    "indic_predicted_language": "telugu"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/telugu/11601927595613225994.wav",
+    "expected": "telugu",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9999263286590576,
+    "whisper_confidence": 0.24996517598628998,
+    "indic_confidence": 0.3234491375193972,
+    "indic_predicted_language": "telugu"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/telugu/12687447370749589600.wav",
+    "expected": "telugu",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9980474710464478,
+    "whisper_confidence": 0.355881929397583,
+    "indic_confidence": 0.22923950475200805,
+    "indic_predicted_language": "telugu"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/telugu/13057612386580237345.wav",
+    "expected": "telugu",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9984630346298218,
+    "whisper_confidence": 0.4746626615524292,
+    "indic_confidence": 0.26724492768064523,
+    "indic_predicted_language": "telugu"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/telugu/13397478532291769112.wav",
+    "expected": "telugu",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9998093247413635,
+    "whisper_confidence": 0.2857796847820282,
+    "indic_confidence": 0.30456365543521113,
+    "indic_predicted_language": "telugu"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/telugu/13681191449535524860.wav",
+    "expected": "telugu",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9994431138038635,
+    "whisper_confidence": 0.2994063198566437,
+    "indic_confidence": 0.33790119244130673,
+    "indic_predicted_language": "telugu"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/telugu/13756845604326270458.wav",
+    "expected": "telugu",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9999814033508301,
+    "whisper_confidence": 0.23513194918632507,
+    "indic_confidence": 0.29193364506110897,
+    "indic_predicted_language": "telugu"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/telugu/1450079556009217598.wav",
+    "expected": "telugu",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9887111186981201,
+    "whisper_confidence": 0.32422885298728943,
+    "indic_confidence": 0.2365282085413734,
+    "indic_predicted_language": "telugu"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/telugu/14683060427756433571.wav",
+    "expected": "telugu",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9998776912689209,
+    "whisper_confidence": 0.3045051395893097,
+    "indic_confidence": 0.37625978038983143,
+    "indic_predicted_language": "telugu"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/telugu/15300898462727353397.wav",
+    "expected": "telugu",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9989622831344604,
+    "whisper_confidence": 0.21406246721744537,
+    "indic_confidence": 0.38186159246225854,
+    "indic_predicted_language": "telugu"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/telugu/15332438158044750934.wav",
+    "expected": "telugu",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9995788931846619,
+    "whisper_confidence": 0.2503321170806885,
+    "indic_confidence": 0.2420963537667624,
+    "indic_predicted_language": "telugu"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/telugu/15464403826497019680.wav",
+    "expected": "telugu",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9980595707893372,
+    "whisper_confidence": 0.3103979229927063,
+    "indic_confidence": 0.31493138820480776,
+    "indic_predicted_language": "telugu"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/telugu/15912838334392844709.wav",
+    "expected": "telugu",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9875811338424683,
+    "whisper_confidence": 0.3330032527446747,
+    "indic_confidence": 0.32193438413354464,
+    "indic_predicted_language": "telugu"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/telugu/16424608319349954184.wav",
+    "expected": "telugu",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9999045133590698,
+    "whisper_confidence": 0.10824421048164368,
+    "indic_confidence": 0.3325369337884088,
+    "indic_predicted_language": "telugu"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/telugu/17864488134762236870.wav",
+    "expected": "telugu",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9884655475616455,
+    "whisper_confidence": 0.4835647642612457,
+    "indic_confidence": 0.21041028102553344,
+    "indic_predicted_language": "telugu"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/telugu/18013764684267007660.wav",
+    "expected": "telugu",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.999491810798645,
+    "whisper_confidence": 0.3046974241733551,
+    "indic_confidence": 0.3598580699542473,
+    "indic_predicted_language": "telugu"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/telugu/1952401735507636754.wav",
+    "expected": "telugu",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9910203814506531,
+    "whisper_confidence": 0.2488420605659485,
+    "indic_confidence": 0.33912817512949306,
+    "indic_predicted_language": "telugu"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/telugu/2842423822116430098.wav",
+    "expected": "telugu",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9943439960479736,
+    "whisper_confidence": 0.43477770686149597,
+    "indic_confidence": 0.18900093254878333,
+    "indic_predicted_language": "telugu"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/telugu/3062518200130457471.wav",
+    "expected": "telugu",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9997507929801941,
+    "whisper_confidence": 0.17763885855674744,
+    "indic_confidence": 0.2760278346757285,
+    "indic_predicted_language": "telugu"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/telugu/3667250650569168633.wav",
+    "expected": "telugu",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9997729659080505,
+    "whisper_confidence": 0.26930204033851624,
+    "indic_confidence": 0.2789018122996721,
+    "indic_predicted_language": "telugu"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/telugu/3905207007909365832.wav",
+    "expected": "telugu",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9999464750289917,
+    "whisper_confidence": 0.858627438545227,
+    "indic_confidence": 0.30619251167438194,
+    "indic_predicted_language": "telugu"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/telugu/4723581876618328134.wav",
+    "expected": "telugu",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9999363422393799,
+    "whisper_confidence": 0.2509933412075043,
+    "indic_confidence": 0.30779237368822854,
+    "indic_predicted_language": "telugu"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/telugu/4820816697937059047.wav",
+    "expected": "telugu",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9996405839920044,
+    "whisper_confidence": 0.25182706117630005,
+    "indic_confidence": 0.34674954460933805,
+    "indic_predicted_language": "telugu"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/telugu/6670200578200292156.wav",
+    "expected": "telugu",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9981217980384827,
+    "whisper_confidence": 0.8916473388671875,
+    "indic_confidence": 0.3658931353871805,
+    "indic_predicted_language": "telugu"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/telugu/7187242779372892625.wav",
+    "expected": "telugu",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9994158744812012,
+    "whisper_confidence": 0.3200831413269043,
+    "indic_confidence": 0.2496661587432027,
+    "indic_predicted_language": "telugu"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/telugu/7953049425010449138.wav",
+    "expected": "telugu",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9997332692146301,
+    "whisper_confidence": 0.02924368530511856,
+    "indic_confidence": 0.32392635730945546,
+    "indic_predicted_language": "telugu"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/telugu/8440887448038191976.wav",
+    "expected": "telugu",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9911510348320007,
+    "whisper_confidence": 0.15465719997882843,
+    "indic_confidence": 0.2545190005261889,
+    "indic_predicted_language": "telugu"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/telugu/9479049491803127245.wav",
+    "expected": "telugu",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9952055215835571,
+    "whisper_confidence": 0.2170211672782898,
+    "indic_confidence": 0.2870193690390939,
+    "indic_predicted_language": "telugu"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/telugu/9636427158980175264.wav",
+    "expected": "telugu",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9939549565315247,
+    "whisper_confidence": 0.44554129242897034,
+    "indic_confidence": 0.22581300559933437,
+    "indic_predicted_language": "telugu"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/telugu/9742635733451539676.wav",
+    "expected": "telugu",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9990718364715576,
+    "whisper_confidence": 0.30903682112693787,
+    "indic_confidence": 0.2751603760788667,
+    "indic_predicted_language": "telugu"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/odia/10138769786292496230.wav",
+    "expected": "odia",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.6671347618103027,
+    "whisper_confidence": 0.9437092542648315,
+    "indic_confidence": 0.19151982206052967,
+    "indic_predicted_language": "odia"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/odia/11226528947015071312.wav",
+    "expected": "odia",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.8746420741081238,
+    "whisper_confidence": 0.17428146302700043,
+    "indic_confidence": 0.22399842876989345,
+    "indic_predicted_language": "odia"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/odia/11370023919013808204.wav",
+    "expected": "odia",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.5819017887115479,
+    "whisper_confidence": 0.48002222180366516,
+    "indic_confidence": 0.1884613550223765,
+    "indic_predicted_language": "odia"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/odia/12551461725672549473.wav",
+    "expected": "odia",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9945470094680786,
+    "whisper_confidence": 0.930683970451355,
+    "indic_confidence": 0.2643140138183485,
+    "indic_predicted_language": "odia"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/odia/12718454599028988781.wav",
+    "expected": "odia",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.5029364824295044,
+    "whisper_confidence": 0.26532283425331116,
+    "indic_confidence": 0.20700248638989732,
+    "indic_predicted_language": "odia"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/odia/1389709891721892104.wav",
+    "expected": "odia",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.6549906134605408,
+    "whisper_confidence": 0.31166350841522217,
+    "indic_confidence": 0.2184661419238322,
+    "indic_predicted_language": "odia"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/odia/14006345808366325766.wav",
+    "expected": "odia",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.5343855619430542,
+    "whisper_confidence": 0.3155449628829956,
+    "indic_confidence": 0.2601732380103831,
+    "indic_predicted_language": "odia"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/odia/15493521733021366792.wav",
+    "expected": "odia",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9348378777503967,
+    "whisper_confidence": 0.8769683241844177,
+    "indic_confidence": 0.2588607351544003,
+    "indic_predicted_language": "odia"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/odia/15517464942670901030.wav",
+    "expected": "odia",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.8602793216705322,
+    "whisper_confidence": 0.85610431432724,
+    "indic_confidence": 0.23774308679858222,
+    "indic_predicted_language": "odia"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/odia/1614590379220584186.wav",
+    "expected": "odia",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9812911748886108,
+    "whisper_confidence": 0.24399204552173615,
+    "indic_confidence": 0.16678983339118542,
+    "indic_predicted_language": "odia"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/odia/16279618729970664740.wav",
+    "expected": "odia",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.42580315470695496,
+    "whisper_confidence": 0.2600173354148865,
+    "indic_confidence": 0.19404641978759715,
+    "indic_predicted_language": "odia"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/odia/17639671044456297061.wav",
+    "expected": "odia",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9002848863601685,
+    "whisper_confidence": 0.9073535799980164,
+    "indic_confidence": 0.18719458286191376,
+    "indic_predicted_language": "odia"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/odia/1895010702350346057.wav",
+    "expected": "odia",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.45210063457489014,
+    "whisper_confidence": 0.30044740438461304,
+    "indic_confidence": 0.14972375764658577,
+    "indic_predicted_language": "odia"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/odia/2396719851488271906.wav",
+    "expected": "odia",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9718918800354004,
+    "whisper_confidence": 0.2669416666030884,
+    "indic_confidence": 0.1104689947888255,
+    "indic_predicted_language": "odia"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/odia/2627609110449530657.wav",
+    "expected": "odia",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.542078971862793,
+    "whisper_confidence": 0.28175869584083557,
+    "indic_confidence": 0.14554804114624859,
+    "indic_predicted_language": "odia"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/odia/3195079704055186486.wav",
+    "expected": "odia",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.725074827671051,
+    "whisper_confidence": 0.23387673497200012,
+    "indic_confidence": 0.14920606577367174,
+    "indic_predicted_language": "odia"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/odia/3236932136210573477.wav",
+    "expected": "odia",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.6772838830947876,
+    "whisper_confidence": 0.8931145071983337,
+    "indic_confidence": 0.1581053870402604,
+    "indic_predicted_language": "odia"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/odia/3385903354305249555.wav",
+    "expected": "odia",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.5071903467178345,
+    "whisper_confidence": 0.3945012092590332,
+    "indic_confidence": 0.21958062375013374,
+    "indic_predicted_language": "odia"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/odia/420850375592003104.wav",
+    "expected": "odia",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9032894372940063,
+    "whisper_confidence": 0.3580852150917053,
+    "indic_confidence": 0.1881525766144952,
+    "indic_predicted_language": "odia"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/odia/4323426974427489191.wav",
+    "expected": "odia",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9986531734466553,
+    "whisper_confidence": 0.5163406133651733,
+    "indic_confidence": 0.20193335227668285,
+    "indic_predicted_language": "odia"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/odia/4335270767736299919.wav",
+    "expected": "odia",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.5613579154014587,
+    "whisper_confidence": 0.29031693935394287,
+    "indic_confidence": 0.15485690971503832,
+    "indic_predicted_language": "odia"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/odia/518325524393450662.wav",
+    "expected": "odia",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.7587973475456238,
+    "whisper_confidence": 0.41975313425064087,
+    "indic_confidence": 0.26602472357967116,
+    "indic_predicted_language": "odia"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/odia/5367956647344379232.wav",
+    "expected": "odia",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9959188103675842,
+    "whisper_confidence": 0.2740475833415985,
+    "indic_confidence": 0.3414178567442608,
+    "indic_predicted_language": "odia"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/odia/6698853485820918702.wav",
+    "expected": "odia",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9153562784194946,
+    "whisper_confidence": 0.26924368739128113,
+    "indic_confidence": 0.25590332417109174,
+    "indic_predicted_language": "odia"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/odia/6731228874275221328.wav",
+    "expected": "odia",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.38171738386154175,
+    "whisper_confidence": 0.29945093393325806,
+    "indic_confidence": 0.17307738109745763,
+    "indic_predicted_language": "odia"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/odia/8129036625380023101.wav",
+    "expected": "odia",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.7784464955329895,
+    "whisper_confidence": 0.3022860586643219,
+    "indic_confidence": 0.21487899501586244,
+    "indic_predicted_language": "odia"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/odia/8366267164094558376.wav",
+    "expected": "odia",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.6710825562477112,
+    "whisper_confidence": 0.28382259607315063,
+    "indic_confidence": 0.14497172583763202,
+    "indic_predicted_language": "odia"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/odia/9231029118786171116.wav",
+    "expected": "odia",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9054824709892273,
+    "whisper_confidence": 0.2097635716199875,
+    "indic_confidence": 0.18059925624059842,
+    "indic_predicted_language": "odia"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/odia/9577809327778668326.wav",
+    "expected": "odia",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.49194154143333435,
+    "whisper_confidence": 0.8592422008514404,
+    "indic_confidence": 0.24981687736214586,
+    "indic_predicted_language": "odia"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/odia/9599252265865019569.wav",
+    "expected": "odia",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9232487678527832,
+    "whisper_confidence": 0.4315500855445862,
+    "indic_confidence": 0.18648162758966655,
+    "indic_predicted_language": "odia"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/bengali/10104859715102207297.wav",
+    "expected": "bengali",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9538548588752747,
+    "whisper_confidence": 0.25568920373916626,
+    "indic_confidence": 0.24398175405338407,
+    "indic_predicted_language": "bengali"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/bengali/10834839875492074156.wav",
+    "expected": "bengali",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9999961853027344,
+    "whisper_confidence": 0.4222133457660675,
+    "indic_confidence": 0.24007338846030718,
+    "indic_predicted_language": "bengali"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/bengali/13131203669420690991.wav",
+    "expected": "bengali",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.999991774559021,
+    "whisper_confidence": 0.25353720784187317,
+    "indic_confidence": 0.25035358365211224,
+    "indic_predicted_language": "bengali"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/bengali/1394296299615339342.wav",
+    "expected": "bengali",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9999934434890747,
+    "whisper_confidence": 0.3348914384841919,
+    "indic_confidence": 0.22854915965175213,
+    "indic_predicted_language": "bengali"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/bengali/14502108063697834270.wav",
+    "expected": "bengali",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9975925087928772,
+    "whisper_confidence": 0.8348289132118225,
+    "indic_confidence": 0.19737189715314243,
+    "indic_predicted_language": "bengali"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/bengali/1489237356869569449.wav",
+    "expected": "bengali",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9999998807907104,
+    "whisper_confidence": 0.2572728991508484,
+    "indic_confidence": 0.23538437404888957,
+    "indic_predicted_language": "bengali"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/bengali/15758638240933415996.wav",
+    "expected": "bengali",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 1.0,
+    "whisper_confidence": 0.3619271516799927,
+    "indic_confidence": 0.20680445397912123,
+    "indic_predicted_language": "bengali"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/bengali/15912378016575753280.wav",
+    "expected": "bengali",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 1.0,
+    "whisper_confidence": 0.22189389169216156,
+    "indic_confidence": 0.25335674875948044,
+    "indic_predicted_language": "bengali"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/bengali/16467563587558204467.wav",
+    "expected": "bengali",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9988548755645752,
+    "whisper_confidence": 0.4927534759044647,
+    "indic_confidence": 0.1267785525246375,
+    "indic_predicted_language": "bengali"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/bengali/1647174394039285806.wav",
+    "expected": "bengali",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 1.0,
+    "whisper_confidence": 0.32613205909729004,
+    "indic_confidence": 0.2479848995036076,
+    "indic_predicted_language": "bengali"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/bengali/1727683219828799568.wav",
+    "expected": "bengali",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9999308586120605,
+    "whisper_confidence": 0.4147298336029053,
+    "indic_confidence": 0.2322514558436124,
+    "indic_predicted_language": "bengali"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/bengali/18047917231334807334.wav",
+    "expected": "bengali",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9998865127563477,
+    "whisper_confidence": 0.8432351350784302,
+    "indic_confidence": 0.1934363511390984,
+    "indic_predicted_language": "bengali"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/bengali/18308735163243046363.wav",
+    "expected": "bengali",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9998196959495544,
+    "whisper_confidence": 0.4012734293937683,
+    "indic_confidence": 0.12390604020199841,
+    "indic_predicted_language": "bengali"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/bengali/18425071988203767284.wav",
+    "expected": "bengali",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9994112253189087,
+    "whisper_confidence": 0.9051233530044556,
+    "indic_confidence": 0.22141788994724101,
+    "indic_predicted_language": "bengali"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/bengali/1858386819312524658.wav",
+    "expected": "bengali",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9999990463256836,
+    "whisper_confidence": 0.2400270402431488,
+    "indic_confidence": 0.1295900778760287,
+    "indic_predicted_language": "bengali"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/bengali/2102165689543847948.wav",
+    "expected": "bengali",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9999985694885254,
+    "whisper_confidence": 0.7877753376960754,
+    "indic_confidence": 0.19849490001008419,
+    "indic_predicted_language": "bengali"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/bengali/2203366980885701963.wav",
+    "expected": "bengali",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9999783039093018,
+    "whisper_confidence": 0.3620796799659729,
+    "indic_confidence": 0.24360676661555497,
+    "indic_predicted_language": "bengali"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/bengali/3402623966327416978.wav",
+    "expected": "bengali",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9977593421936035,
+    "whisper_confidence": 0.46275803446769714,
+    "indic_confidence": 0.1787873870106759,
+    "indic_predicted_language": "bengali"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/bengali/3862559632181048820.wav",
+    "expected": "bengali",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9998689889907837,
+    "whisper_confidence": 0.9181468486785889,
+    "indic_confidence": 0.1597231876725952,
+    "indic_predicted_language": "bengali"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/bengali/528625776523140967.wav",
+    "expected": "bengali",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9990929365158081,
+    "whisper_confidence": 0.3678220510482788,
+    "indic_confidence": 0.17535469656078412,
+    "indic_predicted_language": "bengali"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/bengali/5652074168337500508.wav",
+    "expected": "bengali",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 1.0,
+    "whisper_confidence": 0.3422919809818268,
+    "indic_confidence": 0.2171605492522027,
+    "indic_predicted_language": "bengali"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/bengali/5726750314150975788.wav",
+    "expected": "bengali",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 1.0,
+    "whisper_confidence": 0.14571170508861542,
+    "indic_confidence": 0.2355026100995019,
+    "indic_predicted_language": "bengali"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/bengali/6342827678267298967.wav",
+    "expected": "bengali",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 1.0,
+    "whisper_confidence": 0.3215940296649933,
+    "indic_confidence": 0.18570199541362195,
+    "indic_predicted_language": "bengali"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/bengali/6792156500014616683.wav",
+    "expected": "bengali",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9999699592590332,
+    "whisper_confidence": 0.4309459626674652,
+    "indic_confidence": 0.19127807326492716,
+    "indic_predicted_language": "bengali"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/bengali/7643319061777601036.wav",
+    "expected": "bengali",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 1.0,
+    "whisper_confidence": 0.8501016497612,
+    "indic_confidence": 0.273519843392488,
+    "indic_predicted_language": "bengali"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/bengali/7674924145246732073.wav",
+    "expected": "bengali",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9999732971191406,
+    "whisper_confidence": 0.46550634503364563,
+    "indic_confidence": 0.2521554347491119,
+    "indic_predicted_language": "bengali"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/bengali/7842194200163321094.wav",
+    "expected": "bengali",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9829049110412598,
+    "whisper_confidence": 0.4526631832122803,
+    "indic_confidence": 0.15396927570997687,
+    "indic_predicted_language": "bengali"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/bengali/7871144864496685015.wav",
+    "expected": "bengali",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9930359721183777,
+    "whisper_confidence": 0.42910832166671753,
+    "indic_confidence": 0.23921726815751754,
+    "indic_predicted_language": "bengali"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/bengali/8072954930115691743.wav",
+    "expected": "bengali",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9999910593032837,
+    "whisper_confidence": 0.9397377967834473,
+    "indic_confidence": 0.23649742355084288,
+    "indic_predicted_language": "bengali"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/bengali/8243991586131957882.wav",
+    "expected": "bengali",
+    "expected_coarse": "indic",
+    "lid_coarse_group": "indic",
+    "lid_confidence": 0.9999703168869019,
+    "whisper_confidence": 0.8949041366577148,
+    "indic_confidence": 0.21543260087044194,
+    "indic_predicted_language": "bengali"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/english/10335587906469246566.wav",
+    "expected": "english",
+    "expected_coarse": "english",
+    "lid_coarse_group": "english",
+    "lid_confidence": 1.0,
+    "whisper_confidence": 0.9151749610900879,
+    "indic_confidence": 0.0,
+    "indic_predicted_language": "hindi"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/english/10481451226514948764.wav",
+    "expected": "english",
+    "expected_coarse": "english",
+    "lid_coarse_group": "english",
+    "lid_confidence": 0.999997615814209,
+    "whisper_confidence": 0.8787752985954285,
+    "indic_confidence": 0.0,
+    "indic_predicted_language": "hindi"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/english/11525263464519603482.wav",
+    "expected": "english",
+    "expected_coarse": "english",
+    "lid_coarse_group": "english",
+    "lid_confidence": 0.9998952150344849,
+    "whisper_confidence": 0.9612175226211548,
+    "indic_confidence": 0.0,
+    "indic_predicted_language": "hindi"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/english/11766033532714442721.wav",
+    "expected": "english",
+    "expected_coarse": "english",
+    "lid_coarse_group": "english",
+    "lid_confidence": 0.9999995231628418,
+    "whisper_confidence": 0.7417755722999573,
+    "indic_confidence": 0.05818601493728256,
+    "indic_predicted_language": "telugu"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/english/12190760535244332971.wav",
+    "expected": "english",
+    "expected_coarse": "english",
+    "lid_coarse_group": "english",
+    "lid_confidence": 0.9999966621398926,
+    "whisper_confidence": 0.705390989780426,
+    "indic_confidence": 0.04588758201848361,
+    "indic_predicted_language": "malayalam"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/english/12519810849995407480.wav",
+    "expected": "english",
+    "expected_coarse": "english",
+    "lid_coarse_group": "english",
+    "lid_confidence": 1.0,
+    "whisper_confidence": 0.9435751438140869,
+    "indic_confidence": 0.0,
+    "indic_predicted_language": "hindi"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/english/13295416245066118625.wav",
+    "expected": "english",
+    "expected_coarse": "english",
+    "lid_coarse_group": "english",
+    "lid_confidence": 0.9999885559082031,
+    "whisper_confidence": 0.8323472738265991,
+    "indic_confidence": 0.15233060270547866,
+    "indic_predicted_language": "telugu"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/english/1372746700546513130.wav",
+    "expected": "english",
+    "expected_coarse": "english",
+    "lid_coarse_group": "english",
+    "lid_confidence": 0.999925971031189,
+    "whisper_confidence": 0.9133371114730835,
+    "indic_confidence": 0.094609000608325,
+    "indic_predicted_language": "telugu"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/english/14076834086577911298.wav",
+    "expected": "english",
+    "expected_coarse": "english",
+    "lid_coarse_group": "english",
+    "lid_confidence": 0.9999998807907104,
+    "whisper_confidence": 0.9611465334892273,
+    "indic_confidence": 0.0,
+    "indic_predicted_language": "hindi"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/english/14291047344508554279.wav",
+    "expected": "english",
+    "expected_coarse": "english",
+    "lid_coarse_group": "english",
+    "lid_confidence": 0.9999986886978149,
+    "whisper_confidence": 0.8967596292495728,
+    "indic_confidence": 0.0,
+    "indic_predicted_language": "hindi"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/english/1618638950277648344.wav",
+    "expected": "english",
+    "expected_coarse": "english",
+    "lid_coarse_group": "english",
+    "lid_confidence": 0.9999995231628418,
+    "whisper_confidence": 0.9083595275878906,
+    "indic_confidence": 0.07299033424530466,
+    "indic_predicted_language": "hindi"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/english/16721823661104667622.wav",
+    "expected": "english",
+    "expected_coarse": "english",
+    "lid_coarse_group": "english",
+    "lid_confidence": 0.9998873472213745,
+    "whisper_confidence": 0.8467004299163818,
+    "indic_confidence": 0.0,
+    "indic_predicted_language": "hindi"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/english/16989675193715509568.wav",
+    "expected": "english",
+    "expected_coarse": "english",
+    "lid_coarse_group": "english",
+    "lid_confidence": 0.9999998807907104,
+    "whisper_confidence": 0.8652607202529907,
+    "indic_confidence": 0.0,
+    "indic_predicted_language": "hindi"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/english/17107523751051309601.wav",
+    "expected": "english",
+    "expected_coarse": "english",
+    "lid_coarse_group": "english",
+    "lid_confidence": 0.9999957084655762,
+    "whisper_confidence": 0.8521235585212708,
+    "indic_confidence": 0.0,
+    "indic_predicted_language": "hindi"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/english/17867641190456170710.wav",
+    "expected": "english",
+    "expected_coarse": "english",
+    "lid_coarse_group": "english",
+    "lid_confidence": 0.9999998807907104,
+    "whisper_confidence": 0.7898467779159546,
+    "indic_confidence": 0.07059241660199193,
+    "indic_predicted_language": "hindi"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/english/1800879378797955911.wav",
+    "expected": "english",
+    "expected_coarse": "english",
+    "lid_coarse_group": "english",
+    "lid_confidence": 0.9999786615371704,
+    "whisper_confidence": 0.7235116958618164,
+    "indic_confidence": 0.05125533846030767,
+    "indic_predicted_language": "hindi"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/english/2690730742102184605.wav",
+    "expected": "english",
+    "expected_coarse": "english",
+    "lid_coarse_group": "english",
+    "lid_confidence": 1.0,
+    "whisper_confidence": 0.9154531955718994,
+    "indic_confidence": 0.0,
+    "indic_predicted_language": "hindi"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/english/319499985577636973.wav",
+    "expected": "english",
+    "expected_coarse": "english",
+    "lid_coarse_group": "english",
+    "lid_confidence": 0.9999982118606567,
+    "whisper_confidence": 0.8924127221107483,
+    "indic_confidence": 0.06513266328228526,
+    "indic_predicted_language": "hindi"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/english/3236057319333367673.wav",
+    "expected": "english",
+    "expected_coarse": "english",
+    "lid_coarse_group": "english",
+    "lid_confidence": 0.999998927116394,
+    "whisper_confidence": 0.9107058644294739,
+    "indic_confidence": 0.06454566913476635,
+    "indic_predicted_language": "hindi"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/english/3797667971540248320.wav",
+    "expected": "english",
+    "expected_coarse": "english",
+    "lid_coarse_group": "english",
+    "lid_confidence": 0.9999877214431763,
+    "whisper_confidence": 0.7463403940200806,
+    "indic_confidence": 0.0,
+    "indic_predicted_language": "hindi"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/english/4807942348083346744.wav",
+    "expected": "english",
+    "expected_coarse": "english",
+    "lid_coarse_group": "english",
+    "lid_confidence": 0.9999310970306396,
+    "whisper_confidence": 0.8773489594459534,
+    "indic_confidence": 0.06253914799421065,
+    "indic_predicted_language": "hindi"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/english/4838660681321542582.wav",
+    "expected": "english",
+    "expected_coarse": "english",
+    "lid_coarse_group": "english",
+    "lid_confidence": 0.9999994039535522,
+    "whisper_confidence": 0.9565492272377014,
+    "indic_confidence": 0.0,
+    "indic_predicted_language": "hindi"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/english/5531306493601107261.wav",
+    "expected": "english",
+    "expected_coarse": "english",
+    "lid_coarse_group": "english",
+    "lid_confidence": 0.9999997615814209,
+    "whisper_confidence": 0.8929581642150879,
+    "indic_confidence": 0.0,
+    "indic_predicted_language": "hindi"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/english/6263891810431071444.wav",
+    "expected": "english",
+    "expected_coarse": "english",
+    "lid_coarse_group": "english",
+    "lid_confidence": 0.9999998807907104,
+    "whisper_confidence": 0.8358076810836792,
+    "indic_confidence": 0.0,
+    "indic_predicted_language": "hindi"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/english/6434859821714227491.wav",
+    "expected": "english",
+    "expected_coarse": "english",
+    "lid_coarse_group": "english",
+    "lid_confidence": 0.9999988079071045,
+    "whisper_confidence": 0.8783721923828125,
+    "indic_confidence": 0.062827180341507,
+    "indic_predicted_language": "hindi"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/english/7266355212113564962.wav",
+    "expected": "english",
+    "expected_coarse": "english",
+    "lid_coarse_group": "english",
+    "lid_confidence": 0.9999983310699463,
+    "whisper_confidence": 0.834388256072998,
+    "indic_confidence": 0.07641513602478274,
+    "indic_predicted_language": "hindi"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/english/7632932253248030737.wav",
+    "expected": "english",
+    "expected_coarse": "english",
+    "lid_coarse_group": "english",
+    "lid_confidence": 0.999998927116394,
+    "whisper_confidence": 0.8543865084648132,
+    "indic_confidence": 0.32210323214530945,
+    "indic_predicted_language": "marathi"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/english/776561182148076732.wav",
+    "expected": "english",
+    "expected_coarse": "english",
+    "lid_coarse_group": "english",
+    "lid_confidence": 0.9999977350234985,
+    "whisper_confidence": 0.786035418510437,
+    "indic_confidence": 0.09107358582317829,
+    "indic_predicted_language": "hindi"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/english/8546403500877190903.wav",
+    "expected": "english",
+    "expected_coarse": "english",
+    "lid_coarse_group": "english",
+    "lid_confidence": 1.0,
+    "whisper_confidence": 0.955183744430542,
+    "indic_confidence": 0.08690810203552246,
+    "indic_predicted_language": "tamil"
+  },
+  {
+    "audio_path": "evaluation/fleurs_calibration_30/english/972042798956052862.wav",
+    "expected": "english",
+    "expected_coarse": "english",
+    "lid_coarse_group": "english",
+    "lid_confidence": 1.0,
+    "whisper_confidence": 0.8633943200111389,
+    "indic_confidence": 0.0,
+    "indic_predicted_language": "hindi"
+  }
+]
