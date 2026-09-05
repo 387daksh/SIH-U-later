@@ -13,27 +13,47 @@ import java.util.Base64
 import kotlin.math.exp
 
 data class SpeechResult(val language: String, val text: String, val backend: String, val milliseconds: Long)
+enum class RoutingMode { AUTO, ENGLISH, INDIC }
 
-class OfflineSpeechPipeline(private val root: File) : Closeable {
-    private val manifest = File(root, "manifest.json").also {
-        require(it.isFile) {
-            "Models missing. Run scripts/stage_android_models.py and copy its contents to $root"
+fun validateModelBundle(root: File) {
+    val manifest = JSONObject(File(root, "manifest.json").also { require(it.isFile) { "Missing model manifest" } }.readText())
+    val files = manifest.getJSONObject("files")
+    files.keys().forEach { relative ->
+        require(".." !in relative) { "Unsafe model path: $relative" }
+        val file = File(root, relative)
+        require(file.isFile && file.length() == files.getJSONObject(relative).getLong("bytes")) {
+            "Missing or incomplete model: $relative"
         }
     }
+}
+
+class OfflineSpeechPipeline(private val root: File) : Closeable {
+    init { validateModelBundle(root) }
     private val environment = OrtEnvironment.getEnvironment()
-    private val whisper = WhisperRuntime(environment, File(root, "whisper"))
+    private var whisper: WhisperRuntime? = null
     private var indic: IndicRuntime? = null
 
-    fun transcribe(audio: FloatArray): SpeechResult {
+    fun transcribe(audio: FloatArray, mode: RoutingMode = RoutingMode.AUTO): SpeechResult {
         require(audio.size >= 1_600) { "Recording is shorter than 0.1 seconds" }
         val started = System.nanoTime()
-        val english = whisper.transcribeIfEnglish(audio)
-        val answer = english ?: (indic ?: IndicRuntime(environment, File(root, "indic")).also { indic = it })
-            .transcribe(audio)
+        val answer = when (mode) {
+            RoutingMode.AUTO -> whisper().transcribeEnglish(audio, verifyLanguage = true) ?: indic().transcribe(audio)
+            RoutingMode.ENGLISH -> {
+                indic?.close(); indic = null
+                requireNotNull(whisper().transcribeEnglish(audio, verifyLanguage = false))
+            }
+            RoutingMode.INDIC -> {
+                whisper?.close(); whisper = null
+                indic().transcribe(audio)
+            }
+        }
         return answer.copy(milliseconds = (System.nanoTime() - started) / 1_000_000)
     }
 
-    override fun close() { indic?.close(); whisper.close() }
+    private fun whisper() = whisper ?: WhisperRuntime(environment, File(root, "whisper")).also { whisper = it }
+    private fun indic() = indic ?: IndicRuntime(environment, File(root, "indic")).also { indic = it }
+
+    override fun close() { indic?.close(); whisper?.close() }
 }
 
 private class WhisperRuntime(private val env: OrtEnvironment, root: File) : Closeable {
@@ -60,14 +80,14 @@ private class WhisperRuntime(private val env: OrtEnvironment, root: File) : Clos
         id.toInt() to if (encoded == "=") byteArrayOf() else Base64.getDecoder().decode(encoded)
     }
 
-    fun transcribeIfEnglish(audio: FloatArray): SpeechResult? {
+    fun transcribeEnglish(audio: FloatArray, verifyLanguage: Boolean): SpeechResult? {
         val input = audio.copyOf(minOf(audio.size, 480_000))
         OnnxTensor.createTensor(env, FloatBuffer.wrap(input), longArrayOf(1, input.size.toLong())).use { waveform ->
             preprocessor.run(mapOf("waveform" to waveform)).use { front ->
                 encoder.run(mapOf("mel" to front[0] as OnnxTensor)).use { encoded ->
                     val crossK = encoded[0] as OnnxTensor
                     val crossV = encoded[1] as OnnxTensor
-                    if (englishProbability(crossK, crossV) < config.getDouble("english_threshold")) return null
+                    if (verifyLanguage && englishProbability(crossK, crossV) < config.getDouble("english_threshold")) return null
                     return SpeechResult("english", decodeEnglish(crossK, crossV), "whisper-tiny-int8", 0)
                 }
             }

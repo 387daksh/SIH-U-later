@@ -2,12 +2,14 @@ package org.sih.offlinespeech
 
 import android.Manifest
 import android.app.Activity
+import android.content.Context
 import android.content.pm.PackageManager
 import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.MediaRecorder
 import android.os.Bundle
 import android.os.StatFs
+import android.util.Log
 import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -37,7 +39,7 @@ class MainActivity : Activity() {
         })
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED)
             requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), 1)
-        if (!File(modelDir, "manifest.json").isFile) installEmbeddedModels(modelDir)
+        if (runCatching { validateModelBundle(modelDir) }.isFailure) installEmbeddedModels(modelDir)
     }
 
     private fun toggleRecording() {
@@ -45,7 +47,7 @@ class MainActivity : Activity() {
         if (active == null) {
             if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) return
             try {
-                recorder = MicRecorder().also { it.start() }
+                recorder = MicRecorder(this).also { it.start() }
                 button.text = "Stop and transcribe"
                 status.text = "Recording 16 kHz mono…"
             } catch (error: Exception) { status.text = error.message }
@@ -60,6 +62,8 @@ class MainActivity : Activity() {
                 val models = File(getExternalFilesDir(null), "models")
                 val engine = pipeline ?: OfflineSpeechPipeline(models).also { pipeline = it }
                 val answer = engine.transcribe(audio)
+                Log.i("SIH_METRIC", "mode=AUTO language=${answer.language} backend=${answer.backend} " +
+                    "audio_ms=${audio.size * 1000 / 16000} inference_ms=${answer.milliseconds}")
                 runOnUiThread {
                     result.text = "${answer.language} · ${answer.backend}\n${answer.text}"
                     status.text = "Stop-to-text: %.2f s".format(answer.milliseconds / 1000.0)
@@ -83,7 +87,7 @@ class MainActivity : Activity() {
                 val temporary = File(target.parentFile, "models.installing")
                 temporary.deleteRecursively(); temporary.mkdirs()
                 copyAssetDirectory("models", temporary)
-                require(File(temporary, "manifest.json").isFile) { "Embedded model bundle is incomplete" }
+                validateModelBundle(temporary)
                 if (target.exists()) target.deleteRecursively()
                 require(temporary.renameTo(target)) { "Could not finish model installation" }
                 runOnUiThread { status.text = "Models ready. Tap Start recording."; button.isEnabled = true }
@@ -111,17 +115,23 @@ class MainActivity : Activity() {
     }
 
     override fun onDestroy() {
-        recorder?.stop(); worker.shutdownNow(); pipeline?.close(); super.onDestroy()
+        recorder?.stop()
+        worker.execute { pipeline?.close(); pipeline = null }
+        worker.shutdown()
+        super.onDestroy()
     }
 }
 
-private class MicRecorder {
+private class MicRecorder(private val context: Context) {
     private val bytes = ByteArrayOutputStream()
     @Volatile private var running = false
     private lateinit var audioRecord: AudioRecord
     private lateinit var thread: Thread
 
     fun start() {
+        if (context.checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            throw SecurityException("Microphone permission is not granted")
+        }
         val minimum = AudioRecord.getMinBufferSize(16_000, AudioFormat.CHANNEL_IN_MONO,
             AudioFormat.ENCODING_PCM_16BIT)
         check(minimum > 0) { "No usable 16 kHz microphone" }

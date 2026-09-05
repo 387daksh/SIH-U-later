@@ -10,8 +10,8 @@ From the repository root:
 .\.venv\Scripts\python.exe .\scripts\stage_android_models.py
 ```
 
-The generated bundle is ~771.70 MiB and remains untracked under `artifacts/android_models`. It includes:
-- **Silero VAD ONNX**: Real-time voice activity detection with rolling 64-sample context buffer and adaptive hysteresis pause segmentation.
+The generated bundle is 771.70 MiB and remains untracked under `artifacts/android_models`. It includes:
+- **Silero VAD ONNX v6.2.1**: Pinned by SHA-256 and used for real-time pause segmentation.
 - **Whisper (English)**: Hybrid FP32 encoder + INT8 decoder.
 - **IndicConformer (9 Indian Languages)**: Hybrid INT8 model with 9-language CTC decoding.
 
@@ -37,15 +37,24 @@ Pop-Location
 & $adb shell am start -n org.sih.offlinespeech/.MainActivity
 ```
 
-Grant microphone permission, tap **Start continuous listening**, speak naturally with pauses between sentences, and observe real-time speech detection and segment-by-segment offline transcription. Tap **Stop listening** when finished. Tap **Speak latest result** to play back the transcription via Android TTS.
+Grant microphone permission, leave **Routing: AUTO** selected, tap **Start continuous listening**, and speak naturally with pauses between sentences. Tap the routing button to force English or Indic only when diagnosing a routing failure; forced routing also avoids loading the unused ASR backend. Tap **Speak latest result** to use an installed offline Android TTS voice.
 
-## Adaptive Device Profiling
+## VAD configuration
 
-The app automatically categorizes the host hardware tier based on device RAM and CPU cores:
-- **LOW Tier (<3 GB RAM / <=4 cores)**: Threshold 0.55, 600ms silence segmentation, 128ms padding.
-- **MID Tier (3–6 GB RAM)**: Threshold 0.50, 500ms silence segmentation, 96ms padding.
-- **HIGH Tier (>6 GB RAM)**: Threshold 0.45, 400ms silence segmentation, 64ms padding.
+VAD uses the same acoustic settings on every phone: 0.50 speech threshold, 0.35 silence threshold, 500 ms end pause, and 96 ms pre-padding. Hardware tier is shown only as diagnostic information; RAM and CPU count do not determine whether audio contains speech.
+
+## Capture phone metrics
+
+Clear old inference logs before a test, transcribe several utterances, then capture latency and memory:
+
+```powershell
+.\.android-sdk\platform-tools\adb.exe logcat -c
+# Run the microphone test on the phone.
+.\scripts\measure_android.ps1
+```
+
+This writes raw `dumpsys meminfo`, structured `SIH_METRIC` inference events, and `report.json` under `artifacts/android_device/<timestamp>`.
 
 ## Validation boundary
 
-The Silero VAD ONNX model contract ([1, 576] input, [2, 1, 128] LSTM state carry-forward), ONNX frontends, model I/O, Whisper cache decoding, English routing/transcription, and Indic transcript parity were verified. Continuous audio capture with software linear resampling fallback and DC offset removal ensures stability across varying microphone hardware. Re-test this external-model build on the target phone before treating it as demo-ready.
+The pinned VAD model contract, ONNX frontends, model bundle sizes, Whisper English smoke test, streaming resampler, Kotlin compilation, and debug APK build are checked locally. Continuous microphone segmentation, Android latency, TTS voice availability, thermals, and memory still require the target-phone run above.

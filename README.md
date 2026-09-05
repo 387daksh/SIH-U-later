@@ -13,7 +13,7 @@ tools/legacy/     synthetic smoke tools (not evaluation evidence)
 models/           downloaded LID and Whisper models
 evaluation/       real manifests, audio subsets, and benchmark reports
 artifacts/        local microphone and synthetic recordings
-android/           preferred Kotlin/ONNX Runtime app with USB-staged models and TTS
+android/           preferred Kotlin/ONNX Runtime app with USB-staged models, VAD, and TTS
 android-bundled/   self-contained 800+ MiB APK variant; generated models stay untracked
 android-colleague/ incoming Android test prototype preserved from commit 8c6c0f1
 ```
@@ -57,4 +57,4 @@ Install `requirements-training.txt` only when rebuilding the coarse LID head.
 
 Use `-h` on any command for its options. See `evaluation/LID_ROBUST_ROUTER_REPORT.md` for the new router's real-data results and limitations. Synthetic tools under `tools/legacy` are smoke tests only.
 
-For the on-device build, model staging, and ADB install steps, see [`android/README.md`](android/README.md).
+For model staging, ADB installation, routing controls, and phone RAM/latency capture, see [`android/README.md`](android/README.md). Local builds produce the clearly named `dist/SIH-Offline-Speech-small-usb.apk` and `dist/SIH-Offline-Speech-bundled.apk`; APKs and model weights remain untracked.

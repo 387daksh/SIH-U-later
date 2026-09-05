@@ -6,7 +6,8 @@
         </intent>
     </queries>
     <application android:theme="@android:style/Theme.Material.Light.NoActionBar"
-        android:label="SIH Offline Speech" android:allowBackup="false" android:largeHeap="true">
+        android:label="SIH Offline Speech" android:icon="@drawable/ic_launcher"
+        android:allowBackup="false" android:largeHeap="true">
         <activity android:name=".MainActivity" android:screenOrientation="portrait"
             android:exported="true">
             <intent-filter>

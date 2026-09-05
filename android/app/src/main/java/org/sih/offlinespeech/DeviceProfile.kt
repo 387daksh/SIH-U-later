@@ -29,7 +29,7 @@ data class DeviceProfile(
     val tier: DeviceTier,
     val totalRamGb: Double,
     val cpuCores: Int,
-    val vadConfig: VadConfig
+    val vadConfig: VadConfig = VadConfig()
 ) {
     fun summary(): String {
         return "Tier: $tier (${"%.1f".format(totalRamGb)} GB RAM, $cpuCores cores)"
@@ -51,34 +51,7 @@ data class DeviceProfile(
                 else -> DeviceTier.HIGH
             }
 
-            val vadConfig = when (tier) {
-                DeviceTier.LOW -> VadConfig(
-                    threshold = 0.55f,
-                    silenceThreshold = 0.38f,
-                    minSpeechDurationMs = 300,
-                    minSilenceDurationMs = 600,
-                    speechPadMs = 128,
-                    maxSegmentDurationMs = 15000
-                )
-                DeviceTier.MID -> VadConfig(
-                    threshold = 0.50f,
-                    silenceThreshold = 0.35f,
-                    minSpeechDurationMs = 250,
-                    minSilenceDurationMs = 500,
-                    speechPadMs = 96,
-                    maxSegmentDurationMs = 15000
-                )
-                DeviceTier.HIGH -> VadConfig(
-                    threshold = 0.45f,
-                    silenceThreshold = 0.30f,
-                    minSpeechDurationMs = 200,
-                    minSilenceDurationMs = 400,
-                    speechPadMs = 64,
-                    maxSegmentDurationMs = 15000
-                )
-            }
-
-            return DeviceProfile(tier, totalRamGb, cpuCores, vadConfig)
+            return DeviceProfile(tier, totalRamGb, cpuCores)
         }
     }
 }

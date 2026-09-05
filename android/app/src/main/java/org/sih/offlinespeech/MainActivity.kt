@@ -7,6 +7,7 @@ import android.graphics.Color
 import android.graphics.Typeface
 import android.os.Bundle
 import android.speech.tts.TextToSpeech
+import android.util.Log
 import android.view.ViewGroup
 import android.widget.Button
 import android.widget.LinearLayout
@@ -15,14 +16,17 @@ import android.widget.TextView
 import java.io.File
 import java.util.Locale
 import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicInteger
 
 class MainActivity : Activity() {
     private val sttWorker = Executors.newSingleThreadExecutor()
+    private val pendingSegments = AtomicInteger()
 
     private lateinit var status: TextView
     private lateinit var vadIndicator: TextView
     private lateinit var result: TextView
     private lateinit var startStopButton: Button
+    private lateinit var routeButton: Button
     private lateinit var speakButton: Button
 
     private lateinit var deviceProfile: DeviceProfile
@@ -34,6 +38,8 @@ class MainActivity : Activity() {
     private var segmentCount = 0
     private var lastText = ""
     private var lastLanguage = "english"
+    @Volatile private var listening = false
+    @Volatile private var routingMode = RoutingMode.AUTO
 
     override fun onCreate(state: Bundle?) {
         super.onCreate(state)
@@ -75,6 +81,14 @@ class MainActivity : Activity() {
             setOnClickListener { toggleListening() }
         }
 
+        routeButton = Button(this).apply {
+            text = "Routing: AUTO"
+            setOnClickListener {
+                routingMode = RoutingMode.entries[(routingMode.ordinal + 1) % RoutingMode.entries.size]
+                text = "Routing: $routingMode"
+            }
+        }
+
         speakButton = Button(this).apply {
             text = "Speak latest result"
             isEnabled = false
@@ -87,6 +101,7 @@ class MainActivity : Activity() {
             addView(status)
             addView(vadIndicator)
             addView(startStopButton)
+            addView(routeButton)
             addView(speakButton)
             addView(scrollView)
         })
@@ -101,10 +116,11 @@ class MainActivity : Activity() {
             requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), 1)
         }
 
-        val manifestFile = File(modelDir, "manifest.json")
-        if (!manifestFile.isFile || !vadModelFile.isFile) {
+        val modelError = runCatching { validateModelBundle(modelDir) }.exceptionOrNull()
+        if (modelError != null || !vadModelFile.isFile) {
             startStopButton.isEnabled = false
-            status.text = "Models missing.\nInstall the APK and copy artifacts/android_models over USB.\n$modelDir"
+            status.text = "Models missing or incomplete: ${modelError?.message ?: "Silero VAD missing"}\n" +
+                "Copy artifacts/android_models over USB.\n$modelDir"
         } else {
             status.text = "Models ready (${deviceProfile.summary()}). Tap Start listening."
         }
@@ -148,6 +164,15 @@ class MainActivity : Activity() {
 
                         override fun onSpeechSegment(audio: FloatArray) {
                             val segId = ++segmentCount
+                            val mode = routingMode
+                            // ponytail: one running + one queued; persist audio only if device tests show lost speech.
+                            if (pendingSegments.incrementAndGet() > 2) {
+                                pendingSegments.decrementAndGet()
+                                runOnUiThread {
+                                    vadIndicator.text = "Transcription busy; segment #$segId skipped"
+                                }
+                                return
+                            }
                             runOnUiThread {
                                 vadIndicator.text = "⏳ Transcribing segment #$segId (${"%.1f".format(audio.size / 16000.0)}s)..."
                             }
@@ -155,7 +180,10 @@ class MainActivity : Activity() {
                             sttWorker.execute {
                                 try {
                                     val sttEngine = pipeline ?: OfflineSpeechPipeline(modelDir).also { pipeline = it }
-                                    val answer = sttEngine.transcribe(audio)
+                                    val answer = sttEngine.transcribe(audio, mode)
+                                    Log.i("SIH_METRIC", "segment=$segId mode=$mode language=${answer.language} " +
+                                        "backend=${answer.backend} audio_ms=${audio.size * 1000 / 16000} " +
+                                        "inference_ms=${answer.milliseconds}")
                                     runOnUiThread {
                                         lastText = answer.text
                                         lastLanguage = answer.language
@@ -163,12 +191,18 @@ class MainActivity : Activity() {
 
                                         val line = "[#$segId] ${answer.language.uppercase()} (${answer.milliseconds}ms):\n${answer.text}\n\n"
                                         result.append(line)
-                                        vadIndicator.text = "🟢 Listening (Segment #$segId completed in ${answer.milliseconds}ms)"
+                                        vadIndicator.text = if (listening) {
+                                            "🟢 Listening (Segment #$segId completed in ${answer.milliseconds}ms)"
+                                        } else {
+                                            "Stopped (Segment #$segId completed in ${answer.milliseconds}ms)"
+                                        }
                                     }
                                 } catch (error: Exception) {
                                     runOnUiThread {
                                         vadIndicator.text = "⚠️ Segment #$segId error: ${error.message}"
                                     }
+                                } finally {
+                                    pendingSegments.decrementAndGet()
                                 }
                             }
                         }
@@ -176,11 +210,12 @@ class MainActivity : Activity() {
                 )
                 vadEngine = engine
 
-                val pipelineCapture = AudioPipeline { chunk ->
+                val pipelineCapture = AudioPipeline(this@MainActivity) { chunk ->
                     engine.processChunk(chunk)
                 }
                 pipelineCapture.start()
                 audioPipeline = pipelineCapture
+                listening = true
 
                 startStopButton.text = "Stop listening"
                 vadIndicator.text = "🟢 Listening (${pipelineCapture.sampleRate} Hz mic, VAD active)"
@@ -189,6 +224,7 @@ class MainActivity : Activity() {
             }
         } else {
             // Stop continuous listening
+            listening = false
             try {
                 activePipeline.stop()
             } catch (_: Exception) {}
@@ -212,18 +248,25 @@ class MainActivity : Activity() {
             "bengali" to "bn-IN",
         )[lastLanguage] ?: "en-IN"
 
-        if (engine.setLanguage(Locale.forLanguageTag(tag)) < TextToSpeech.LANG_AVAILABLE) {
-            status.text = "No installed TTS voice for $lastLanguage"
+        val locale = Locale.forLanguageTag(tag)
+        val voice = engine.voices
+            .filter { !it.isNetworkConnectionRequired && it.locale.language == locale.language }
+            .maxByOrNull { if (it.locale.country == locale.country) 1 else 0 }
+        if (voice == null || engine.setVoice(voice) != TextToSpeech.SUCCESS) {
+            status.text = "No offline TTS voice installed for $lastLanguage"
             return
         }
         engine.speak(lastText, TextToSpeech.QUEUE_FLUSH, null, "transcription")
     }
 
     override fun onDestroy() {
+        listening = false
         audioPipeline?.stop()
+        audioPipeline = null
         vadEngine?.close()
-        sttWorker.shutdownNow()
-        pipeline?.close()
+        vadEngine = null
+        sttWorker.execute { pipeline?.close(); pipeline = null }
+        sttWorker.shutdown()
         tts?.shutdown()
         super.onDestroy()
     }

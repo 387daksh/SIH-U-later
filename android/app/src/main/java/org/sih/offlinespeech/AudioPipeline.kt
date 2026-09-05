@@ -1,9 +1,13 @@
 package org.sih.offlinespeech
 
+import android.Manifest
+import android.content.Context
+import android.content.pm.PackageManager
 import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.MediaRecorder
 import java.io.Closeable
+import kotlin.math.floor
 import kotlin.math.max
 
 fun interface AudioChunkListener {
@@ -11,6 +15,7 @@ fun interface AudioChunkListener {
 }
 
 class AudioPipeline(
+    private val context: Context,
     private val listener: AudioChunkListener
 ) : Closeable {
 
@@ -65,6 +70,9 @@ class AudioPipeline(
     }
 
     private fun initAudioRecord(): AudioRecord {
+        if (context.checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            throw SecurityException("Microphone permission is not granted")
+        }
         for (rate in CANDIDATE_RATES) {
             val minBuf = AudioRecord.getMinBufferSize(
                 rate,
@@ -191,6 +199,7 @@ class DcOffsetFilter(private val r: Float = 0.995f) {
     }
 }
 
+// ponytail: linear fallback is enough for microphones; use native DSP only if device WER regresses.
 class LinearResampler(private val inRate: Int, private val outRate: Int = 16000) {
     private var lastSample: Float = 0f
     private var hasLastSample: Boolean = false
@@ -198,30 +207,30 @@ class LinearResampler(private val inRate: Int, private val outRate: Int = 16000)
     private val step: Double = inRate.toDouble() / outRate.toDouble()
 
     fun resample(input: FloatArray, count: Int): FloatArray {
+        require(count in 0..input.size)
+        if (count == 0) return FloatArray(0)
         if (inRate == outRate) {
             return input.copyOf(count)
         }
-        val estimatedOut = ((count + 1) / step).toInt() + 2
+        val estimatedOut = ((count + step) / step).toInt() + 1
         val outList = FloatArray(estimatedOut)
         var outIdx = 0
 
         var pos = phase
         while (true) {
-            val i = pos.toInt()
-            val frac = (pos - i).toFloat()
-
-            val s0 = if (i == 0) {
-                if (hasLastSample) lastSample else input[0]
-            } else if (i - 1 < count) {
-                input[i - 1]
-            } else {
-                break
+            val left = floor(pos).toInt()
+            val right = left + 1
+            val frac = (pos - left).toFloat()
+            val s0 = when {
+                left < 0 && hasLastSample -> lastSample
+                left in 0 until count -> input[left]
+                else -> break
             }
-
-            val s1 = if (i < count) {
-                input[i]
-            } else {
-                break
+            val s1 = when {
+                right < 0 && hasLastSample -> lastSample
+                right in 0 until count -> input[right]
+                frac == 0f -> s0
+                else -> break
             }
 
             outList[outIdx++] = s0 + frac * (s1 - s0)
