@@ -12,7 +12,13 @@ import java.nio.LongBuffer
 import java.util.Base64
 import kotlin.math.exp
 
-data class SpeechResult(val language: String, val text: String, val backend: String, val milliseconds: Long)
+data class SpeechResult(
+    val language: String,
+    val text: String,
+    val backend: String,
+    val milliseconds: Long,
+    val confidence: Double = Double.NaN,
+)
 enum class RoutingMode { AUTO, ENGLISH, INDIC }
 
 fun validateModelBundle(root: File) {
@@ -88,7 +94,8 @@ private class WhisperRuntime(private val env: OrtEnvironment, root: File) : Clos
                     val crossK = encoded[0] as OnnxTensor
                     val crossV = encoded[1] as OnnxTensor
                     if (verifyLanguage && englishProbability(crossK, crossV) < config.getDouble("english_threshold")) return null
-                    return SpeechResult("english", decodeEnglish(crossK, crossV), "whisper-tiny-int8", 0)
+                    val decodedText = decodeEnglish(crossK, crossV)
+                    return SpeechResult("english", decodedText.text, "whisper-tiny-int8", 0, decodedText.confidence)
                 }
             }
         }
@@ -109,41 +116,54 @@ private class WhisperRuntime(private val env: OrtEnvironment, root: File) : Clos
         }
     }
 
-    private fun decodeEnglish(crossK: OnnxTensor, crossV: OnnxTensor): String {
+    private data class WhisperText(val text: String, val confidence: Double)
+    private data class TokenChoice(val token: Int, val marginConfidence: Double)
+
+    private fun decodeEnglish(crossK: OnnxTensor, crossV: OnnxTensor): WhisperText {
         val zeroK = zeroCache(); val zeroV = zeroCache()
         var owner = runDecoder(longArrayOf(sot.toLong(), englishToken.toLong(), transcribe.toLong(),
             noTimestamps.toLong()), 0, zeroK, zeroV, crossK, crossV)
         zeroK.close(); zeroV.close()
         val generated = ArrayList<Int>()
+        var confidenceSum = 0.0
         var offset = 4L
         while (generated.size < context - 4) {
-            val token = bestToken(owner, generated.isEmpty())
-            if (token == eot) break
-            generated += token
+            val choice = bestToken(owner, generated.isEmpty())
+            if (choice.token == eot) break
+            generated += choice.token
+            confidenceSum += choice.marginConfidence
             val old = owner
-            owner = runDecoder(longArrayOf(token.toLong()), offset++, old[1] as OnnxTensor,
+            owner = runDecoder(longArrayOf(choice.token.toLong()), offset++, old[1] as OnnxTensor,
                 old[2] as OnnxTensor, crossK, crossV)
             old.close()
         }
         owner.close()
         val bytes = ByteArrayOutputStream()
         generated.forEach { tokens[it]?.let { value -> bytes.write(value) } }
-        return bytes.toByteArray().toString(Charsets.UTF_8).trim()
+        return WhisperText(
+            bytes.toByteArray().toString(Charsets.UTF_8).trim(),
+            if (generated.isEmpty()) 0.0 else confidenceSum / generated.size,
+        )
     }
 
-    private fun bestToken(result: OrtSession.Result, first: Boolean): Int {
+    private fun bestToken(result: OrtSession.Result, first: Boolean): TokenChoice {
         val logits = result[0] as OnnxTensor
         val data = logits.floatBuffer
         val width = logits.info.shape.last().toInt()
         val start = (logits.info.shape[1].toInt() - 1) * width
-        var best = eot; var bestScore = Float.NEGATIVE_INFINITY
+        var best = eot; var bestScore = Float.NEGATIVE_INFINITY; var secondScore = Float.NEGATIVE_INFINITY
         for (token in 0 until width) {
             if (token == noTimestamps || token == sot || token == noSpeech || token == translate ||
                 first && (token == blank || token == eot)) continue
             val score = data.get(start + token)
-            if (score > bestScore) { best = token; bestScore = score }
+            if (score > bestScore) {
+                secondScore = bestScore; best = token; bestScore = score
+            } else if (score > secondScore) {
+                secondScore = score
+            }
         }
-        return best
+        val margin = (bestScore - secondScore).toDouble()
+        return TokenChoice(best, if (margin.isFinite()) 1.0 / (1.0 + exp(-margin)) else 1.0)
     }
 
     private fun runDecoder(tokenIds: LongArray, offsetValue: Long, cacheK: OnnxTensor,
@@ -253,7 +273,7 @@ private class IndicRuntime(private val env: OrtEnvironment, root: File) : Closea
             if (average > winnerConfidence) {
                 winnerConfidence = average
                 winner = SpeechResult(language, text.toString().replace("▁", " ").trim(),
-                    "indic-conformer-600m-hybrid-int8", 0)
+                    "indic-conformer-600m-hybrid-int8", 0, average)
             }
         }
         return requireNotNull(winner)
