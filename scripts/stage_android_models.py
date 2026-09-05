@@ -92,13 +92,22 @@ def check_english(bundle, audio_path):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--output", type=Path, default=ROOT / "artifacts/android_models")
-    parser.add_argument("--indic-dir", type=Path, default=ROOT / "deployment_models/indic/hybrid_int8")
+    indic_default = ROOT / "deployment_models/indic/hybrid_int8"
+    if not (indic_default / "assets" / "preprocessor.ts").exists():
+        indic_default = ROOT / "models/indic"
+    parser.add_argument("--indic-dir", type=Path, default=indic_default)
     parser.add_argument("--whisper-dir", type=Path, default=ROOT / "deployment_models/android/whisper")
+    parser.add_argument("--vad-path", type=Path, default=ROOT / "models/vad/silero_vad.onnx")
     args = parser.parse_args()
+
+    if not args.vad_path.is_file():
+        subprocess.run([sys.executable, str(ROOT / "scripts/download_silero_vad.py"),
+                        "--output", str(args.vad_path)], check=True, cwd=ROOT)
 
     subprocess.run([sys.executable, str(ROOT / "scripts/export_indic_preprocessor_onnx.py"),
                     "--indic-dir", str(args.indic_dir)], check=True, cwd=ROOT)
     subprocess.run([sys.executable, str(ROOT / "scripts/export_whisper_preprocessor_onnx.py"),
+                    "--whisper-dir", str(ROOT / "models/whisper"),
                     "--output", str(args.whisper_dir / "preprocessor.onnx")], check=True, cwd=ROOT)
 
     files = {
@@ -112,6 +121,7 @@ def main():
         args.whisper_dir / "tiny-encoder.onnx": args.output / "whisper/encoder.onnx",
         args.whisper_dir / "tiny-decoder.int8.onnx": args.output / "whisper/decoder.onnx",
         args.whisper_dir / "tiny-tokens.txt": args.output / "whisper/tokens.txt",
+        args.vad_path: args.output / "vad/silero_vad.onnx",
     }
     for source, target in files.items():
         copy(source, target)
