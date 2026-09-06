@@ -98,7 +98,7 @@ class SutraTransmissionService : Service(), PeerTransportListener {
         getSharedPreferences("sutra", MODE_PRIVATE).getString("pairing_phrase", null)
             ?.takeIf { it.length >= 12 }?.let { security = SecureFrameCodec.fromPhrase(it) }
         wifi = TcpPeerTransport(this)
-        bluetooth = BluetoothPeerTransport(this, this)
+        bluetooth = BluetoothPeerTransport(this, this, sourceId)
         arcJitterBuffer = ArcJitterBuffer(
             onRelease = ::releaseStreamingText,
             nowMs = SystemClock::elapsedRealtime,
@@ -124,9 +124,11 @@ class SutraTransmissionService : Service(), PeerTransportListener {
     fun wifiHost() = wifi.host()
     fun wifiConnect(host: String) = wifi.connect(host)
     fun wifiDisconnect() = wifi.disconnect()
+    /** Start unpaired BLE advertising and Bitchat-style nearby discovery. */
     fun bluetoothListen() = bluetooth.listen()
     fun bluetoothConnect(address: String) = bluetooth.connect(address)
-    fun bluetoothPeers(): List<BluetoothPeer> = bluetooth.bondedPeers()
+    fun bluetoothPeers(): List<BluetoothPeer> = bluetooth.nearbyPeers()
+    fun bluetoothDisconnect() = bluetooth.disconnect()
     fun disconnectAll() { wifi.disconnect(); bluetooth.disconnect() }
     fun isConnected(): Boolean = wifi.isConnected || bluetooth.isConnected
 
@@ -182,7 +184,7 @@ class SutraTransmissionService : Service(), PeerTransportListener {
 
     override fun onTransportStatus(status: String) {
         status(status)
-        if (status.contains("connected", ignoreCase = true)) flushOutbox()
+        if (isConnected()) flushOutbox()
     }
 
     override fun onTransportMessage(bytes: ByteArray) {
