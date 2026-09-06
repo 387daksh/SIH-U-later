@@ -498,8 +498,9 @@ class MainActivity : Activity(), SutraTransmissionListener {
                 )
                 vadEngine = engine
 
+                val playbackSilence = FloatArray(AudioPipeline.CHUNK_SIZE)
                 val pipelineCapture = AudioPipeline(this@MainActivity) { chunk ->
-                    engine.processChunk(chunk)
+                    engine.processChunk(if (AudioDuplexGate.isPlaybackActive) playbackSilence else chunk)
                 }
                 pipelineCapture.start()
                 audioPipeline = pipelineCapture

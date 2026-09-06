@@ -23,7 +23,27 @@ import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicLong
 import kotlin.math.max
+
+internal object AudioDuplexGate {
+    private const val PLAYBACK_DRAIN_NANOS = 750_000_000L
+    private val activePlaybacks = AtomicInteger()
+    private val muteUntilNanos = AtomicLong()
+    val isPlaybackActive: Boolean
+        get() = activePlaybacks.get() > 0 || System.nanoTime() < muteUntilNanos.get()
+    fun beginPlayback() { activePlaybacks.incrementAndGet() }
+    fun endPlayback() {
+        if (activePlaybacks.getAndUpdate { max(0, it - 1) } == 1) {
+            muteUntilNanos.set(System.nanoTime() + PLAYBACK_DRAIN_NANOS)
+        }
+    }
+    fun reset() {
+        activePlaybacks.set(0)
+        muteUntilNanos.set(0)
+    }
+}
 
 internal fun pcmFloatBufferBytes(minimumBytes: Int, sampleRate: Int): Int {
     val requested = max(minimumBytes, sampleRate)
@@ -253,12 +273,14 @@ class SutraTransmissionService : Service(), PeerTransportListener {
                         store.metric(it.id.toString(), "playback_finished")
                         sendAck(it, SutraMessageType.PLAYBACK_FINISHED)
                     }
+                    AudioDuplexGate.endPlayback()
                     abandonAudioFocus()
                 }
 
                 @Deprecated("Deprecated in Java")
                 override fun onError(utteranceId: String) {
                     pendingSpeech.remove(utteranceId)
+                    AudioDuplexGate.endPlayback()
                     abandonAudioFocus()
                 }
             })
@@ -302,8 +324,10 @@ class SutraTransmissionService : Service(), PeerTransportListener {
         val usage = if (alert) AudioAttributes.USAGE_ALARM else AudioAttributes.USAGE_ASSISTANCE_ACCESSIBILITY
         engine.setAudioAttributes(AudioAttributes.Builder().setUsage(usage).setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build())
         requestAudioFocus(alert)
+        AudioDuplexGate.beginPlayback()
         val accepted = engine.speak(text, TextToSpeech.QUEUE_ADD, null, utteranceId) == TextToSpeech.SUCCESS
         if (!accepted) {
+            AudioDuplexGate.endPlayback()
             status("TTS rejected the received message")
         }
         return accepted
@@ -337,8 +361,10 @@ class SutraTransmissionService : Service(), PeerTransportListener {
 
     private fun playOnnx(text: String, language: String, alert: Boolean, message: SutraMessage?) {
         ttsWorker.execute {
+            AudioDuplexGate.beginPlayback()
             val runtime = loadOnnxTts()
             if (runtime == null) {
+                AudioDuplexGate.endPlayback()
                 val id = message?.let { "sutra-${it.id}" } ?: "local-${System.nanoTime()}"
                 if (message != null) pendingSpeech[id] = message
                 if (!speakSystem(text, language, alert, id)) pendingSpeech.remove(id)
@@ -399,6 +425,7 @@ class SutraTransmissionService : Service(), PeerTransportListener {
             } finally {
                 runCatching { track?.stop() }
                 track?.release()
+                AudioDuplexGate.endPlayback()
                 abandonAudioFocus()
             }
         }
@@ -466,6 +493,7 @@ class SutraTransmissionService : Service(), PeerTransportListener {
         ttsWorker.shutdownNow()
         runCatching { ttsWorker.awaitTermination(2, TimeUnit.SECONDS) }
         onnxTts?.close()
+        AudioDuplexGate.reset()
         store.metric(null, "service_stopped")
         store.close()
         io.shutdownNow()

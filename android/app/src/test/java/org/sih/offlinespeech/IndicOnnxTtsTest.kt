@@ -25,4 +25,18 @@ class IndicOnnxTtsTest {
         assertEquals(22_052, pcmFloatBufferBytes(-2, 22_050))
         assertEquals(32_768, pcmFloatBufferBytes(32_768, 22_050))
     }
+
+    @Test
+    fun duplexGateStaysMutedUntilEveryPlaybackFinishes() {
+        AudioDuplexGate.reset()
+        AudioDuplexGate.beginPlayback()
+        AudioDuplexGate.beginPlayback()
+        AudioDuplexGate.endPlayback()
+        assertEquals(true, AudioDuplexGate.isPlaybackActive)
+        AudioDuplexGate.endPlayback()
+        assertEquals(true, AudioDuplexGate.isPlaybackActive)
+        AudioDuplexGate.reset()
+        AudioDuplexGate.endPlayback()
+        assertEquals(false, AudioDuplexGate.isPlaybackActive)
+    }
 }
