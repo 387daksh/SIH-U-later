@@ -19,4 +19,10 @@ class IndicOnnxTtsTest {
     fun splitsLongUnpunctuatedTextAtWords() {
         assertEquals(listOf("ab ab", "ab"), processor.chunks("AB AB AB"))
     }
+
+    @Test
+    fun alignsOddSampleRateBufferToFloatFrames() {
+        assertEquals(22_052, pcmFloatBufferBytes(-2, 22_050))
+        assertEquals(32_768, pcmFloatBufferBytes(32_768, 22_050))
+    }
 }

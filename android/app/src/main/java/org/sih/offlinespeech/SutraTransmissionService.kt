@@ -25,6 +25,11 @@ import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import kotlin.math.max
 
+internal fun pcmFloatBufferBytes(minimumBytes: Int, sampleRate: Int): Int {
+    val requested = max(minimumBytes, sampleRate)
+    return (requested + Float.SIZE_BYTES - 1) / Float.SIZE_BYTES * Float.SIZE_BYTES
+}
+
 interface SutraTransmissionListener {
     fun onTransmissionStatus(status: String)
     fun onTransmissionMessage(message: SutraMessage, elapsedMs: Long?, duplicate: Boolean)
@@ -351,7 +356,7 @@ class SutraTransmissionService : Service(), PeerTransportListener {
                     .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
                     .build()
                 val usage = if (alert) AudioAttributes.USAGE_ALARM else AudioAttributes.USAGE_ASSISTANCE_ACCESSIBILITY
-                val bufferBytes = max(
+                val bufferBytes = pcmFloatBufferBytes(
                     AudioTrack.getMinBufferSize(runtime.sampleRate, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_FLOAT),
                     runtime.sampleRate,
                 )
