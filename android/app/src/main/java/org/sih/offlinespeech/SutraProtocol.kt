@@ -49,7 +49,30 @@ data class SutraMessage(
     val sourceId: Long = 0,
     val destinationId: Long = 0,
     val flags: Int = 0,
-)
+) {
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (other !is SutraMessage) return false
+        return type == other.type &&
+            language == other.language &&
+            payload.contentEquals(other.payload) &&
+            id == other.id &&
+            sourceId == other.sourceId &&
+            destinationId == other.destinationId &&
+            flags == other.flags
+    }
+
+    override fun hashCode(): Int {
+        var result = type.hashCode()
+        result = 31 * result + language.hashCode()
+        result = 31 * result + payload.contentHashCode()
+        result = 31 * result + id.hashCode()
+        result = 31 * result + sourceId.hashCode()
+        result = 31 * result + destinationId.hashCode()
+        result = 31 * result + flags
+        return result
+    }
+}
 
 object SutraFlags {
     const val FINAL = 1

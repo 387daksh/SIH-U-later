@@ -24,6 +24,8 @@ class SutraProtocolTest {
         assertEquals(original.id, decoded.id)
         assertEquals(original.sourceId, decoded.sourceId)
         assertEquals("गेट चार पर मत जाना", SutraCodec.utf8(decoded.payload))
+        assertEquals(original, decoded)
+        assertEquals(original.hashCode(), decoded.hashCode())
 
         encoded[encoded.lastIndex - 2] = (encoded[encoded.lastIndex - 2].toInt() xor 1).toByte()
         val error = runCatching { SutraCodec.decode(encoded) }.exceptionOrNull()

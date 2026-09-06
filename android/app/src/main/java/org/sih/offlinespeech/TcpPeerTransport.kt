@@ -23,7 +23,13 @@ class TcpPeerTransport(private val listener: PeerTransportListener, private val 
 
         fun localIpv4Addresses(): List<String> {
             val interfaces = NetworkInterface.getNetworkInterfaces() ?: return emptyList()
-            return Collections.list(interfaces)
+            val list = Collections.list(interfaces).filter { runCatching { it.isUp && !it.isLoopback }.getOrDefault(false) }
+            val preferredOrder = listOf("wlan", "p2p", "eth", "en")
+            return list
+                .sortedBy { iface ->
+                    val name = iface.name.lowercase()
+                    preferredOrder.indexOfFirst { name.startsWith(it) }.let { if (it == -1) 99 else it }
+                }
                 .flatMap { Collections.list(it.inetAddresses) }
                 .filterIsInstance<Inet4Address>()
                 .filterNot { it.isLoopbackAddress || it.isLinkLocalAddress }
@@ -84,15 +90,15 @@ class TcpPeerTransport(private val listener: PeerTransportListener, private val 
         require(bytes.size in 1..MAX_FRAME_BYTES) { "Invalid transport frame size" }
         val active = peers.entries.toList()
         check(active.isNotEmpty()) { "No Wi-Fi peer is connected" }
+        val header = java.nio.ByteBuffer.allocate(4).order(java.nio.ByteOrder.BIG_ENDIAN).putInt(bytes.size).array()
         var delivered = 0
         active.forEach { (id, peer) ->
             try {
                 synchronized(writeLocks.getOrPut(id) { Any() }) {
-                    DataOutputStream(peer.getOutputStream()).apply {
-                        writeInt(bytes.size)
-                        write(bytes)
-                        flush()
-                    }
+                    val output = peer.getOutputStream()
+                    output.write(header)
+                    output.write(bytes)
+                    output.flush()
                 }
                 delivered++
             } catch (_: Exception) {
@@ -118,7 +124,9 @@ class TcpPeerTransport(private val listener: PeerTransportListener, private val 
             val input = DataInputStream(peer.getInputStream())
             while (!peer.isClosed) {
                 val size = input.readInt()
-                require(size in 1..MAX_FRAME_BYTES) { "Peer frame is too large: $size" }
+                // Length-prefixed stream framing: if frame size is corrupted, stream synchronization is lost.
+                // The connection must be torn down and renegotiated.
+                require(size in 1..MAX_FRAME_BYTES) { "Wi-Fi framing desync (frame size $size exceeds limit $MAX_FRAME_BYTES)" }
                 listener.onTransportMessage(ByteArray(size).also(input::readFully))
             }
         } catch (error: Exception) {

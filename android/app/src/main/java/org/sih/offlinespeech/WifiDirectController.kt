@@ -14,6 +14,8 @@ import android.net.wifi.p2p.WifiP2pManager
 import android.net.wifi.p2p.nsd.WifiP2pDnsSdServiceInfo
 import android.net.wifi.p2p.nsd.WifiP2pDnsSdServiceRequest
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 
 data class WifiDirectPeer(val name: String, val address: String)
 
@@ -36,6 +38,7 @@ class WifiDirectController(
     private val channel = manager.initialize(activity, activity.mainLooper) {
         listener.onWifiDirectStatus("Wi-Fi Direct channel lost")
     }
+    private val handler = Handler(activity.mainLooper)
     private val devices = LinkedHashMap<String, WifiP2pDevice>()
     private var registered = false
     private var groupSignature: String? = null
@@ -73,31 +76,60 @@ class WifiDirectController(
         requirePermission()
         devices.clear()
         listener.onWifiDirectPeers(emptyList())
-        advertise()
         manager.setDnsSdResponseListeners(
             channel,
             WifiP2pManager.DnsSdServiceResponseListener { instance, registration, device ->
                 if (instance == INSTANCE && registration.startsWith(SERVICE)) addDevice(device)
             },
-            WifiP2pManager.DnsSdTxtRecordListener { _, record, device ->
-                if (record["protocol"] == "1") addDevice(device, record["name"])
+            WifiP2pManager.DnsSdTxtRecordListener { fullDomainName, record, device ->
+                val matchesService = fullDomainName.contains(INSTANCE) || fullDomainName.contains(SERVICE)
+                val matchesProtocol = record["protocol"] == "1"
+                val matchesApp = record["app"] == "sutra" || matchesService
+                if (matchesService && matchesProtocol && matchesApp) {
+                    addDevice(device, record["name"])
+                }
             },
         )
+        // Sequentially chain advertise -> service search so wpa_supplicant doesn't fail with BUSY (2)
+        advertise {
+            startServiceSearch()
+        }
+    }
+
+    private fun startServiceSearch(retryCount: Int = 0) {
+        val request = WifiP2pDnsSdServiceRequest.newInstance(INSTANCE, SERVICE)
+        serviceRequest = request
+
+        val executeDiscovery = {
+            manager.addServiceRequest(channel, request, action(
+                success = {
+                    manager.discoverServices(channel, action(
+                        success = { listener.onWifiDirectStatus("Searching for nearby SUTRA apps...") },
+                        failure = { reason ->
+                            if (reason == WifiP2pManager.BUSY && retryCount < 3) {
+                                listener.onWifiDirectStatus("Wi-Fi Direct busy; retrying in 500ms...")
+                                handler.postDelayed({ startServiceSearch(retryCount + 1) }, 500)
+                            } else {
+                                listener.onWifiDirectStatus("Service search: ${errorText(reason)}")
+                            }
+                        },
+                    ))
+                },
+                failure = { reason ->
+                    if (reason == WifiP2pManager.BUSY && retryCount < 3) {
+                        listener.onWifiDirectStatus("Wi-Fi Direct busy; retrying in 500ms...")
+                        handler.postDelayed({ startServiceSearch(retryCount + 1) }, 500)
+                    } else {
+                        listener.onWifiDirectStatus("Could not add search (${errorText(reason)})")
+                    }
+                },
+            ))
+        }
+
+        // Even if clearServiceRequests fails (or returns busy), proceed directly to addServiceRequest
         manager.clearServiceRequests(channel, action(
-            success = {
-                val request = WifiP2pDnsSdServiceRequest.newInstance(INSTANCE, SERVICE)
-                serviceRequest = request
-                manager.addServiceRequest(channel, request, action(
-                    success = {
-                        manager.discoverServices(channel, action(
-                            success = { listener.onWifiDirectStatus("Searching for nearby SUTRA apps") },
-                            failure = { listener.onWifiDirectStatus("Service search failed ($it)") },
-                        ))
-                    },
-                    failure = { listener.onWifiDirectStatus("Could not add service search ($it)") },
-                ))
-            },
-            failure = { listener.onWifiDirectStatus("Could not reset service search ($it)") },
+            success = { executeDiscovery() },
+            failure = { executeDiscovery() },
         ))
     }
 
@@ -123,21 +155,45 @@ class WifiDirectController(
         ))
     }
 
-    private fun advertise() {
+    private fun advertise(onComplete: (() -> Unit)? = null) {
         val service = WifiP2pDnsSdServiceInfo.newInstance(
             INSTANCE,
             SERVICE,
-            mapOf("protocol" to "1", "name" to "${Build.MANUFACTURER} ${Build.MODEL}"),
+            mapOf("app" to "sutra", "protocol" to "1", "name" to "${Build.MANUFACTURER} ${Build.MODEL}"),
         )
         manager.clearLocalServices(channel, action(
             success = {
                 manager.addLocalService(channel, service, action(
-                    success = { listener.onWifiDirectStatus("SUTRA receive mode advertised") },
-                    failure = { listener.onWifiDirectStatus("Could not advertise SUTRA ($it)") },
+                    success = {
+                        listener.onWifiDirectStatus("SUTRA receive mode advertised")
+                        onComplete?.invoke()
+                    },
+                    failure = { reason ->
+                        listener.onWifiDirectStatus("Could not advertise SUTRA (${errorText(reason)})")
+                        onComplete?.invoke()
+                    },
                 ))
             },
-            failure = { listener.onWifiDirectStatus("Could not reset advertisement ($it)") },
+            failure = {
+                manager.addLocalService(channel, service, action(
+                    success = {
+                        listener.onWifiDirectStatus("SUTRA receive mode advertised")
+                        onComplete?.invoke()
+                    },
+                    failure = {
+                        onComplete?.invoke()
+                    },
+                ))
+            },
         ))
+    }
+
+    private fun errorText(code: Int): String = when (code) {
+        WifiP2pManager.ERROR -> "internal error"
+        WifiP2pManager.P2P_UNSUPPORTED -> "P2P unsupported"
+        WifiP2pManager.BUSY -> "radio busy"
+        WifiP2pManager.NO_SERVICE_REQUESTS -> "no service requests"
+        else -> "code $code"
     }
 
     private fun addDevice(device: WifiP2pDevice, advertisedName: String? = null) {
