@@ -14,14 +14,21 @@ fun interface AudioChunkListener {
     fun onAudioChunk(chunk: FloatArray)
 }
 
+/** A continuous 500 ms, 16 kHz capture window and its sender-relative timestamp. */
+fun interface StreamingAudioChunkListener {
+    fun onStreamingChunk(chunk: FloatArray, senderTimestampMs: Long)
+}
+
 class AudioPipeline(
     private val context: Context,
-    private val listener: AudioChunkListener
+    private val listener: AudioChunkListener,
+    private val streamingListener: StreamingAudioChunkListener? = null,
 ) : Closeable {
 
     companion object {
         const val TARGET_SAMPLE_RATE = 16000
         const val CHUNK_SIZE = 512
+        const val STREAMING_CHUNK_SAMPLES = TARGET_SAMPLE_RATE / 2
         private val CANDIDATE_RATES = intArrayOf(16000, 48000, 44100, 22050, 8000)
     }
 
@@ -37,6 +44,9 @@ class AudioPipeline(
     // Accumulator to ensure exactly 512 samples are emitted per chunk
     private val accumulator = FloatArray(CHUNK_SIZE * 4)
     private var accumulatorCount = 0
+    private val streamingAccumulator = FloatArray(STREAMING_CHUNK_SAMPLES * 2)
+    private var streamingAccumulatorCount = 0
+    private var emittedStreamingSamples = 0L
 
     val sampleRate: Int
         get() = actualSampleRate
@@ -60,6 +70,8 @@ class AudioPipeline(
         dcFilter.reset()
         resampler?.reset()
         accumulatorCount = 0
+        streamingAccumulatorCount = 0
+        emittedStreamingSamples = 0
 
         running = true
         record.startRecording()
@@ -149,6 +161,31 @@ class AudioPipeline(
 
                     if (running) {
                         listener.onAudioChunk(chunk)
+                    }
+                }
+            }
+
+            // 5. In parallel, emit exact 500 ms windows for streaming STT. This is
+            // independent of the 512-sample VAD hop so neither consumer is rounded.
+            val stream = streamingListener
+            if (stream != null) {
+                var streamOffset = 0
+                while (streamOffset < processedCount) {
+                    val room = streamingAccumulator.size - streamingAccumulatorCount
+                    val count = minOf(room, processedCount - streamOffset)
+                    System.arraycopy(processed, streamOffset, streamingAccumulator, streamingAccumulatorCount, count)
+                    streamingAccumulatorCount += count
+                    streamOffset += count
+                    while (streamingAccumulatorCount >= STREAMING_CHUNK_SAMPLES) {
+                        val chunk = streamingAccumulator.copyOfRange(0, STREAMING_CHUNK_SAMPLES)
+                        streamingAccumulatorCount -= STREAMING_CHUNK_SAMPLES
+                        if (streamingAccumulatorCount > 0) {
+                            System.arraycopy(streamingAccumulator, STREAMING_CHUNK_SAMPLES,
+                                streamingAccumulator, 0, streamingAccumulatorCount)
+                        }
+                        val timestamp = emittedStreamingSamples * 1_000 / TARGET_SAMPLE_RATE
+                        emittedStreamingSamples += STREAMING_CHUNK_SAMPLES
+                        if (running) stream.onStreamingChunk(chunk, timestamp)
                     }
                 }
             }

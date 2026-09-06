@@ -14,6 +14,7 @@ import android.media.AudioManager
 import android.media.AudioTrack
 import android.os.Binder
 import android.os.IBinder
+import android.os.SystemClock
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import android.util.Log
@@ -80,6 +81,7 @@ class SutraTransmissionService : Service(), PeerTransportListener {
     private var onnxTtsAttempted = false
     private var security: SecureFrameCodec? = null
     private var focusRequest: AudioFocusRequest? = null
+    private lateinit var arcJitterBuffer: ArcJitterBuffer
     @Volatile private var listener: SutraTransmissionListener? = null
     private var sourceId = 0L
 
@@ -97,6 +99,10 @@ class SutraTransmissionService : Service(), PeerTransportListener {
             ?.takeIf { it.length >= 12 }?.let { security = SecureFrameCodec.fromPhrase(it) }
         wifi = TcpPeerTransport(this)
         bluetooth = BluetoothPeerTransport(this, this)
+        arcJitterBuffer = ArcJitterBuffer(
+            onRelease = ::releaseStreamingText,
+            nowMs = SystemClock::elapsedRealtime,
+        )
         initialiseTts()
         store.metric(null, "service_started")
     }
@@ -147,6 +153,16 @@ class SutraTransmissionService : Service(), PeerTransportListener {
         flushOutbox()
     }
 
+    /** Sends a time-sensitive text burst without putting it through the durable final-message outbox. */
+    fun sendVoiceBurst(packet: VoiceBurstPacket) {
+        val plain = VoiceBurstPacketCodec.encode(packet)
+        io.execute {
+            runCatching { sendFrame(security?.seal(plain) ?: plain) }
+                .onSuccess { store.metric(null, "voice_tx", "seq=${packet.sequence},bytes=${plain.size}") }
+                .onFailure { store.metric(null, "voice_tx_failed", it.message.orEmpty()) }
+        }
+    }
+
     fun exportMetrics(): Pair<File, Int> {
         val target = File(requireNotNull(getExternalFilesDir(null)), "metrics/sutra_metrics.csv")
         return target to store.exportMetrics(target)
@@ -176,7 +192,28 @@ class SutraTransmissionService : Service(), PeerTransportListener {
                 status("Rejected unauthenticated/wrong-phrase frame")
                 return@execute
             }
+            // SUTRA has an explicit magic prefix; live Bitchat envelopes do not.
+            // Keeping the lanes separate makes old reliable peers interoperate unchanged.
+            val isSutra = plain.size >= 2 &&
+                ((plain[0].toInt() and 0xff) == 0x53) && ((plain[1].toInt() and 0xff) == 0x54)
+            if (!isSutra) {
+                val packet = runCatching { VoiceBurstPacketCodec.decode(plain) }.getOrElse { error ->
+                    store.metric(null, "voice_rx_invalid", error.message.orEmpty())
+                    status("Rejected invalid live voice frame: ${error.message}")
+                    return@execute
+                }
+                store.metric(null, "voice_rx", "seq=${packet.sequence},bytes=${plain.size}")
+                arcJitterBuffer.offer(packet, SystemClock.elapsedRealtime())
+                return@execute
+            }
             val message = runCatching { SutraCodec.decode(plain) }.getOrElse { error ->
+                // A Bitchat burst id is random and may begin with S,T. Treat a
+                // failed SUTRA parse as a burst before rejecting the frame.
+                runCatching { VoiceBurstPacketCodec.decode(plain) }.getOrNull()?.let { packet ->
+                    store.metric(null, "voice_rx", "seq=${packet.sequence},bytes=${plain.size}")
+                    arcJitterBuffer.offer(packet, SystemClock.elapsedRealtime())
+                    return@execute
+                }
                 store.metric(null, "rx_invalid", error.message.orEmpty())
                 status("Rejected invalid SUTRA frame: ${error.message}")
                 return@execute
@@ -214,6 +251,15 @@ class SutraTransmissionService : Service(), PeerTransportListener {
                 }
                 SutraMessageType.HELLO -> listener?.onTransmissionMessage(message, null, false)
             }
+        }
+    }
+
+    /** ARC's scheduled receiver callback. DATA is the only burst type presented to TTS. */
+    private fun releaseStreamingText(packet: VoiceBurstPacket) {
+        if (packet.flags != VoiceBurstPacket.FLAG_DATA || packet.text.isBlank()) return
+        store.metric(null, "voice_released", "seq=${packet.sequence},sn=${packet.senderTimestampMs}")
+        if (!speakLocal(packet.text, packet.language.pipelineName)) {
+            status("Offline TTS is not ready for streamed ${packet.language.pipelineName}")
         }
     }
 
@@ -487,6 +533,7 @@ class SutraTransmissionService : Service(), PeerTransportListener {
 
     override fun onDestroy() {
         listener = null
+        arcJitterBuffer.close()
         wifi.close()
         bluetooth.close()
         tts?.shutdown()

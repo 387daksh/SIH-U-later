@@ -57,6 +57,8 @@ class MainActivity : Activity(), SutraTransmissionListener {
     private var audioPipeline: AudioPipeline? = null
     private var vadEngine: SileroVadEngine? = null
     private var pipeline: OfflineSpeechPipeline? = null
+    private var streamingPipeline: OfflineSpeechPipeline? = null
+    private var streamingSpeech: StreamingSpeechSession? = null
 
     private var segmentCount = 0
     private var lastText = ""
@@ -412,6 +414,22 @@ class MainActivity : Activity(), SutraTransmissionListener {
             segmentCount = 0
             result.text = ""
 
+            // Live packets use a dedicated sequential inference stream. The existing
+            // VAD path remains responsible for the durable final SUTRA transcript.
+            val liveSession = StreamingSpeechSession(
+                pipelineFactory = {
+                    streamingPipeline ?: OfflineSpeechPipeline(modelDir).also { streamingPipeline = it }
+                },
+                routingMode = routingMode,
+                send = { packet -> transmission?.sendVoiceBurst(packet) },
+                onFinished = {
+                    streamingPipeline?.close()
+                    streamingPipeline = null
+                },
+            )
+            streamingSpeech = liveSession
+            liveSession.start()
+
             try {
                 val engine = SileroVadEngine(
                     modelFile = vadModel,
@@ -499,9 +517,17 @@ class MainActivity : Activity(), SutraTransmissionListener {
                 vadEngine = engine
 
                 val playbackSilence = FloatArray(AudioPipeline.CHUNK_SIZE)
-                val pipelineCapture = AudioPipeline(this@MainActivity) { chunk ->
-                    engine.processChunk(if (AudioDuplexGate.isPlaybackActive) playbackSilence else chunk)
-                }
+                val pipelineCapture = AudioPipeline(
+                    context = this@MainActivity,
+                    listener = AudioChunkListener { chunk ->
+                        engine.processChunk(if (AudioDuplexGate.isPlaybackActive) playbackSilence else chunk)
+                    },
+                    streamingListener = StreamingAudioChunkListener { chunk, timestampMs ->
+                        if (!AudioDuplexGate.isPlaybackActive) {
+                            liveSession.submit(chunk, timestampMs)
+                        }
+                    },
+                )
                 pipelineCapture.start()
                 audioPipeline = pipelineCapture
                 listening = true
@@ -518,6 +544,8 @@ class MainActivity : Activity(), SutraTransmissionListener {
                 activePipeline.stop()
             } catch (_: Exception) {}
             audioPipeline = null
+            streamingSpeech?.finish()
+            streamingSpeech = null
 
             vadEngine?.flush()
             vadEngine?.close()
@@ -588,6 +616,8 @@ class MainActivity : Activity(), SutraTransmissionListener {
         listening = false
         audioPipeline?.stop()
         audioPipeline = null
+        streamingSpeech?.finish(canceled = true)
+        streamingSpeech = null
         vadEngine?.close()
         vadEngine = null
         wifiDirect?.close()
