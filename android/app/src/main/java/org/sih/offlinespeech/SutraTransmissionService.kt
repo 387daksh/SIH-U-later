@@ -9,7 +9,9 @@ import android.app.Service
 import android.content.Intent
 import android.media.AudioAttributes
 import android.media.AudioFocusRequest
+import android.media.AudioFormat
 import android.media.AudioManager
+import android.media.AudioTrack
 import android.os.Binder
 import android.os.IBinder
 import android.speech.tts.TextToSpeech
@@ -20,6 +22,8 @@ import java.security.SecureRandom
 import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
+import kotlin.math.max
 
 interface SutraTransmissionListener {
     fun onTransmissionStatus(status: String)
@@ -37,6 +41,7 @@ class SutraTransmissionService : Service(), PeerTransportListener {
 
     private val binder = LocalBinder()
     private val io = Executors.newSingleThreadExecutor()
+    private val ttsWorker = Executors.newSingleThreadExecutor()
     private val sentAt = ConcurrentHashMap<String, Long>()
     private val pendingSpeech = ConcurrentHashMap<String, SutraMessage>()
     private val speechQueue = ArrayDeque<SutraMessage>()
@@ -46,6 +51,8 @@ class SutraTransmissionService : Service(), PeerTransportListener {
     private lateinit var audioManager: AudioManager
     private var tts: TextToSpeech? = null
     private var ttsReady = false
+    private var onnxTts: IndicOnnxTts? = null
+    private var onnxTtsAttempted = false
     private var security: SecureFrameCodec? = null
     private var focusRequest: AudioFocusRequest? = null
     @Volatile private var listener: SutraTransmissionListener? = null
@@ -122,6 +129,15 @@ class SutraTransmissionService : Service(), PeerTransportListener {
 
     fun recordMetric(messageId: String?, event: String, detail: String = "") =
         store.metric(messageId, event, detail)
+
+    fun speakLocal(text: String, language: String): Boolean {
+        if (text.isBlank()) return false
+        if (hasOnnxTts(language)) {
+            playOnnx(text, language, alert = false, message = null)
+            return true
+        }
+        return speakSystem(text, language, alert = false, utteranceId = "local-${System.nanoTime()}")
+    }
 
     override fun onTransportStatus(status: String) {
         status(status)
@@ -251,8 +267,21 @@ class SutraTransmissionService : Service(), PeerTransportListener {
 
     private fun speakIncoming(message: SutraMessage) {
         val text = runCatching { SutraCodec.utf8(message.payload) }.getOrElse { return }
-        val engine = tts ?: return
         val language = message.language.pipelineName
+        val alert = message.flags and SutraFlags.ALERT != 0
+        if (hasOnnxTts(language)) {
+            playOnnx(text, language, alert, message)
+            return
+        }
+        val utteranceId = "sutra-${message.id}"
+        pendingSpeech[utteranceId] = message
+        if (!speakSystem(text, language, alert, utteranceId)) {
+            pendingSpeech.remove(utteranceId)
+        }
+    }
+
+    private fun speakSystem(text: String, language: String, alert: Boolean, utteranceId: String): Boolean {
+        val engine = tts ?: return false
         val tag = mapOf(
             "english" to "en-IN", "hindi" to "hi-IN", "gujarati" to "gu-IN",
             "marathi" to "mr-IN", "kannada" to "kn-IN", "malayalam" to "ml-IN",
@@ -263,17 +292,120 @@ class SutraTransmissionService : Service(), PeerTransportListener {
             .maxByOrNull { if (it.locale.country == locale.country) 1 else 0 }
         if (voice == null || engine.setVoice(voice) != TextToSpeech.SUCCESS) {
             status("No installed offline TTS voice for $language")
-            return
+            return false
         }
-        val alert = message.flags and SutraFlags.ALERT != 0
         val usage = if (alert) AudioAttributes.USAGE_ALARM else AudioAttributes.USAGE_ASSISTANCE_ACCESSIBILITY
         engine.setAudioAttributes(AudioAttributes.Builder().setUsage(usage).setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build())
         requestAudioFocus(alert)
-        val utteranceId = "sutra-${message.id}"
-        pendingSpeech[utteranceId] = message
-        if (engine.speak(text, TextToSpeech.QUEUE_ADD, null, utteranceId) != TextToSpeech.SUCCESS) {
-            pendingSpeech.remove(utteranceId)
+        val accepted = engine.speak(text, TextToSpeech.QUEUE_ADD, null, utteranceId) == TextToSpeech.SUCCESS
+        if (!accepted) {
             status("TTS rejected the received message")
+        }
+        return accepted
+    }
+
+    private fun hasOnnxTts(language: String): Boolean {
+        if (language != "english" && language != "hindi") return false
+        val root = File(resolveModelDir(this), "tts/en-hi")
+        return File(root, "fastpitch.onnx").isFile && File(root, "hifigan.onnx").isFile &&
+            File(root, "meta.json").isFile
+    }
+
+    @Synchronized
+    private fun loadOnnxTts(): IndicOnnxTts? {
+        onnxTts?.let { return it }
+        if (onnxTtsAttempted) return null
+        onnxTtsAttempted = true
+        val root = File(resolveModelDir(this), "tts/en-hi")
+        return runCatching { IndicOnnxTts(root) }
+            .onSuccess {
+                onnxTts = it
+                store.metric(null, "tts_model_loaded", "ai4bharat-indic-tts-en+hi-int8")
+                status("AI4Bharat Indic-TTS ready")
+            }
+            .onFailure {
+                store.metric(null, "tts_model_failed", it.message.orEmpty())
+                status("Indic-TTS failed; using installed system voice")
+            }
+            .getOrNull()
+    }
+
+    private fun playOnnx(text: String, language: String, alert: Boolean, message: SutraMessage?) {
+        ttsWorker.execute {
+            val runtime = loadOnnxTts()
+            if (runtime == null) {
+                val id = message?.let { "sutra-${it.id}" } ?: "local-${System.nanoTime()}"
+                if (message != null) pendingSpeech[id] = message
+                if (!speakSystem(text, language, alert, id)) pendingSpeech.remove(id)
+                return@execute
+            }
+            val started = System.nanoTime()
+            var track: AudioTrack? = null
+            try {
+                val chunks = runtime.chunks(text)
+                require(chunks.isNotEmpty()) { "TTS text has no supported characters" }
+                val first = runtime.synthesize(chunks.first())
+                val format = AudioFormat.Builder()
+                    .setSampleRate(runtime.sampleRate)
+                    .setEncoding(AudioFormat.ENCODING_PCM_FLOAT)
+                    .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
+                    .build()
+                val usage = if (alert) AudioAttributes.USAGE_ALARM else AudioAttributes.USAGE_ASSISTANCE_ACCESSIBILITY
+                val bufferBytes = max(
+                    AudioTrack.getMinBufferSize(runtime.sampleRate, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_FLOAT),
+                    runtime.sampleRate,
+                )
+                track = AudioTrack.Builder()
+                    .setAudioAttributes(AudioAttributes.Builder().setUsage(usage).setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build())
+                    .setAudioFormat(format)
+                    .setBufferSizeInBytes(bufferBytes)
+                    .setTransferMode(AudioTrack.MODE_STREAM)
+                    .build()
+                require(track.state == AudioTrack.STATE_INITIALIZED) { "AudioTrack did not initialise" }
+                requestAudioFocus(alert)
+                track.setVolume(1f)
+                val prebuffer = minOf(first.size, bufferBytes / Float.SIZE_BYTES)
+                writeAll(track, first, 0, prebuffer)
+                track.play()
+                message?.let {
+                    store.metric(it.id.toString(), "playback_started", "backend=indic-tts")
+                    sendAck(it, SutraMessageType.PLAYBACK_STARTED)
+                }
+                store.metric(message?.id?.toString(), "tts_first_audio", "ms=${(System.nanoTime() - started) / 1_000_000}")
+                writeAll(track, first, prebuffer, first.size - prebuffer)
+                var frames = first.size
+                val gap = FloatArray(runtime.chunkGapFrames)
+                chunks.drop(1).forEach { chunk ->
+                    writeAll(track, gap, 0, gap.size)
+                    val audio = runtime.synthesize(chunk)
+                    writeAll(track, audio, 0, audio.size)
+                    frames += gap.size + audio.size
+                }
+                val deadline = System.nanoTime() + (frames * 1_000_000_000L / runtime.sampleRate) + 2_000_000_000L
+                while (track.playbackHeadPosition < frames && System.nanoTime() < deadline) Thread.sleep(10)
+                message?.let {
+                    store.markPlayed(it.id.toString())
+                    store.metric(it.id.toString(), "playback_finished", "backend=indic-tts")
+                    sendAck(it, SutraMessageType.PLAYBACK_FINISHED)
+                }
+            } catch (error: Exception) {
+                store.metric(message?.id?.toString(), "tts_failed", error.message.orEmpty())
+                status("Indic-TTS playback failed: ${error.message}")
+            } finally {
+                runCatching { track?.stop() }
+                track?.release()
+                abandonAudioFocus()
+            }
+        }
+    }
+
+    private fun writeAll(track: AudioTrack, audio: FloatArray, start: Int, length: Int) {
+        var offset = start
+        val end = start + length
+        while (offset < end) {
+            val written = track.write(audio, offset, end - offset, AudioTrack.WRITE_BLOCKING)
+            require(written > 0) { "AudioTrack write failed: $written" }
+            offset += written
         }
     }
 
@@ -326,6 +458,9 @@ class SutraTransmissionService : Service(), PeerTransportListener {
         wifi.close()
         bluetooth.close()
         tts?.shutdown()
+        ttsWorker.shutdownNow()
+        runCatching { ttsWorker.awaitTermination(2, TimeUnit.SECONDS) }
+        onnxTts?.close()
         store.metric(null, "service_stopped")
         store.close()
         io.shutdownNow()

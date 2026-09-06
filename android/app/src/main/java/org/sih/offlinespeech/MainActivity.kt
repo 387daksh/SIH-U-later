@@ -14,7 +14,6 @@ import android.graphics.Typeface
 import android.os.Build
 import android.os.Bundle
 import android.os.IBinder
-import android.speech.tts.TextToSpeech
 import android.util.Log
 import android.view.ViewGroup
 import android.widget.Button
@@ -26,7 +25,6 @@ import android.widget.Spinner
 import android.widget.TextView
 import java.io.File
 import java.security.SecureRandom
-import java.util.Locale
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -59,7 +57,6 @@ class MainActivity : Activity(), SutraTransmissionListener {
     private var audioPipeline: AudioPipeline? = null
     private var vadEngine: SileroVadEngine? = null
     private var pipeline: OfflineSpeechPipeline? = null
-    private var tts: TextToSpeech? = null
 
     private var segmentCount = 0
     private var lastText = ""
@@ -96,7 +93,7 @@ class MainActivity : Activity(), SutraTransmissionListener {
                 preferences.edit().putLong("terminal_id", generated).apply(); generated
             }
         }
-        modelDir = resolveModelDir()
+        modelDir = resolveModelDir(this)
         val vadModelFile = File(modelDir, "vad/silero_vad.onnx")
         val vadInstallError = runCatching { installVadIfMissing(vadModelFile) }.exceptionOrNull()
 
@@ -327,12 +324,6 @@ class MainActivity : Activity(), SutraTransmissionListener {
         }
         setContentView(ScrollView(this).apply { addView(page) })
 
-        tts = TextToSpeech(this) { code ->
-            if (code != TextToSpeech.SUCCESS) {
-                runOnUiThread { status.append("\nTTS unavailable") }
-            }
-        }
-
         val serviceIntent = Intent(this, SutraTransmissionService::class.java)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(serviceIntent)
         else startService(serviceIntent)
@@ -388,18 +379,6 @@ class MainActivity : Activity(), SutraTransmissionListener {
             bluetoothPeers.map { "${it.name} (${it.address})" }.ifEmpty { listOf("No paired Bluetooth phones") },
         )
         bluetoothPeerAdapter.notifyDataSetChanged()
-    }
-
-    private fun resolveModelDir(): File {
-        // The original 800 MB APK extracted here. Keep it first so thin APK updates reuse it.
-        val bundledApkPath = getExternalFilesDir(null)?.resolve("models")
-        val usbStagedPath = File(filesDir, "models")
-        return when {
-            bundledApkPath?.isDirectory == true -> bundledApkPath
-            usbStagedPath.isDirectory -> usbStagedPath
-            bundledApkPath != null -> bundledApkPath
-            else -> usbStagedPath
-        }
     }
 
     private fun installVadIfMissing(target: File) {
@@ -549,7 +528,9 @@ class MainActivity : Activity(), SutraTransmissionListener {
     }
 
     private fun speakResult() {
-        speakText(lastText, lastLanguage, "local-${System.nanoTime()}")
+        if (transmission?.speakLocal(lastText, lastLanguage) != true) {
+            status.text = "TTS service is not ready"
+        }
     }
 
     override fun onTransmissionStatus(status: String) {
@@ -589,27 +570,6 @@ class MainActivity : Activity(), SutraTransmissionListener {
         }
     }
 
-    private fun speakText(text: String, language: String, utteranceId: String): Boolean {
-        if (text.isBlank()) return false
-        val engine = tts ?: return false
-        val tag = mapOf(
-            "english" to "en-IN", "hindi" to "hi-IN", "gujarati" to "gu-IN",
-            "marathi" to "mr-IN", "kannada" to "kn-IN", "malayalam" to "ml-IN",
-            "tamil" to "ta-IN", "telugu" to "te-IN", "odia" to "or-IN",
-            "bengali" to "bn-IN",
-        )[language] ?: "en-IN"
-
-        val locale = Locale.forLanguageTag(tag)
-        val voice = engine.voices
-            .filter { !it.isNetworkConnectionRequired && it.locale.language == locale.language }
-            .maxByOrNull { if (it.locale.country == locale.country) 1 else 0 }
-        if (voice == null || engine.setVoice(voice) != TextToSpeech.SUCCESS) {
-            status.text = "No offline TTS voice installed for $language"
-            return false
-        }
-        return engine.speak(text, TextToSpeech.QUEUE_ADD, null, utteranceId) == TextToSpeech.SUCCESS
-    }
-
     override fun onStart() {
         super.onStart()
         bindService(Intent(this, SutraTransmissionService::class.java), serviceConnection, Context.BIND_AUTO_CREATE)
@@ -632,7 +592,6 @@ class MainActivity : Activity(), SutraTransmissionListener {
         wifiDirect?.close()
         sttWorker.execute { pipeline?.close(); pipeline = null }
         sttWorker.shutdown()
-        tts?.shutdown()
         super.onDestroy()
     }
 }

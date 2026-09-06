@@ -98,6 +98,8 @@ def main():
     parser.add_argument("--indic-dir", type=Path, default=indic_default)
     parser.add_argument("--whisper-dir", type=Path, default=ROOT / "deployment_models/android/whisper")
     parser.add_argument("--vad-path", type=Path, default=ROOT / "models/vad/silero_vad.onnx")
+    parser.add_argument("--tts-dir", type=Path, default=ROOT / "models/tts/en-hi",
+                        help="Directory extracted from the notebook's onnx_en+hi.zip")
     args = parser.parse_args()
 
     if not args.vad_path.is_file():
@@ -123,6 +125,18 @@ def main():
         args.whisper_dir / "tiny-tokens.txt": args.output / "whisper/tokens.txt",
         args.vad_path: args.output / "vad/silero_vad.onnx",
     }
+    if args.tts_dir.is_dir():
+        selected_tts = {
+            args.tts_dir / "fastpitch_en+hi.qdq-safe.onnx": args.output / "tts/en-hi/fastpitch.onnx",
+            args.tts_dir / "hifigan_en+hi.minmax.onnx": args.output / "tts/en-hi/hifigan.onnx",
+            args.tts_dir / "meta.json": args.output / "tts/en-hi/meta.json",
+        }
+        missing = [path for path in selected_tts if not path.is_file()]
+        if missing:
+            raise FileNotFoundError(f"Incomplete Indic-TTS export: {missing}")
+        files.update(selected_tts)
+    else:
+        print(f"Indic-TTS skipped; extract onnx_en+hi.zip to {args.tts_dir}")
     for source, target in files.items():
         copy(source, target)
 

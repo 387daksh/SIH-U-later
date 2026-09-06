@@ -86,7 +86,8 @@ The primary Android app already contains:
 - pause-based VAD segmentation;
 - offline English/Indic STT routing;
 - bounded STT work so segments do not grow without limit;
-- Android `TextToSpeech` playback of a completed transcript;
+- AI4Bharat Indic-TTS `en+hi` FastPitch + HiFi-GAN ONNX playback when its selected 88.9 MB pair is staged;
+- Android offline `TextToSpeech` fallback for languages without a staged Indic-TTS export;
 - per-segment STT timing logs.
 
 The original missing judged loop was:
@@ -98,7 +99,7 @@ The first implementation now covers that loop through native Wi-Fi Direct discov
 Two current limitations must be stated honestly:
 
 1. Existing desktop ASR timings are not phone timings. The local patched Indic ONNX model also uses float convolution replacements, so its desktop result is not evidence of an efficient mobile INT8 deployment.
-2. Android’s installed offline `TextToSpeech` voices are device-dependent and their model licenses are not controlled by this APK. For strict “open-source only” compliance and reproducible TTS accuracy, bundle a verified open-source TTS model/voice set or obtain written organizer confirmation that system TTS is acceptable.
+2. The open-source AI4Bharat `en+hi` export covers English/Hindi only. The other eight languages still use device-dependent system voices until their open-source checkpoints are exported, measured, and staged; therefore ten-language TTS compliance is not yet proven.
 
 ## 4. Required interaction modes
 

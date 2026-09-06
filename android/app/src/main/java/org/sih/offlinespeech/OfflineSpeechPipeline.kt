@@ -1,5 +1,6 @@
 package org.sih.offlinespeech
 
+import android.content.Context
 import ai.onnxruntime.OnnxTensor
 import ai.onnxruntime.OrtEnvironment
 import ai.onnxruntime.OrtSession
@@ -20,6 +21,17 @@ data class SpeechResult(
     val confidence: Double = Double.NaN,
 )
 enum class RoutingMode { AUTO, ENGLISH, INDIC }
+
+fun resolveModelDir(context: Context): File {
+    val external = context.getExternalFilesDir(null)?.resolve("models")
+    val internal = File(context.filesDir, "models")
+    return when {
+        external?.isDirectory == true -> external
+        internal.isDirectory -> internal
+        external != null -> external
+        else -> internal
+    }
+}
 
 fun validateModelBundle(root: File) {
     val manifest = JSONObject(File(root, "manifest.json").also { require(it.isFile) { "Missing model manifest" } }.readText())
