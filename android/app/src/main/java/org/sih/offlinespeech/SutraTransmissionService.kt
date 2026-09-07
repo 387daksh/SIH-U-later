@@ -1,6 +1,5 @@
-package org.sih.offlinespeech
+﻿package org.sih.offlinespeech
 
-import android.app.Activity
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -56,6 +55,14 @@ interface SutraTransmissionListener {
     fun onTransmissionMessage(message: SutraMessage, elapsedMs: Long?, duplicate: Boolean)
 }
 
+data class MeshPeerInfo(
+    val address: String,
+    val name: String,
+    val lat: Double?,
+    val lng: Double?,
+    val distanceMetres: Double?,
+)
+
 class SutraTransmissionService : Service(), PeerTransportListener {
     companion object {
         private const val CHANNEL = "sutra_connection"
@@ -84,6 +91,10 @@ class SutraTransmissionService : Service(), PeerTransportListener {
     private lateinit var arcJitterBuffer: ArcJitterBuffer
     @Volatile private var listener: SutraTransmissionListener? = null
     private var sourceId = 0L
+    // Mesh GPS location state
+    @Volatile private var myLat = 0.0
+    @Volatile private var myLng = 0.0
+    private val peerLocationByNodeInt = ConcurrentHashMap<Int, MeshLocationPacket>()
 
     override fun onCreate() {
         super.onCreate()
@@ -91,9 +102,9 @@ class SutraTransmissionService : Service(), PeerTransportListener {
         startForeground(NOTIFICATION_ID, notification("Ready for offline peer messages"))
         store = SutraStore(this)
         audioManager = getSystemService(AudioManager::class.java)
-        sourceId = getSharedPreferences("sutra", MODE_PRIVATE).let { preferences ->
-            if (preferences.contains("terminal_id")) preferences.getLong("terminal_id", 0)
-            else SecureRandom().nextLong().also { preferences.edit().putLong("terminal_id", it).apply() }
+        sourceId = getSharedPreferences("sutra", MODE_PRIVATE).let { prefs ->
+            if (prefs.contains("terminal_id")) prefs.getLong("terminal_id", 0)
+            else SecureRandom().nextLong().also { prefs.edit().putLong("terminal_id", it).apply() }
         }
         getSharedPreferences("sutra", MODE_PRIVATE).getString("pairing_phrase", null)
             ?.takeIf { it.length >= 12 }?.let { security = SecureFrameCodec.fromPhrase(it) }
@@ -110,16 +121,11 @@ class SutraTransmissionService : Service(), PeerTransportListener {
     override fun onBind(intent: Intent?): IBinder = binder
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        if (intent?.action == ACTION_STOP) {
-            stopSelf()
-            return START_NOT_STICKY
-        }
+        if (intent?.action == ACTION_STOP) { stopSelf(); return START_NOT_STICKY }
         return START_STICKY
     }
 
-    fun setListener(value: SutraTransmissionListener?) {
-        listener = value
-    }
+    fun setListener(value: SutraTransmissionListener?) { listener = value }
 
     fun wifiHost() = wifi.host()
     fun wifiConnect(host: String) = wifi.connect(host)
@@ -131,6 +137,23 @@ class SutraTransmissionService : Service(), PeerTransportListener {
     fun bluetoothDisconnect() = bluetooth.disconnect()
     fun disconnectAll() { wifi.disconnect(); bluetooth.disconnect() }
     fun isConnected(): Boolean = wifi.isConnected || bluetooth.isConnected
+
+    /** Update this device GPS coordinates; broadcast to all mesh peers immediately. */
+    fun setMyLocation(lat: Double, lng: Double) {
+        myLat = lat; myLng = lng
+        if (bluetooth.isConnected) {
+            val pkt = MeshLocationCodec.encode(MeshLocationPacket(sourceId, lat, lng))
+            io.execute { runCatching { bluetooth.broadcast(pkt) } }
+        }
+    }
+
+    /** Returns all currently-connected BLE mesh peers with their last-known GPS location. */
+    fun meshPeers(): List<MeshPeerInfo> = bluetooth.connectedPeers().map { peer ->
+        val nodeInt = bluetooth.nodeIntForAddress(peer.address)
+        val loc = nodeInt?.let { peerLocationByNodeInt[it] }
+        val dist = if (loc != null) MeshLocationCodec.distanceMetres(myLat, myLng, loc.lat, loc.lng) else null
+        MeshPeerInfo(peer.address, peer.name, loc?.lat, loc?.lng, dist)
+    }
 
     fun setPairingPhrase(phrase: String) {
         if (phrase.isBlank()) {
@@ -155,7 +178,7 @@ class SutraTransmissionService : Service(), PeerTransportListener {
         flushOutbox()
     }
 
-    /** Sends a time-sensitive text burst without putting it through the durable final-message outbox. */
+    /** Sends a time-sensitive text burst without the durable outbox. */
     fun sendVoiceBurst(packet: VoiceBurstPacket) {
         val plain = VoiceBurstPacketCodec.encode(packet)
         io.execute {
@@ -175,10 +198,7 @@ class SutraTransmissionService : Service(), PeerTransportListener {
 
     fun speakLocal(text: String, language: String): Boolean {
         if (text.isBlank()) return false
-        if (hasOnnxTts(language)) {
-            playOnnx(text, language, alert = false, message = null)
-            return true
-        }
+        if (hasOnnxTts(language)) { playOnnx(text, language, alert = false, message = null); return true }
         return speakSystem(text, language, alert = false, utteranceId = "local-${System.nanoTime()}")
     }
 
@@ -189,13 +209,30 @@ class SutraTransmissionService : Service(), PeerTransportListener {
 
     override fun onTransportMessage(bytes: ByteArray) {
         io.execute {
+            // --- Mesh control frames (never encrypted; handled before SUTRA codec) ---
+            if (MeshLocationCodec.isSentinel(bytes)) {
+                // A new BLE peer connected: reply with our GPS position.
+                val lat = myLat; val lng = myLng
+                if (lat != 0.0 || lng != 0.0) {
+                    val pkt = MeshLocationCodec.encode(MeshLocationPacket(sourceId, lat, lng))
+                    runCatching { bluetooth.broadcast(pkt) }
+                }
+                return@execute
+            }
+            if (MeshLocationCodec.isMeshLocation(bytes)) {
+                runCatching { MeshLocationCodec.decode(bytes) }.getOrNull()?.let { loc ->
+                    peerLocationByNodeInt[loc.nodeId.toInt()] = loc
+                    status("Mesh: location received (${bluetooth.connectedCount} phones in mesh)")
+                }
+                return@execute
+            }
+            // --- Standard SUTRA / VoiceBurst frames ---
             val plain = runCatching { security?.open(bytes) ?: bytes }.getOrElse { error ->
                 store.metric(null, "rx_security_rejected", error.message.orEmpty())
                 status("Rejected unauthenticated/wrong-phrase frame")
                 return@execute
             }
             // SUTRA has an explicit magic prefix; live Bitchat envelopes do not.
-            // Keeping the lanes separate makes old reliable peers interoperate unchanged.
             val isSutra = plain.size >= 2 &&
                 ((plain[0].toInt() and 0xff) == 0x53) && ((plain[1].toInt() and 0xff) == 0x54)
             if (!isSutra) {
@@ -209,8 +246,6 @@ class SutraTransmissionService : Service(), PeerTransportListener {
                 return@execute
             }
             val message = runCatching { SutraCodec.decode(plain) }.getOrElse { error ->
-                // A Bitchat burst id is random and may begin with S,T. Treat a
-                // failed SUTRA parse as a burst before rejecting the frame.
                 runCatching { VoiceBurstPacketCodec.decode(plain) }.getOrNull()?.let { packet ->
                     store.metric(null, "voice_rx", "seq=${packet.sequence},bytes=${plain.size}")
                     arcJitterBuffer.offer(packet, SystemClock.elapsedRealtime())
@@ -232,7 +267,6 @@ class SutraTransmissionService : Service(), PeerTransportListener {
                     if (fresh) {
                         speakOrQueue(message)
                         if (message.flags and SutraFlags.ALERT != 0) {
-                            // ponytail: one bounded epidemic copy; add per-peer copy budgets only after a 3-phone trace needs them.
                             store.enqueue(message, plain)
                             store.metric(id, "relay_stored", "alert=true")
                         }
@@ -256,40 +290,29 @@ class SutraTransmissionService : Service(), PeerTransportListener {
         }
     }
 
-    /** ARC's scheduled receiver callback. DATA is the only burst type presented to TTS. */
     private fun releaseStreamingText(packet: VoiceBurstPacket) {
         if (packet.flags != VoiceBurstPacket.FLAG_DATA || packet.text.isBlank()) return
         store.metric(null, "voice_released", "seq=${packet.sequence},sn=${packet.senderTimestampMs}")
-        if (!speakLocal(packet.text, packet.language.pipelineName)) {
+        if (!speakLocal(packet.text, packet.language.pipelineName))
             status("Offline TTS is not ready for streamed ${packet.language.pipelineName}")
-        }
     }
 
     private fun flushOutbox() {
         io.execute {
-            if (!isConnected()) {
-                status("Message queued; waiting for Wi-Fi Direct or Bluetooth")
-                return@execute
-            }
+            if (!isConnected()) { status("Message queued; waiting for Wi-Fi Direct or Bluetooth"); return@execute }
             store.pending().forEach { pending ->
                 val wire = security?.seal(pending.bytes) ?: pending.bytes
                 val sent = runCatching { sendFrame(wire) }.isSuccess
-                if (sent) {
-                    store.markAttempt(pending.key)
-                    store.metric(pending.messageId, "tx_complete", "wire_bytes=${wire.size}")
-                } else return@forEach
+                if (sent) { store.markAttempt(pending.key); store.metric(pending.messageId, "tx_complete", "wire_bytes=${wire.size}") }
+                else return@forEach
             }
         }
     }
 
     private fun sendFrame(bytes: ByteArray) {
         var delivered = false
-        if (wifi.isConnected) {
-            runCatching { wifi.send(bytes) }.onSuccess { delivered = true }
-        }
-        if (bluetooth.isConnected) {
-            runCatching { bluetooth.send(bytes) }.onSuccess { delivered = true }
-        }
+        if (wifi.isConnected) runCatching { wifi.send(bytes) }.onSuccess { delivered = true }
+        if (bluetooth.isConnected) runCatching { bluetooth.send(bytes) }.onSuccess { delivered = true }
         check(delivered) { "No peer is connected" }
     }
 
@@ -303,9 +326,7 @@ class SutraTransmissionService : Service(), PeerTransportListener {
         tts = TextToSpeech(this) { code ->
             ttsReady = code == TextToSpeech.SUCCESS
             if (!ttsReady) status("Offline TTS unavailable")
-            else synchronized(speechQueue) {
-                while (speechQueue.isNotEmpty()) speakIncoming(speechQueue.removeFirst())
-            }
+            else synchronized(speechQueue) { while (speechQueue.isNotEmpty()) speakIncoming(speechQueue.removeFirst()) }
         }.also { engine ->
             engine.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
                 override fun onStart(utteranceId: String) {
@@ -314,22 +335,18 @@ class SutraTransmissionService : Service(), PeerTransportListener {
                         sendAck(it, SutraMessageType.PLAYBACK_STARTED)
                     }
                 }
-
                 override fun onDone(utteranceId: String) {
                     pendingSpeech.remove(utteranceId)?.let {
                         store.markPlayed(it.id.toString())
                         store.metric(it.id.toString(), "playback_finished")
                         sendAck(it, SutraMessageType.PLAYBACK_FINISHED)
                     }
-                    AudioDuplexGate.endPlayback()
-                    abandonAudioFocus()
+                    AudioDuplexGate.endPlayback(); abandonAudioFocus()
                 }
-
                 @Deprecated("Deprecated in Java")
                 override fun onError(utteranceId: String) {
                     pendingSpeech.remove(utteranceId)
-                    AudioDuplexGate.endPlayback()
-                    abandonAudioFocus()
+                    AudioDuplexGate.endPlayback(); abandonAudioFocus()
                 }
             })
         }
@@ -344,15 +361,10 @@ class SutraTransmissionService : Service(), PeerTransportListener {
         val text = runCatching { SutraCodec.utf8(message.payload) }.getOrElse { return }
         val language = message.language.pipelineName
         val alert = message.flags and SutraFlags.ALERT != 0
-        if (hasOnnxTts(language)) {
-            playOnnx(text, language, alert, message)
-            return
-        }
+        if (hasOnnxTts(language)) { playOnnx(text, language, alert, message); return }
         val utteranceId = "sutra-${message.id}"
         pendingSpeech[utteranceId] = message
-        if (!speakSystem(text, language, alert, utteranceId)) {
-            pendingSpeech.remove(utteranceId)
-        }
+        if (!speakSystem(text, language, alert, utteranceId)) pendingSpeech.remove(utteranceId)
     }
 
     private fun speakSystem(text: String, language: String, alert: Boolean, utteranceId: String): Boolean {
@@ -366,18 +378,14 @@ class SutraTransmissionService : Service(), PeerTransportListener {
         val voice = engine.voices.filter { !it.isNetworkConnectionRequired && it.locale.language == locale.language }
             .maxByOrNull { if (it.locale.country == locale.country) 1 else 0 }
         if (voice == null || engine.setVoice(voice) != TextToSpeech.SUCCESS) {
-            status("No installed offline TTS voice for $language")
-            return false
+            status("No installed offline TTS voice for $language"); return false
         }
         val usage = if (alert) AudioAttributes.USAGE_ALARM else AudioAttributes.USAGE_ASSISTANCE_ACCESSIBILITY
         engine.setAudioAttributes(AudioAttributes.Builder().setUsage(usage).setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build())
         requestAudioFocus(alert)
         AudioDuplexGate.beginPlayback()
         val accepted = engine.speak(text, TextToSpeech.QUEUE_ADD, null, utteranceId) == TextToSpeech.SUCCESS
-        if (!accepted) {
-            AudioDuplexGate.endPlayback()
-            status("TTS rejected the received message")
-        }
+        if (!accepted) { AudioDuplexGate.endPlayback(); status("TTS rejected the received message") }
         return accepted
     }
 
@@ -395,15 +403,8 @@ class SutraTransmissionService : Service(), PeerTransportListener {
         onnxTtsAttempted = true
         val root = File(resolveModelDir(this), "tts/en-hi")
         return runCatching { IndicOnnxTts(root) }
-            .onSuccess {
-                onnxTts = it
-                store.metric(null, "tts_model_loaded", "ai4bharat-indic-tts-en+hi-int8")
-                status("AI4Bharat Indic-TTS ready")
-            }
-            .onFailure {
-                store.metric(null, "tts_model_failed", it.message.orEmpty())
-                status("Indic-TTS failed; using installed system voice")
-            }
+            .onSuccess { onnxTts = it; store.metric(null, "tts_model_loaded", "ai4bharat-indic-tts-en+hi-int8"); status("AI4Bharat Indic-TTS ready") }
+            .onFailure { store.metric(null, "tts_model_failed", it.message.orEmpty()); status("Indic-TTS failed; using installed system voice") }
             .getOrNull()
     }
 
@@ -425,10 +426,8 @@ class SutraTransmissionService : Service(), PeerTransportListener {
                 require(chunks.isNotEmpty()) { "TTS text has no supported characters" }
                 val first = runtime.synthesize(chunks.first())
                 val format = AudioFormat.Builder()
-                    .setSampleRate(runtime.sampleRate)
-                    .setEncoding(AudioFormat.ENCODING_PCM_FLOAT)
-                    .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
-                    .build()
+                    .setSampleRate(runtime.sampleRate).setEncoding(AudioFormat.ENCODING_PCM_FLOAT)
+                    .setChannelMask(AudioFormat.CHANNEL_OUT_MONO).build()
                 val usage = if (alert) AudioAttributes.USAGE_ALARM else AudioAttributes.USAGE_ASSISTANCE_ACCESSIBILITY
                 val bufferBytes = pcmFloatBufferBytes(
                     AudioTrack.getMinBufferSize(runtime.sampleRate, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_FLOAT),
@@ -436,20 +435,14 @@ class SutraTransmissionService : Service(), PeerTransportListener {
                 )
                 track = AudioTrack.Builder()
                     .setAudioAttributes(AudioAttributes.Builder().setUsage(usage).setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build())
-                    .setAudioFormat(format)
-                    .setBufferSizeInBytes(bufferBytes)
-                    .setTransferMode(AudioTrack.MODE_STREAM)
-                    .build()
+                    .setAudioFormat(format).setBufferSizeInBytes(bufferBytes).setTransferMode(AudioTrack.MODE_STREAM).build()
                 require(track.state == AudioTrack.STATE_INITIALIZED) { "AudioTrack did not initialise" }
                 requestAudioFocus(alert)
                 track.setVolume(1f)
                 val prebuffer = minOf(first.size, bufferBytes / Float.SIZE_BYTES)
                 writeAll(track, first, 0, prebuffer)
                 track.play()
-                message?.let {
-                    store.metric(it.id.toString(), "playback_started", "backend=indic-tts")
-                    sendAck(it, SutraMessageType.PLAYBACK_STARTED)
-                }
+                message?.let { store.metric(it.id.toString(), "playback_started", "backend=indic-tts"); sendAck(it, SutraMessageType.PLAYBACK_STARTED) }
                 store.metric(message?.id?.toString(), "tts_first_audio", "ms=${(System.nanoTime() - started) / 1_000_000}")
                 writeAll(track, first, prebuffer, first.size - prebuffer)
                 var frames = first.size
@@ -462,11 +455,7 @@ class SutraTransmissionService : Service(), PeerTransportListener {
                 }
                 val deadline = System.nanoTime() + (frames * 1_000_000_000L / runtime.sampleRate) + 2_000_000_000L
                 while (track.playbackHeadPosition < frames && System.nanoTime() < deadline) Thread.sleep(10)
-                message?.let {
-                    store.markPlayed(it.id.toString())
-                    store.metric(it.id.toString(), "playback_finished", "backend=indic-tts")
-                    sendAck(it, SutraMessageType.PLAYBACK_FINISHED)
-                }
+                message?.let { store.markPlayed(it.id.toString()); store.metric(it.id.toString(), "playback_finished", "backend=indic-tts"); sendAck(it, SutraMessageType.PLAYBACK_FINISHED) }
             } catch (error: Exception) {
                 store.metric(message?.id?.toString(), "tts_failed", error.message.orEmpty())
                 status("Indic-TTS playback failed: ${error.message}")

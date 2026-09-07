@@ -27,116 +27,184 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.util.ArrayDeque
 import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.max
 
 data class BluetoothPeer(val name: String, val address: String)
 
 /**
- * Unpaired BLE mesh link following Bitchat's peripheral + central model. Every
- * phone advertises this service and scans for it; a deterministic central then
- * connects to the other phone's GATT server. RFCOMM and Android pairing are not used.
+ * Full BLE mesh transport modelled after Bitchat.
+ *
+ * Every phone simultaneously advertises the SUTRA service UUID and scans for it.
+ * When two phones discover each other, the one with the larger localNodeId connects
+ * as GATT central; the other becomes the GATT peripheral/server.  Both roles can be
+ * active concurrently, so on a 3-phone mesh A > B > C:
+ *   A: central to B and C
+ *   B: central to C; peripheral to A
+ *   C: peripheral to A and B
+ *
+ * All SUTRA and VoiceBurst frames are broadcast to every active link.
+ * RFCOMM and Android pairing are never used.
  */
 class BluetoothPeerTransport(
     private val context: Context,
     private val listener: PeerTransportListener,
     sourceId: Long,
 ) : AutoCloseable {
+
     companion object {
-        // Bitchat's production discovery UUIDs. SUTRA still carries its own
-        // authenticated payload after this BLE link is established.
+        // Bitchat's production discovery UUIDs reused for SUTRA.
         val SERVICE_UUID: UUID = UUID.fromString("F47B5E2D-4A9E-4C5A-9B3F-8E1D2C3A4B5C")
         val CHARACTERISTIC_UUID: UUID = UUID.fromString("A1B2C3D4-E5F6-4A5B-8C9D-0E1F2A3B4C5D")
-        private val CLIENT_CONFIGURATION_UUID: UUID = UUID.fromString("00002902-0000-1000-8000-00805F9B34FB")
+        private val CLIENT_CONFIGURATION_UUID: UUID =
+            UUID.fromString("00002902-0000-1000-8000-00805F9B34FB")
         private val SERVICE_PARCEL_UUID = ParcelUuid(SERVICE_UUID)
-        private const val MANUFACTURER_ID = 0x5349 // "SI"; identifies this GATT payload, not Bitchat's.
+        private const val MANUFACTURER_ID = 0x5349   // "SI"
         private const val MAX_FRAME_BYTES = SutraCodec.MAX_PAYLOAD_BYTES + 1024
         private const val REQUESTED_MTU = 247
+        private const val MAX_MESH_LINKS = 7  // typical BLE stack ceiling
     }
+
+    // ── Per-link state ─────────────────────────────────────────────────────────
+
+    /** State for a connection that WE initiated (central role). */
+    private inner class CentralEntry(val address: String) {
+        var gatt: BluetoothGatt? = null
+        var characteristic: BluetoothGattCharacteristic? = null
+        var ready = false
+        var mtu = 23
+        val writes = ArrayDeque<ByteArray>()
+        val assembler = BleFrameAssembler(MAX_FRAME_BYTES)
+    }
+
+    /** State for a connection that a REMOTE peer initiated (we are peripheral/server). */
+    private inner class ServerEntry(val device: BluetoothDevice) {
+        val notifications = ArrayDeque<ByteArray>()
+        val assembler = BleFrameAssembler(MAX_FRAME_BYTES)
+    }
+
+    // ── Fields ─────────────────────────────────────────────────────────────────
 
     private val manager = context.getSystemService(BluetoothManager::class.java)
     private val adapter: BluetoothAdapter? = manager.adapter
-    private val localNodeId = sourceId.toInt()
-    private val discovered = LinkedHashMap<String, BluetoothDevice>()
-    private val lock = Any()
-    private val centralWrites = ArrayDeque<ByteArray>()
-    private val serverNotifications = ArrayDeque<ByteArray>()
-    private val centralAssembler = BleFrameAssembler(MAX_FRAME_BYTES)
-    private val serverAssembler = BleFrameAssembler(MAX_FRAME_BYTES)
+    private val localNodeId = sourceId.toInt()  // Int comparison for deterministic role
+
+    private val discovered         = ConcurrentHashMap<String, BluetoothDevice>()
+    private val addressToRemoteInt  = ConcurrentHashMap<String, Int>()  // BLE addr -> peer's localNodeId
+    private val centralEntries = ConcurrentHashMap<String, CentralEntry>()
+    private val serverEntries  = ConcurrentHashMap<String, ServerEntry>()
+
     private var advertiser: BluetoothLeAdvertiser? = null
     private var scanner: BluetoothLeScanner? = null
     private var gattServer: BluetoothGattServer? = null
     private var serverCharacteristic: BluetoothGattCharacteristic? = null
-    private var serverPeer: BluetoothDevice? = null
-    private var centralGatt: BluetoothGatt? = null
-    private var centralCharacteristic: BluetoothGattCharacteristic? = null
-    private var centralPeerAddress: String? = null
-    private var centralReady = false
     private var scanning = false
     private var advertising = false
     private var serviceReady = false
-    private var mtu = 23
 
-    val isConnected: Boolean get() = synchronized(lock) { centralReady || serverPeer != null }
+    // ── Public API ─────────────────────────────────────────────────────────────
 
-    /** Nearby unpaired BLE candidates; bonded devices are never consulted. */
+    val isConnected: Boolean get() =
+        centralEntries.values.any { it.ready } || serverEntries.isNotEmpty()
+
+    val connectedCount: Int get() =
+        centralEntries.values.count { it.ready } + serverEntries.size
+
+    /** Returns the 32-bit nodeId advertised by a peer (used for location correlation). */
+    fun nodeIntForAddress(address: String): Int? = addressToRemoteInt[address]
+
+    /** All BLE-visible SUTRA phones, whether connected or not. */
     @SuppressLint("MissingPermission")
-    fun nearbyPeers(): List<BluetoothPeer> = synchronized(lock) {
-        discovered.values.map { device ->
-            BluetoothPeer(device.name?.takeIf(String::isNotBlank) ?: "Nearby SUTRA phone", device.address)
-        }.sortedBy(BluetoothPeer::name)
+    fun nearbyPeers(): List<BluetoothPeer> = discovered.values.map { d ->
+        BluetoothPeer(d.name?.takeIf(String::isNotBlank) ?: "Nearby SUTRA phone", d.address)
+    }.sortedBy(BluetoothPeer::name)
+
+    /** Only currently active mesh peers. */
+    @SuppressLint("MissingPermission")
+    fun connectedPeers(): List<BluetoothPeer> {
+        val result = mutableListOf<BluetoothPeer>()
+        centralEntries.values.filter { it.ready }.forEach { e ->
+            val dev = discovered[e.address]
+            val name = dev?.name?.takeIf(String::isNotBlank) ?: "Phone …${e.address.takeLast(5)}"
+            result += BluetoothPeer(name, e.address)
+        }
+        serverEntries.keys.forEach { addr ->
+            val dev = discovered[addr] ?: serverEntries[addr]?.device
+            @SuppressLint("MissingPermission")
+            val name = dev?.name?.takeIf(String::isNotBlank) ?: "Phone …${addr.takeLast(5)}"
+            result += BluetoothPeer(name, addr)
+        }
+        return result.distinctBy { it.address }
     }
 
-    /** Start Bitchat-style advertising and service-filtered discovery. Safe to repeat. */
+    /** Start BLE advertising + scanning.  Safe to call multiple times. */
     @SuppressLint("MissingPermission")
     fun listen() {
-        val activeAdapter = adapter
-        if (activeAdapter == null || !activeAdapter.isEnabled) {
-            listener.onTransportStatus("Bluetooth is off; turn it on to find nearby phones")
+        val a = adapter
+        if (a == null || !a.isEnabled) {
+            listener.onTransportStatus("Bluetooth is off — turn it on to join the mesh")
             return
         }
         ensureGattServer()
         startAdvertising()
         startScanning()
-        listener.onTransportStatus("Searching for nearby phones (no Bluetooth pairing needed)")
+        listener.onTransportStatus("Joining mesh — scanning for nearby phones (no pairing needed)")
     }
 
-    /** Explicit UI selection still uses the unpaired BLE GATT path. */
+    /** Explicit connect to a discovered address (e.g. UI-initiated). */
     @SuppressLint("MissingPermission")
     fun connect(address: String) {
-        val device = synchronized(lock) { discovered[address] }
+        val device = discovered[address]
             ?: throw IllegalArgumentException("That nearby phone is no longer visible")
         connectCentral(device)
     }
 
-    fun send(bytes: ByteArray) {
-        require(bytes.size in 1..MAX_FRAME_BYTES) { "Invalid Bluetooth frame size" }
-        synchronized(lock) {
-            val fragments = BleFrameCodec.fragment(bytes, max(20, mtu - 3))
-            when {
-                centralReady && centralGatt != null && centralCharacteristic != null -> {
-                    centralWrites.addAll(fragments)
-                    writeNextCentralLocked()
-                }
-                serverPeer != null && serverCharacteristic != null -> {
-                    serverNotifications.addAll(fragments)
-                    notifyNextServerLocked()
-                }
-                else -> error("No nearby Bluetooth peer is connected")
+    /**
+     * Broadcast bytes to EVERY connected peer (both central and server links).
+     * Call this for voice bursts and SUTRA messages; replaces the old single-peer send().
+     */
+    fun broadcast(bytes: ByteArray) {
+        require(bytes.size in 1..MAX_FRAME_BYTES) { "Invalid mesh frame size" }
+        var sent = false
+        // --- central links (we initiated) ---
+        centralEntries.values.filter { it.ready }.forEach { entry ->
+            synchronized(entry) {
+                val g = entry.gatt ?: return@forEach
+                val c = entry.characteristic ?: return@forEach
+                BleFrameCodec.fragment(bytes, max(20, entry.mtu - 3)).forEach(entry.writes::addLast)
+                writeNextCentralLocked(entry, g, c)
             }
+            sent = true
         }
+        // --- server links (remote initiated) ---
+        val ch = serverCharacteristic
+        serverEntries.values.forEach { se ->
+            if (ch == null) return@forEach
+            synchronized(se) {
+                BleFrameCodec.fragment(bytes, 20).forEach(se.notifications::addLast)
+                notifyNextServerLocked(se, ch)
+            }
+            sent = true
+        }
+        if (!sent) error("No peers are connected in the mesh")
     }
+
+    /** send() is kept for interface compatibility; it delegates to broadcast(). */
+    fun send(bytes: ByteArray) = broadcast(bytes)
+
+    // ── Private helpers ────────────────────────────────────────────────────────
 
     @SuppressLint("MissingPermission")
     private fun ensureGattServer() {
         if (gattServer != null) return
-        val server = manager.openGattServer(context, serverCallback)
-        if (server == null) {
-            listener.onTransportStatus("Bluetooth LE server could not start")
+        val srv = manager.openGattServer(context, serverCallback) ?: run {
+            listener.onTransportStatus("BLE GATT server could not start")
             return
         }
-        val characteristic = BluetoothGattCharacteristic(
+        val ch = BluetoothGattCharacteristic(
             CHARACTERISTIC_UUID,
-            BluetoothGattCharacteristic.PROPERTY_WRITE or BluetoothGattCharacteristic.PROPERTY_WRITE_NO_RESPONSE or
+            BluetoothGattCharacteristic.PROPERTY_WRITE or
+                BluetoothGattCharacteristic.PROPERTY_WRITE_NO_RESPONSE or
                 BluetoothGattCharacteristic.PROPERTY_NOTIFY,
             BluetoothGattCharacteristic.PERMISSION_WRITE,
         ).apply {
@@ -145,30 +213,31 @@ class BluetoothPeerTransport(
                 BluetoothGattDescriptor.PERMISSION_READ or BluetoothGattDescriptor.PERMISSION_WRITE,
             ))
         }
-        gattServer = server
-        serverCharacteristic = characteristic
-        server.addService(BluetoothGattService(SERVICE_UUID, BluetoothGattService.SERVICE_TYPE_PRIMARY).apply {
-            addCharacteristic(characteristic)
-        })
+        gattServer = srv
+        serverCharacteristic = ch
+        srv.addService(BluetoothGattService(SERVICE_UUID, BluetoothGattService.SERVICE_TYPE_PRIMARY)
+            .apply { addCharacteristic(ch) })
     }
 
     @SuppressLint("MissingPermission")
     private fun startAdvertising() {
         if (advertising || !serviceReady) return
-        val activeAdvertiser = adapter?.bluetoothLeAdvertiser
-        if (activeAdvertiser == null) {
-            listener.onTransportStatus("This phone cannot advertise Bluetooth LE")
+        val adv = adapter?.bluetoothLeAdvertiser ?: run {
+            listener.onTransportStatus("This phone cannot advertise BLE")
             return
         }
-        advertiser = activeAdvertiser
+        advertiser = adv
         val nodeBytes = ByteBuffer.allocate(4).order(ByteOrder.BIG_ENDIAN).putInt(localNodeId).array()
-        activeAdvertiser.startAdvertising(
-            AdvertiseSettings.Builder().setAdvertiseMode(AdvertiseSettings.ADVERTISE_MODE_LOW_LATENCY)
-                .setConnectable(true).setTxPowerLevel(AdvertiseSettings.ADVERTISE_TX_POWER_MEDIUM).build(),
-            AdvertiseData.Builder().addServiceUuid(SERVICE_PARCEL_UUID)
-                // Service UUID + manufacturer data fits the 31-byte BLE
-                // advertising budget; service data would not.
-                .addManufacturerData(MANUFACTURER_ID, nodeBytes).build(),
+        adv.startAdvertising(
+            AdvertiseSettings.Builder()
+                .setAdvertiseMode(AdvertiseSettings.ADVERTISE_MODE_LOW_LATENCY)
+                .setConnectable(true)
+                .setTxPowerLevel(AdvertiseSettings.ADVERTISE_TX_POWER_MEDIUM)
+                .build(),
+            AdvertiseData.Builder()
+                .addServiceUuid(SERVICE_PARCEL_UUID)
+                .addManufacturerData(MANUFACTURER_ID, nodeBytes)
+                .build(),
             advertiseCallback,
         )
     }
@@ -176,13 +245,12 @@ class BluetoothPeerTransport(
     @SuppressLint("MissingPermission")
     private fun startScanning() {
         if (scanning) return
-        val activeScanner = adapter?.bluetoothLeScanner
-        if (activeScanner == null) {
-            listener.onTransportStatus("This phone cannot scan for Bluetooth LE devices")
+        val sc = adapter?.bluetoothLeScanner ?: run {
+            listener.onTransportStatus("This phone cannot scan BLE")
             return
         }
-        scanner = activeScanner
-        activeScanner.startScan(
+        scanner = sc
+        sc.startScan(
             listOf(ScanFilter.Builder().setServiceUuid(SERVICE_PARCEL_UUID).build()),
             ScanSettings.Builder().setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY).build(),
             scanCallback,
@@ -192,130 +260,136 @@ class BluetoothPeerTransport(
 
     @SuppressLint("MissingPermission")
     private fun connectCentral(device: BluetoothDevice) {
-        synchronized(lock) {
-            if (centralPeerAddress == device.address || centralReady) return
-            centralGatt?.close()
-            centralGatt = null
-            centralCharacteristic = null
-            centralReady = false
-            centralPeerAddress = device.address
-            listener.onTransportStatus("Connecting to nearby Bluetooth phone")
-            centralGatt = device.connectGatt(context, false, centralCallback, BluetoothDevice.TRANSPORT_LE)
+        val address = device.address
+        if (centralEntries.containsKey(address)) return   // already connecting/connected
+        if (centralEntries.size + serverEntries.size >= MAX_MESH_LINKS) return
+        val entry = CentralEntry(address)
+        centralEntries[address] = entry
+        entry.gatt = device.connectGatt(context, false, makeCentralCallback(entry), BluetoothDevice.TRANSPORT_LE)
+    }
+
+    @Suppress("DEPRECATION")
+    private fun writeNextCentralLocked(
+        entry: CentralEntry,
+        gatt: BluetoothGatt,
+        ch: BluetoothGattCharacteristic,
+    ) {
+        val frag = entry.writes.firstOrNull() ?: return
+        ch.writeType = BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
+        ch.value = frag
+        @SuppressLint("MissingPermission")
+        if (!gatt.writeCharacteristic(ch)) {
+            entry.writes.clear()
+            listener.onTransportStatus("BLE write failed to …${entry.address.takeLast(5)}")
         }
     }
 
+    @Suppress("DEPRECATION")
     @SuppressLint("MissingPermission")
-    private fun writeNextCentralLocked() {
-        val gatt = centralGatt ?: return
-        val characteristic = centralCharacteristic ?: return
-        val fragment = centralWrites.firstOrNull() ?: return
-        characteristic.writeType = BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
-        characteristic.value = fragment
-        if (!gatt.writeCharacteristic(characteristic)) {
-            centralWrites.clear()
-            listener.onTransportStatus("Bluetooth write could not start")
-        }
+    private fun notifyNextServerLocked(se: ServerEntry, ch: BluetoothGattCharacteristic) {
+        val srv = gattServer ?: return
+        val frag = se.notifications.firstOrNull() ?: return
+        ch.value = frag
+        @Suppress("DEPRECATION")
+        srv.notifyCharacteristicChanged(se.device, ch, false)
     }
 
-    @SuppressLint("MissingPermission")
-    private fun notifyNextServerLocked() {
-        val server = gattServer ?: return
-        val peer = serverPeer ?: return
-        val characteristic = serverCharacteristic ?: return
-        val fragment = serverNotifications.firstOrNull() ?: return
-        characteristic.value = fragment
-        if (!server.notifyCharacteristicChanged(peer, characteristic, false)) {
-            listener.onTransportStatus("Bluetooth notification queue is full")
-        }
+    private fun updateMeshStatus() {
+        val n = connectedCount
+        listener.onTransportStatus(when (n) {
+            0 -> "Mesh: scanning — no phones found yet"
+            1 -> "Mesh: 1 phone connected — ready to speak"
+            else -> "Mesh: $n phones connected — ready to speak"
+        })
     }
+
+    // ── BLE callbacks ──────────────────────────────────────────────────────────
 
     private val advertiseCallback = object : AdvertiseCallback() {
-        override fun onStartSuccess(settingsInEffect: AdvertiseSettings) { advertising = true }
+        override fun onStartSuccess(s: AdvertiseSettings) { advertising = true }
         override fun onStartFailure(errorCode: Int) {
             advertising = false
-            listener.onTransportStatus("Bluetooth advertising failed ($errorCode)")
+            listener.onTransportStatus("BLE advertising failed ($errorCode)")
         }
     }
 
     private val scanCallback = object : ScanCallback() {
         @SuppressLint("MissingPermission")
-        override fun onScanResult(callbackType: Int, result: ScanResult) {
+        override fun onScanResult(type: Int, result: ScanResult) {
             val device = result.device ?: return
-            val remoteIdBytes = result.scanRecord?.getManufacturerSpecificData(MANUFACTURER_ID) ?: return
-            if (remoteIdBytes.size != 4) return
-            val remoteNodeId = ByteBuffer.wrap(remoteIdBytes).order(ByteOrder.BIG_ENDIAN).int
-            if (remoteNodeId == localNodeId) return
-            synchronized(lock) { discovered[device.address] = device }
-
-            // The larger advertised id is the sole central, preventing two links.
-            if (Integer.compareUnsigned(localNodeId, remoteNodeId) > 0) connectCentral(device)
+            val mfr = result.scanRecord?.getManufacturerSpecificData(MANUFACTURER_ID) ?: return
+            if (mfr.size != 4) return
+            val remoteId = ByteBuffer.wrap(mfr).order(ByteOrder.BIG_ENDIAN).int
+            if (remoteId == localNodeId) return
+            discovered[device.address] = device
+            addressToRemoteInt[device.address] = remoteId
+            // Deterministic role: the phone with the larger nodeId is the central for this pair.
+            if (Integer.compareUnsigned(localNodeId, remoteId) > 0) connectCentral(device)
         }
-
         override fun onScanFailed(errorCode: Int) {
             scanning = false
-            listener.onTransportStatus("Bluetooth scan failed ($errorCode)")
+            listener.onTransportStatus("BLE scan failed ($errorCode)")
         }
     }
 
-    private val centralCallback = object : BluetoothGattCallback() {
+    /** Creates an independent GATT callback per outgoing (central) connection. */
+    private fun makeCentralCallback(entry: CentralEntry) = object : BluetoothGattCallback() {
         @SuppressLint("MissingPermission")
         override fun onConnectionStateChange(gatt: BluetoothGatt, status: Int, newState: Int) {
             if (status == BluetoothGatt.GATT_SUCCESS && newState == BluetoothProfile.STATE_CONNECTED) {
-                mtu = 23
                 gatt.requestMtu(REQUESTED_MTU)
                 gatt.discoverServices()
-            } else if (newState == BluetoothProfile.STATE_DISCONNECTED || status != BluetoothGatt.GATT_SUCCESS) {
-                synchronized(lock) {
-                    if (centralGatt === gatt) {
-                        centralReady = false
-                        centralCharacteristic = null
-                        centralWrites.clear()
-                        centralGatt = null
-                        centralPeerAddress = null
-                    }
-                }
+            } else {
                 gatt.close()
-                listener.onTransportStatus("Bluetooth disconnected; searching for nearby phones")
-                startScanning()
+                centralEntries.remove(entry.address)
+                updateMeshStatus()
             }
         }
 
         override fun onMtuChanged(gatt: BluetoothGatt, mtuValue: Int, status: Int) {
-            if (status == BluetoothGatt.GATT_SUCCESS) mtu = mtuValue
+            if (status == BluetoothGatt.GATT_SUCCESS) synchronized(entry) { entry.mtu = mtuValue }
         }
 
         @SuppressLint("MissingPermission")
+        @Suppress("DEPRECATION")
         override fun onServicesDiscovered(gatt: BluetoothGatt, status: Int) {
             if (status != BluetoothGatt.GATT_SUCCESS) return
-            val characteristic = gatt.getService(SERVICE_UUID)?.getCharacteristic(CHARACTERISTIC_UUID) ?: run {
-                listener.onTransportStatus("Nearby device does not expose the SUTRA BLE service")
-                return
-            }
-            synchronized(lock) { centralCharacteristic = characteristic }
-            gatt.setCharacteristicNotification(characteristic, true)
-            val descriptor = characteristic.getDescriptor(CLIENT_CONFIGURATION_UUID) ?: return
-            descriptor.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
-            if (!gatt.writeDescriptor(descriptor)) listener.onTransportStatus("Bluetooth notifications could not be enabled")
+            val ch = gatt.getService(SERVICE_UUID)?.getCharacteristic(CHARACTERISTIC_UUID) ?: return
+            synchronized(entry) { entry.characteristic = ch }
+            gatt.setCharacteristicNotification(ch, true)
+            val desc = ch.getDescriptor(CLIENT_CONFIGURATION_UUID) ?: return
+            desc.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
+            @Suppress("DEPRECATION")
+            gatt.writeDescriptor(desc)
         }
 
-        override fun onDescriptorWrite(gatt: BluetoothGatt, descriptor: BluetoothGattDescriptor, status: Int) {
-            if (descriptor.uuid != CLIENT_CONFIGURATION_UUID || status != BluetoothGatt.GATT_SUCCESS) return
-            synchronized(lock) { centralReady = true }
-            listener.onTransportStatus("Bluetooth connected — ready to speak")
+        @Suppress("DEPRECATION")
+        override fun onDescriptorWrite(gatt: BluetoothGatt, desc: BluetoothGattDescriptor, status: Int) {
+            if (desc.uuid != CLIENT_CONFIGURATION_UUID || status != BluetoothGatt.GATT_SUCCESS) return
+            synchronized(entry) { entry.ready = true }
+            updateMeshStatus()
+            // Signal service to broadcast our GPS location to this new peer.
+            listener.onTransportMessage(MeshLocationCodec.SENTINEL)
         }
 
-        override fun onCharacteristicWrite(gatt: BluetoothGatt, characteristic: BluetoothGattCharacteristic, status: Int) {
-            synchronized(lock) {
-                if (status == BluetoothGatt.GATT_SUCCESS && centralWrites.isNotEmpty()) centralWrites.removeFirst()
-                else if (status != BluetoothGatt.GATT_SUCCESS) centralWrites.clear()
-                writeNextCentralLocked()
+        @Suppress("DEPRECATION")
+        override fun onCharacteristicWrite(gatt: BluetoothGatt, ch: BluetoothGattCharacteristic, status: Int) {
+            synchronized(entry) {
+                if (status == BluetoothGatt.GATT_SUCCESS && entry.writes.isNotEmpty())
+                    entry.writes.removeFirst()
+                else if (status != BluetoothGatt.GATT_SUCCESS)
+                    entry.writes.clear()
+                val g = entry.gatt ?: return
+                val c = entry.characteristic ?: return
+                writeNextCentralLocked(entry, g, c)
             }
         }
 
         @Deprecated("Deprecated in Java")
-        override fun onCharacteristicChanged(gatt: BluetoothGatt, characteristic: BluetoothGattCharacteristic) {
-            if (characteristic.uuid != CHARACTERISTIC_UUID) return
-            centralAssembler.offer(characteristic.value ?: return)?.let(listener::onTransportMessage)
+        @Suppress("DEPRECATION")
+        override fun onCharacteristicChanged(gatt: BluetoothGatt, ch: BluetoothGattCharacteristic) {
+            if (ch.uuid != CHARACTERISTIC_UUID) return
+            entry.assembler.offer(ch.value ?: return)?.let(listener::onTransportMessage)
         }
     }
 
@@ -324,80 +398,95 @@ class BluetoothPeerTransport(
             if (status == BluetoothGatt.GATT_SUCCESS && service.uuid == SERVICE_UUID) {
                 serviceReady = true
                 startAdvertising()
-            } else if (service.uuid == SERVICE_UUID) {
-                listener.onTransportStatus("Bluetooth LE service could not be published")
             }
         }
 
         @SuppressLint("MissingPermission")
         override fun onConnectionStateChange(device: BluetoothDevice, status: Int, newState: Int) {
             if (newState == BluetoothProfile.STATE_DISCONNECTED) {
-                synchronized(lock) {
-                    if (serverPeer?.address == device.address) {
-                        serverPeer = null
-                        serverNotifications.clear()
-                    }
-                }
-                listener.onTransportStatus("Bluetooth disconnected; searching for nearby phones")
+                serverEntries.remove(device.address)
+                updateMeshStatus()
             }
         }
 
         @SuppressLint("MissingPermission")
-        override fun onDescriptorWriteRequest(device: BluetoothDevice, requestId: Int, descriptor: BluetoothGattDescriptor,
-                                               preparedWrite: Boolean, responseNeeded: Boolean, offset: Int, value: ByteArray?) {
+        @Suppress("DEPRECATION")
+        override fun onDescriptorWriteRequest(
+            device: BluetoothDevice, requestId: Int, descriptor: BluetoothGattDescriptor,
+            preparedWrite: Boolean, responseNeeded: Boolean, offset: Int, value: ByteArray?,
+        ) {
             val enabled = descriptor.uuid == CLIENT_CONFIGURATION_UUID &&
                 value?.contentEquals(BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE) == true
-            if (enabled) synchronized(lock) { serverPeer = device }
+            if (enabled) {
+                discovered[device.address] = device
+                serverEntries.getOrPut(device.address) { ServerEntry(device) }
+                updateMeshStatus()
+                // Signal service to send our GPS location to this new peer.
+                listener.onTransportMessage(MeshLocationCodec.SENTINEL)
+            }
             if (responseNeeded) gattServer?.sendResponse(device, requestId,
                 if (enabled) BluetoothGatt.GATT_SUCCESS else BluetoothGatt.GATT_FAILURE, 0, null)
-            if (enabled) listener.onTransportStatus("Bluetooth connected — ready to speak")
         }
 
         @SuppressLint("MissingPermission")
-        override fun onCharacteristicWriteRequest(device: BluetoothDevice, requestId: Int,
-                                                  characteristic: BluetoothGattCharacteristic, preparedWrite: Boolean,
-                                                  responseNeeded: Boolean, offset: Int, value: ByteArray?) {
-            val accepted = characteristic.uuid == CHARACTERISTIC_UUID && !preparedWrite && offset == 0 && value != null
+        @Suppress("DEPRECATION")
+        override fun onCharacteristicWriteRequest(
+            device: BluetoothDevice, requestId: Int, characteristic: BluetoothGattCharacteristic,
+            preparedWrite: Boolean, responseNeeded: Boolean, offset: Int, value: ByteArray?,
+        ) {
+            val accepted = characteristic.uuid == CHARACTERISTIC_UUID &&
+                !preparedWrite && offset == 0 && value != null
             if (responseNeeded) gattServer?.sendResponse(device, requestId,
                 if (accepted) BluetoothGatt.GATT_SUCCESS else BluetoothGatt.GATT_FAILURE, 0, null)
-            if (accepted) serverAssembler.offer(requireNotNull(value))?.let(listener::onTransportMessage)
+            if (accepted) {
+                val se = serverEntries.getOrPut(device.address) {
+                    discovered[device.address] = device
+                    ServerEntry(device)
+                }
+                se.assembler.offer(requireNotNull(value))?.let(listener::onTransportMessage)
+            }
         }
 
         override fun onNotificationSent(device: BluetoothDevice, status: Int) {
-            synchronized(lock) {
-                if (status == BluetoothGatt.GATT_SUCCESS && serverNotifications.isNotEmpty()) serverNotifications.removeFirst()
-                else if (status != BluetoothGatt.GATT_SUCCESS) serverNotifications.clear()
-                notifyNextServerLocked()
+            val se = serverEntries[device.address] ?: return
+            val ch = serverCharacteristic ?: return
+            synchronized(se) {
+                if (status == BluetoothGatt.GATT_SUCCESS && se.notifications.isNotEmpty())
+                    se.notifications.removeFirst()
+                else if (status != BluetoothGatt.GATT_SUCCESS)
+                    se.notifications.clear()
+                notifyNextServerLocked(se, ch)
             }
         }
     }
 
+    // ── Lifecycle ──────────────────────────────────────────────────────────────
+
     @SuppressLint("MissingPermission")
     fun disconnect() {
-        synchronized(lock) {
-            centralWrites.clear(); serverNotifications.clear(); centralReady = false
-            centralCharacteristic = null; centralPeerAddress = null
-            centralGatt?.disconnect(); centralGatt?.close(); centralGatt = null
-            serverPeer = null
+        centralEntries.values.forEach { e ->
+            synchronized(e) { e.writes.clear(); e.ready = false }
+            e.gatt?.disconnect(); e.gatt?.close(); e.gatt = null
         }
+        centralEntries.clear()
+        serverEntries.clear()
     }
 
     @SuppressLint("MissingPermission")
     override fun close() {
         disconnect()
-        scanner?.stopScan(scanCallback)
-        scanner = null; scanning = false
-        advertiser?.stopAdvertising(advertiseCallback)
-        advertiser = null; advertising = false
-        gattServer?.close(); gattServer = null; serverCharacteristic = null
-        serviceReady = false
+        scanner?.stopScan(scanCallback); scanner = null; scanning = false
+        advertiser?.stopAdvertising(advertiseCallback); advertiser = null; advertising = false
+        gattServer?.close(); gattServer = null; serverCharacteristic = null; serviceReady = false
     }
 }
 
-/** GATT carries fragments; this restores regular SUTRA transport frames. */
+// ── Frame codec (unchanged) ────────────────────────────────────────────────────
+
+/** Fragments a SUTRA frame into MTU-sized BLE writes. */
 internal object BleFrameCodec {
     private const val FIRST: Byte = 1
-    private const val NEXT: Byte = 2
+    private const val NEXT: Byte  = 2
     private var nextId = 0
 
     @Synchronized
@@ -405,7 +494,7 @@ internal object BleFrameCodec {
         require(mtuPayload >= 8)
         val id = nextId++ and 0xffff
         val firstPayload = mtuPayload - 7
-        val nextPayload = mtuPayload - 3
+        val nextPayload  = mtuPayload - 3
         val fragments = ArrayList<ByteArray>()
         var offset = minOf(firstPayload, frame.size)
         fragments += ByteBuffer.allocate(7 + offset).order(ByteOrder.BIG_ENDIAN).apply {
@@ -422,6 +511,7 @@ internal object BleFrameCodec {
     }
 }
 
+/** Reassembles fragmented BLE writes back into SUTRA frames. */
 internal class BleFrameAssembler(private val maxFrameBytes: Int) {
     private var id = -1
     private var expected = 0
