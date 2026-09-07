@@ -18,7 +18,7 @@ class BluetoothPeerTransport(context: Context, private val listener: PeerTranspo
         private const val MAX_FRAME_BYTES = SutraCodec.MAX_PAYLOAD_BYTES + 1024
     }
 
-    private val adapter = context.getSystemService(BluetoothManager::class.java).adapter
+    private val adapter = context.getSystemService(BluetoothManager::class.java)?.adapter
     private val worker = Executors.newCachedThreadPool()
     private val writeLock = Any()
     @Volatile private var server: BluetoothServerSocket? = null
@@ -27,16 +27,27 @@ class BluetoothPeerTransport(context: Context, private val listener: PeerTranspo
     val isConnected: Boolean get() = socket?.isConnected == true
 
     @SuppressLint("MissingPermission")
-    fun bondedPeers(): List<BluetoothPeer> = adapter.bondedDevices
-        .map { BluetoothPeer(it.name ?: "Bluetooth phone", it.address) }
-        .sortedBy(BluetoothPeer::name)
+    fun bondedPeers(): List<BluetoothPeer> = try {
+        adapter?.bondedDevices
+            ?.map { BluetoothPeer(it.name ?: "Bluetooth phone", it.address) }
+            ?.sortedBy(BluetoothPeer::name)
+            ?: emptyList()
+    } catch (_: SecurityException) {
+        emptyList()
+    } catch (_: Exception) {
+        emptyList()
+    }
 
     @SuppressLint("MissingPermission")
     fun listen() {
+        val currentAdapter = adapter ?: run {
+            listener.onTransportStatus("Bluetooth unavailable on this device")
+            return
+        }
         disconnect()
         worker.execute {
             try {
-                val listening = adapter.listenUsingRfcommWithServiceRecord("SUTRA Offline Speech", SERVICE_UUID)
+                val listening = currentAdapter.listenUsingRfcommWithServiceRecord("SUTRA Offline Speech", SERVICE_UUID)
                     .also { server = it }
                 listener.onTransportStatus("Bluetooth receive mode ready")
                 while (server === listening) attach(listening.accept())
@@ -52,12 +63,16 @@ class BluetoothPeerTransport(context: Context, private val listener: PeerTranspo
     @SuppressLint("MissingPermission")
     fun connect(address: String) {
         require(address.isNotBlank()) { "Select a paired Bluetooth phone" }
+        val currentAdapter = adapter ?: run {
+            listener.onTransportStatus("Bluetooth unavailable on this device")
+            return
+        }
         disconnect()
         worker.execute {
             try {
-                adapter.cancelDiscovery()
+                currentAdapter.cancelDiscovery()
                 listener.onTransportStatus("Opening Bluetooth fallback")
-                val peer = adapter.getRemoteDevice(address).createRfcommSocketToServiceRecord(SERVICE_UUID)
+                val peer = currentAdapter.getRemoteDevice(address).createRfcommSocketToServiceRecord(SERVICE_UUID)
                 peer.connect()
                 attach(peer)
             } catch (error: Exception) {
@@ -69,12 +84,12 @@ class BluetoothPeerTransport(context: Context, private val listener: PeerTranspo
     fun send(bytes: ByteArray) {
         require(bytes.size in 1..MAX_FRAME_BYTES) { "Invalid Bluetooth frame size" }
         val active = socket ?: error("No Bluetooth peer is connected")
+        val header = java.nio.ByteBuffer.allocate(4).order(java.nio.ByteOrder.BIG_ENDIAN).putInt(bytes.size).array()
         synchronized(writeLock) {
-            DataOutputStream(active.outputStream).apply {
-                writeInt(bytes.size)
-                write(bytes)
-                flush()
-            }
+            val output = active.outputStream
+            output.write(header)
+            output.write(bytes)
+            output.flush()
         }
     }
 
@@ -85,7 +100,9 @@ class BluetoothPeerTransport(context: Context, private val listener: PeerTranspo
             val input = DataInputStream(peer.inputStream)
             while (peer.isConnected) {
                 val size = input.readInt()
-                require(size in 1..MAX_FRAME_BYTES) { "Bluetooth frame is too large: $size" }
+                // Length-prefixed stream framing: if frame size is corrupted, stream synchronization is lost.
+                // The connection must be torn down and renegotiated.
+                require(size in 1..MAX_FRAME_BYTES) { "Bluetooth framing desync (frame size $size exceeds limit $MAX_FRAME_BYTES)" }
                 listener.onTransportMessage(ByteArray(size).also(input::readFully))
             }
         } catch (error: Exception) {

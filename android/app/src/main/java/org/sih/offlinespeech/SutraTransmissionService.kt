@@ -123,6 +123,7 @@ class SutraTransmissionService : Service(), PeerTransportListener {
     fun bluetoothPeers(): List<BluetoothPeer> = bluetooth.bondedPeers()
     fun disconnectAll() { wifi.disconnect(); bluetooth.disconnect() }
     fun isConnected(): Boolean = wifi.isConnected || bluetooth.isConnected
+    fun isSecurityActive(): Boolean = security != null
 
     fun setPairingPhrase(phrase: String) {
         if (phrase.isBlank()) {
