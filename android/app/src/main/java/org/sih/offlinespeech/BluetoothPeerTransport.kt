@@ -481,59 +481,145 @@ class BluetoothPeerTransport(
     }
 }
 
-// ── Frame codec (unchanged) ────────────────────────────────────────────────────
+// ── Frame codec — Bitchat-compatible fragment planner + assembly buffer ──────────
+//
+// Wire format (matches BLEOutboundFragmentPlanner / BLEFragmentAssemblyBuffer):
+//   [fragmentID : 8 bytes, random]
+//   [index      : UInt16 big-endian]
+//   [total      : UInt16 big-endian]
+//   [data       : remainder]
+//
+// Each per-link BleFrameAssembler tracks multiple in-flight fragment streams
+// simultaneously (identified by fragmentID), reassembles them out-of-order,
+// evicts the oldest stream when the in-flight cap is exceeded, and expires
+// incomplete streams after STREAM_TTL_MS.  This faithfully ports bitchat's
+// BLEFragmentAssemblyBuffer behaviour to Kotlin / Android.
 
-/** Fragments a SUTRA frame into MTU-sized BLE writes. */
+/** Fragments a SUTRA frame into MTU-sized BLE writes (Bitchat wire format). */
 internal object BleFrameCodec {
-    private const val FIRST: Byte = 1
-    private const val NEXT: Byte  = 2
-    private var nextId = 0
+    const val FRAGMENT_ID_BYTES = 8
+    // Minimum header: fragmentID(8) + index(2) + total(2) = 12 bytes
+    private const val HEADER_BYTES = FRAGMENT_ID_BYTES + 2 + 2
+    private val random = java.security.SecureRandom()
 
-    @Synchronized
+    /**
+     * Splits [frame] into BLE-MTU-sized fragments.  Each fragment carries the
+     * same random [fragmentID], its [index] and the [total] count so the receiver
+     * can reassemble them out-of-order — matching bitchat's planner contract.
+     */
     fun fragment(frame: ByteArray, mtuPayload: Int): List<ByteArray> {
-        require(mtuPayload >= 8)
-        val id = nextId++ and 0xffff
-        val firstPayload = mtuPayload - 7
-        val nextPayload  = mtuPayload - 3
-        val fragments = ArrayList<ByteArray>()
-        var offset = minOf(firstPayload, frame.size)
-        fragments += ByteBuffer.allocate(7 + offset).order(ByteOrder.BIG_ENDIAN).apply {
-            put(FIRST); putShort(id.toShort()); putInt(frame.size); put(frame, 0, offset)
-        }.array()
-        while (offset < frame.size) {
-            val count = minOf(nextPayload, frame.size - offset)
-            fragments += ByteBuffer.allocate(3 + count).order(ByteOrder.BIG_ENDIAN).apply {
-                put(NEXT); putShort(id.toShort()); put(frame, offset, count)
+        require(mtuPayload > HEADER_BYTES) { "MTU too small for fragment header" }
+        val chunkSize = mtuPayload - HEADER_BYTES
+        val fragmentId = ByteArray(FRAGMENT_ID_BYTES).also(random::nextBytes)
+        val chunks = frame.toList().chunked(chunkSize) { it.toByteArray() }
+        val total = chunks.size
+        return chunks.mapIndexed { index, chunk ->
+            ByteBuffer.allocate(HEADER_BYTES + chunk.size).order(ByteOrder.BIG_ENDIAN).apply {
+                put(fragmentId)
+                putShort(index.toShort())
+                putShort(total.toShort())
+                put(chunk)
             }.array()
-            offset += count
         }
-        return fragments
     }
 }
 
-/** Reassembles fragmented BLE writes back into SUTRA frames. */
-internal class BleFrameAssembler(private val maxFrameBytes: Int) {
-    private var id = -1
-    private var expected = 0
-    private var received = 0
-    private var frame = ByteArray(0)
+/**
+ * Per-link inbound fragment reassembler — a Kotlin port of bitchat's
+ * [BLEFragmentAssemblyBuffer].
+ *
+ * Differences from the old single-stream assembler:
+ *  - Tracks up to [maxInFlight] concurrent fragment streams by fragmentID.
+ *  - Reassembles fragments **out of order**: stores by (fragmentID → Map<index, bytes>).
+ *  - Evicts the **oldest** stream when [maxInFlight] is exceeded.
+ *  - Expires incomplete streams after [streamTtlMs] since first fragment.
+ *  - Enforces a [maxFrameBytes] size cap; oversized streams are evicted immediately.
+ */
+internal class BleFrameAssembler(
+    private val maxFrameBytes: Int,
+    private val maxInFlight: Int = 32,
+    private val streamTtlMs: Long = 30_000L,
+) {
+    private data class StreamKey(val id: String)   // hex of 8-byte fragmentID
 
+    private class StreamState(val total: Int, val startedAt: Long) {
+        val fragments = HashMap<Int, ByteArray>()
+    }
+
+    private val streams = LinkedHashMap<StreamKey, StreamState>()  // insertion-ordered for eviction
+
+    /**
+     * Offer one raw BLE write to the assembler.
+     *
+     * Returns the fully reassembled frame bytes when the last fragment of a
+     * stream arrives, or null if the stream is still incomplete.
+     *
+     * Wire layout expected: [fragmentID:8][index:u16][total:u16][data…]
+     */
     fun offer(fragment: ByteArray): ByteArray? {
-        if (fragment.size < 3) return null
-        val input = ByteBuffer.wrap(fragment).order(ByteOrder.BIG_ENDIAN)
-        val kind = input.get()
-        val incomingId = input.short.toInt() and 0xffff
-        if (kind == 1.toByte()) {
-            if (input.remaining() < 4) return null
-            val size = input.int
-            if (size !in 1..maxFrameBytes || input.remaining() > size) return null
-            id = incomingId; expected = size; received = input.remaining(); frame = ByteArray(size)
-            input.get(frame, 0, received)
-        } else if (kind == 2.toByte() && incomingId == id && received < expected) {
-            val count = minOf(input.remaining(), expected - received)
-            input.get(frame, received, count)
-            received += count
-        } else return null
-        return if (received == expected) frame.also { id = -1; expected = 0; received = 0; frame = ByteArray(0) } else null
+        val hdrSize = BleFrameCodec.FRAGMENT_ID_BYTES + 4   // id + index(2) + total(2)
+        if (fragment.size < hdrSize) return null
+
+        val buf = ByteBuffer.wrap(fragment).order(ByteOrder.BIG_ENDIAN)
+        val idBytes = ByteArray(BleFrameCodec.FRAGMENT_ID_BYTES).also(buf::get)
+        val index = buf.short.toInt() and 0xffff
+        val total = buf.short.toInt() and 0xffff
+        val data  = ByteArray(buf.remaining()).also(buf::get)
+
+        if (total <= 0 || total > 10_000 || index < 0 || index >= total) return null
+        if (data.size > maxFrameBytes) return null
+
+        val key = StreamKey(idBytes.joinToString("") { "%02x".format(it) })
+        val now = System.currentTimeMillis()
+
+        expireStaleStreams(now)
+
+        // Start a new stream or retrieve existing one
+        val stream = streams.getOrPut(key) {
+            evictOldestIfNeeded()
+            StreamState(total, now)
+        }
+
+        // Validate total is consistent across fragments of the same stream
+        if (stream.total != total) {
+            streams.remove(key)
+            return null
+        }
+
+        // Size guard: reject if adding this fragment would overflow the limit
+        val currentSize = stream.fragments.values.sumOf { it.size }
+        if (currentSize + data.size > maxFrameBytes) {
+            streams.remove(key)
+            return null
+        }
+
+        stream.fragments[index] = data   // idempotent: duplicate fragments are harmless
+
+        if (stream.fragments.size < total) return null   // still waiting for more
+
+        // All fragments received — reassemble in order
+        val assembled = ByteArray(stream.fragments.values.sumOf { it.size })
+        var pos = 0
+        for (i in 0 until total) {
+            val part = stream.fragments[i] ?: run { streams.remove(key); return null }
+            part.copyInto(assembled, pos)
+            pos += part.size
+        }
+        streams.remove(key)
+        return assembled
+    }
+
+    private fun expireStaleStreams(now: Long) {
+        val it = streams.iterator()
+        while (it.hasNext()) {
+            val entry = it.next()
+            if (now - entry.value.startedAt > streamTtlMs) it.remove()
+        }
+    }
+
+    private fun evictOldestIfNeeded() {
+        if (streams.size >= maxInFlight) {
+            streams.iterator().apply { if (hasNext()) { next(); remove() } }
+        }
     }
 }

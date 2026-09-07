@@ -1,4 +1,4 @@
-﻿package org.sih.offlinespeech
+package org.sih.offlinespeech
 
 import android.Manifest
 import android.app.Activity
@@ -53,6 +53,7 @@ class MainActivity : Activity(), SutraTransmissionListener {
     private lateinit var meshStatus: TextView
     private lateinit var meshPeerList: LinearLayout
     private lateinit var pairingPhrase: EditText
+    private lateinit var locationStatus: TextView
 
     private lateinit var deviceProfile: DeviceProfile
     private lateinit var modelDir: File
@@ -76,6 +77,9 @@ class MainActivity : Activity(), SutraTransmissionListener {
     private var alertMode = false
     @Volatile private var listening = false
     @Volatile private var routingMode = RoutingMode.AUTO
+    // Flags to handle service-bind / permission race conditions
+    @Volatile private var pendingBluetoothListen = false
+    @Volatile private var hasPendingLocation = false
 
     // Auto-refresh mesh peer list every 2 seconds
     private val meshRefreshRunnable = object : Runnable {
@@ -92,9 +96,16 @@ class MainActivity : Activity(), SutraTransmissionListener {
             }
             serviceBound = true
             networkStatus.text = "SUTRA receiver service ready"
-            // Auto-join mesh as soon as service is ready
-            if (ensureBluetoothPermission()) {
+            // Re-broadcast GPS fix if we already have one from before service was bound
+            if (hasPendingLocation && (myLat != 0.0 || myLng != 0.0)) {
+                transmission?.setMyLocation(myLat, myLng)
+                hasPendingLocation = false
+            }
+            // Auto-join mesh — retry if a BT permission grant happened before service bound
+            if (pendingBluetoothListen || ensureBluetoothPermission()) {
+                pendingBluetoothListen = false
                 transmission?.bluetoothListen()
+                meshStatus.text = "Mesh: scanning for nearby phones…"
             }
         }
 
@@ -289,6 +300,11 @@ class MainActivity : Activity(), SutraTransmissionListener {
             }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         }
 
+        locationStatus = TextView(this).apply {
+            text = "📍 Location: not yet acquired"
+            setTextColor(Color.DKGRAY); setPadding(0, 4, 0, 4)
+        }
+
         val page = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL; setPadding(32, 48, 32, 32)
             addView(status)
@@ -307,6 +323,7 @@ class MainActivity : Activity(), SutraTransmissionListener {
             addView(meshStatus)
             addView(meshPeerList)
             addView(meshButtons)
+            addView(locationStatus)
             addView(pairingPhrase)
             addView(securityAndMetrics)
             addView(TextView(this@MainActivity).apply { text = "Manual IP fallback (diagnostics only)" })
@@ -356,21 +373,33 @@ class MainActivity : Activity(), SutraTransmissionListener {
         val lm = locationManager ?: return
         if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED &&
             checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) return
-        val listener = object : LocationListener {
+        val locListener = object : LocationListener {
             override fun onLocationChanged(loc: Location) {
                 myLat = loc.latitude; myLng = loc.longitude
-                transmission?.setMyLocation(myLat, myLng)
+                val svc = transmission
+                if (svc != null) svc.setMyLocation(myLat, myLng)
+                else hasPendingLocation = true
+                runOnUiThread {
+                    val provider = if (loc.provider == LocationManager.GPS_PROVIDER) "GPS" else "Network"
+                    locationStatus.text = "📍 $provider: %.5f, %.5f (±%.0fm)".format(
+                        loc.latitude, loc.longitude, loc.accuracy)
+                }
             }
         }
         // Try GPS first, fall back to network
-        runCatching { lm.requestLocationUpdates(LocationManager.GPS_PROVIDER, 15_000L, 50f, listener) }
-        runCatching { lm.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, 15_000L, 50f, listener) }
+        runCatching { lm.requestLocationUpdates(LocationManager.GPS_PROVIDER, 15_000L, 50f, locListener) }
+        runCatching { lm.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, 15_000L, 50f, locListener) }
+        locationStatus.text = "📍 Waiting for GPS fix…"
         // Use last known immediately
         runCatching {
             (lm.getLastKnownLocation(LocationManager.GPS_PROVIDER)
                 ?: lm.getLastKnownLocation(LocationManager.NETWORK_PROVIDER))?.let { loc ->
                 myLat = loc.latitude; myLng = loc.longitude
-                transmission?.setMyLocation(myLat, myLng)
+                val svc = transmission
+                if (svc != null) svc.setMyLocation(myLat, myLng)
+                else hasPendingLocation = true
+                val provider = if (loc.provider == LocationManager.GPS_PROVIDER) "GPS" else "Network"
+                locationStatus.text = "📍 Last known ($provider): %.5f, %.5f".format(loc.latitude, loc.longitude)
             }
         }
     }
@@ -432,7 +461,15 @@ class MainActivity : Activity(), SutraTransmissionListener {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         when (requestCode) {
             3 -> if (grantResults.all { it == PackageManager.PERMISSION_GRANTED }) {
-                transmission?.bluetoothListen()
+                val svc = transmission
+                if (svc != null) {
+                    svc.bluetoothListen()
+                    meshStatus.text = "Mesh: scanning for nearby phones…"
+                } else {
+                    // Service not yet bound — set flag so onServiceConnected picks it up
+                    pendingBluetoothListen = true
+                    meshStatus.text = "Mesh: will start when service is ready…"
+                }
             }
             5 -> if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
                 startLocationUpdates()
