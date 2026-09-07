@@ -7,6 +7,15 @@ import kotlin.math.sin
 
 class AudioPipelineTest {
     @Test
+    fun mergesPushToTalkChunksInOrder() {
+        assertArrayEquals(
+            floatArrayOf(1f, 2f, 3f),
+            mergeAudioChunks(listOf(floatArrayOf(1f, 2f), floatArrayOf(3f))),
+            0f,
+        )
+    }
+
+    @Test
     fun streamingResampleMatchesOneShot() {
         val input = FloatArray(4_800) { sin(it / 17.0).toFloat() }
         val expected = LinearResampler(48_000).resample(input, input.size)

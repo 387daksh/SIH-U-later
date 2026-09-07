@@ -11,8 +11,8 @@ android {
         applicationId = "org.sih.offlinespeech"
         minSdk = 26
         targetSdk = 35
-        versionCode = 6
-        versionName = "0.5-tts"
+        versionCode = 8
+        versionName = "0.7-sutra-ui"
         ndk {
             abiFilters += "arm64-v8a"
         }

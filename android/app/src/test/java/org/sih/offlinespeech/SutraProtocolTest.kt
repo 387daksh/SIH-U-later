@@ -39,6 +39,7 @@ class SutraProtocolTest {
             text = "Do not send two ambulances to gate four",
             confidence = 0.91,
             alert = true,
+            alertCategory = "Medical",
             sourceId = 99,
             wordConfidences = listOf(0.95, 0.20, 0.95, 0.30, 0.91, 0.95, 0.93, 0.88),
         )
@@ -49,6 +50,7 @@ class SutraProtocolTest {
         )
         assertTrue(layers.fields.any { it.kind == CriticalKind.NEGATION && it.text == "not" })
         assertTrue(layers.fields.any { it.kind == CriticalKind.NUMBER && it.text == "two" })
+        assertEquals("Medical", CriticalFieldCodec.decode(layers.messages.first().payload).first().text)
         val repair = CriticalFieldCodec.decode(layers.messages.last().payload)
         assertEquals(listOf("not", "two"), repair.map { it.text })
         assertTrue(layers.messages.all { SutraCodec.decode(SutraCodec.encode(it)).id == layers.id })

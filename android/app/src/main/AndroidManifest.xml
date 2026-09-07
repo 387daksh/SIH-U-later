@@ -27,7 +27,7 @@
         </intent>
     </queries>
     <application android:theme="@android:style/Theme.Material.Light.NoActionBar"
-        android:label="SIH Offline Speech" android:icon="@drawable/ic_launcher"
+        android:label="SUTRA" android:icon="@drawable/ic_launcher"
         android:allowBackup="false" android:largeHeap="true">
         <service android:name=".SutraTransmissionService"
             android:exported="false"

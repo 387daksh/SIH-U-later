@@ -14,6 +14,16 @@ fun interface AudioChunkListener {
     fun onAudioChunk(chunk: FloatArray)
 }
 
+internal fun mergeAudioChunks(chunks: List<FloatArray>): FloatArray {
+    val merged = FloatArray(chunks.sumOf { it.size })
+    var offset = 0
+    chunks.forEach { chunk ->
+        chunk.copyInto(merged, offset)
+        offset += chunk.size
+    }
+    return merged
+}
+
 class AudioPipeline(
     private val context: Context,
     private val listener: AudioChunkListener

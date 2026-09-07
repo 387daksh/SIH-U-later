@@ -254,6 +254,7 @@ object SutraSemanticEncoder {
         text: String,
         confidence: Double,
         alert: Boolean,
+        alertCategory: String? = null,
         sourceId: Long,
         destinationId: Long = 0,
         id: SutraId = SutraId.random(),
@@ -264,7 +265,10 @@ object SutraSemanticEncoder {
         val fallbackConfidences = if (wordConfidences.isEmpty()) {
             List(Regex("[\\p{L}\\p{M}\\p{N}]+(?:['’][\\p{L}\\p{M}\\p{N}]+)*").findAll(text).count()) { confidence }
         } else wordConfidences
-        val fields = CriticalFieldDetector.detect(text, fallbackConfidences)
+        val detectedFields = CriticalFieldDetector.detect(text, fallbackConfidences)
+        val fields = if (alert && !alertCategory.isNullOrBlank()) {
+            listOf(CriticalField(alertCategory, CriticalKind.EMERGENCY, 1.0)) + detectedFields
+        } else detectedFields
         val uncertain = fields.filter { it.confidence < REPAIR_THRESHOLD }
         val commonFlags = SutraFlags.FINAL or SutraFlags.REQUIRES_ACK or
             (if (alert) SutraFlags.ALERT else 0) or (if (uncertain.isNotEmpty()) SutraFlags.HAS_REPAIR else 0)
