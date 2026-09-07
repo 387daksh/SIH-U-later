@@ -14,6 +14,7 @@ deployment_models/
 android/local.properties
 android/.gradle/
 android/.gradle-user/
+android/.kotlin/
 android/**/build/
 android/app/src/main/assets/models/
 android-colleague/local.properties

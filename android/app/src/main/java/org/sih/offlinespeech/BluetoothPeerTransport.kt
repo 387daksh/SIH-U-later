@@ -22,6 +22,9 @@ import android.bluetooth.le.ScanFilter
 import android.bluetooth.le.ScanResult
 import android.bluetooth.le.ScanSettings
 import android.content.Context
+import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.os.ParcelUuid
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
@@ -61,7 +64,8 @@ class BluetoothPeerTransport(
         private val SERVICE_PARCEL_UUID = ParcelUuid(SERVICE_UUID)
         private const val MANUFACTURER_ID = 0x5349   // "SI"
         private const val MAX_FRAME_BYTES = SutraCodec.MAX_PAYLOAD_BYTES + 1024
-        private const val REQUESTED_MTU = 247
+        // Maximum ATT MTU on Android is 517 (yielding 512 bytes payload, exactly matching Bitchat)
+        private const val REQUESTED_MTU = 517
         private const val MAX_MESH_LINKS = 7  // typical BLE stack ceiling
     }
 
@@ -72,13 +76,14 @@ class BluetoothPeerTransport(
         var gatt: BluetoothGatt? = null
         var characteristic: BluetoothGattCharacteristic? = null
         var ready = false
-        var mtu = 23
+        var mtu = REQUESTED_MTU
         val writes = ArrayDeque<ByteArray>()
         val assembler = BleFrameAssembler(MAX_FRAME_BYTES)
     }
 
     /** State for a connection that a REMOTE peer initiated (we are peripheral/server). */
     private inner class ServerEntry(val device: BluetoothDevice) {
+        var mtu = REQUESTED_MTU
         val notifications = ArrayDeque<ByteArray>()
         val assembler = BleFrameAssembler(MAX_FRAME_BYTES)
     }
@@ -181,7 +186,7 @@ class BluetoothPeerTransport(
         serverEntries.values.forEach { se ->
             if (ch == null) return@forEach
             synchronized(se) {
-                BleFrameCodec.fragment(bytes, 20).forEach(se.notifications::addLast)
+                BleFrameCodec.fragment(bytes, max(20, se.mtu - 3)).forEach(se.notifications::addLast)
                 notifyNextServerLocked(se, ch)
             }
             sent = true
@@ -232,7 +237,7 @@ class BluetoothPeerTransport(
             AdvertiseSettings.Builder()
                 .setAdvertiseMode(AdvertiseSettings.ADVERTISE_MODE_LOW_LATENCY)
                 .setConnectable(true)
-                .setTxPowerLevel(AdvertiseSettings.ADVERTISE_TX_POWER_MEDIUM)
+                .setTxPowerLevel(AdvertiseSettings.ADVERTISE_TX_POWER_HIGH)
                 .build(),
             AdvertiseData.Builder()
                 .addServiceUuid(SERVICE_PARCEL_UUID)
@@ -261,7 +266,7 @@ class BluetoothPeerTransport(
     @SuppressLint("MissingPermission")
     private fun connectCentral(device: BluetoothDevice) {
         val address = device.address
-        if (centralEntries.containsKey(address)) return   // already connecting/connected
+        if (centralEntries.containsKey(address) || serverEntries.containsKey(address)) return   // already connecting/connected
         if (centralEntries.size + serverEntries.size >= MAX_MESH_LINKS) return
         val entry = CentralEntry(address)
         centralEntries[address] = entry
@@ -275,12 +280,30 @@ class BluetoothPeerTransport(
         ch: BluetoothGattCharacteristic,
     ) {
         val frag = entry.writes.firstOrNull() ?: return
-        ch.writeType = BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
-        ch.value = frag
+        ch.writeType = BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE
         @SuppressLint("MissingPermission")
-        if (!gatt.writeCharacteristic(ch)) {
-            entry.writes.clear()
-            listener.onTransportStatus("BLE write failed to …${entry.address.takeLast(5)}")
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            val status = gatt.writeCharacteristic(ch, frag, BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE)
+            if (status != BluetoothGatt.GATT_SUCCESS) {
+                Handler(Looper.getMainLooper()).postDelayed({
+                    synchronized(entry) {
+                        val g = entry.gatt ?: return@postDelayed
+                        val c = entry.characteristic ?: return@postDelayed
+                        writeNextCentralLocked(entry, g, c)
+                    }
+                }, 15)
+            }
+        } else {
+            ch.value = frag
+            if (!gatt.writeCharacteristic(ch)) {
+                Handler(Looper.getMainLooper()).postDelayed({
+                    synchronized(entry) {
+                        val g = entry.gatt ?: return@postDelayed
+                        val c = entry.characteristic ?: return@postDelayed
+                        writeNextCentralLocked(entry, g, c)
+                    }
+                }, 15)
+            }
         }
     }
 
@@ -289,9 +312,27 @@ class BluetoothPeerTransport(
     private fun notifyNextServerLocked(se: ServerEntry, ch: BluetoothGattCharacteristic) {
         val srv = gattServer ?: return
         val frag = se.notifications.firstOrNull() ?: return
-        ch.value = frag
-        @Suppress("DEPRECATION")
-        srv.notifyCharacteristicChanged(se.device, ch, false)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            val status = srv.notifyCharacteristicChanged(se.device, ch, false, frag)
+            if (status != BluetoothGatt.GATT_SUCCESS) {
+                Handler(Looper.getMainLooper()).postDelayed({
+                    synchronized(se) {
+                        val c = serverCharacteristic ?: return@postDelayed
+                        notifyNextServerLocked(se, c)
+                    }
+                }, 15)
+            }
+        } else {
+            ch.value = frag
+            if (!srv.notifyCharacteristicChanged(se.device, ch, false)) {
+                Handler(Looper.getMainLooper()).postDelayed({
+                    synchronized(se) {
+                        val c = serverCharacteristic ?: return@postDelayed
+                        notifyNextServerLocked(se, c)
+                    }
+                }, 15)
+            }
+        }
     }
 
     private fun updateMeshStatus() {
@@ -323,6 +364,8 @@ class BluetoothPeerTransport(
             if (remoteId == localNodeId) return
             discovered[device.address] = device
             addressToRemoteInt[device.address] = remoteId
+            // Do not attempt central connect if we already hold an active link (central or server)
+            if (centralEntries.containsKey(device.address) || serverEntries.containsKey(device.address)) return
             // Deterministic role: the phone with the larger nodeId is the central for this pair.
             if (Integer.compareUnsigned(localNodeId, remoteId) > 0) connectCentral(device)
         }
@@ -337,8 +380,18 @@ class BluetoothPeerTransport(
         @SuppressLint("MissingPermission")
         override fun onConnectionStateChange(gatt: BluetoothGatt, status: Int, newState: Int) {
             if (status == BluetoothGatt.GATT_SUCCESS && newState == BluetoothProfile.STATE_CONNECTED) {
+                // 1. Ultra-low latency: request connection priority HIGH (drops interval to 11.25ms - 15ms)
+                gatt.requestConnectionPriority(BluetoothGatt.CONNECTION_PRIORITY_HIGH)
+                // 2. Request maximum MTU (517)
                 gatt.requestMtu(REQUESTED_MTU)
-                gatt.discoverServices()
+                // 3. Fallback: discover services if onMtuChanged is delayed or uncalled
+                Handler(Looper.getMainLooper()).postDelayed({
+                    synchronized(entry) {
+                        if (entry.characteristic == null && entry.gatt != null) {
+                            gatt.discoverServices()
+                        }
+                    }
+                }, 350)
             } else {
                 gatt.close()
                 centralEntries.remove(entry.address)
@@ -346,8 +399,13 @@ class BluetoothPeerTransport(
             }
         }
 
+        @SuppressLint("MissingPermission")
         override fun onMtuChanged(gatt: BluetoothGatt, mtuValue: Int, status: Int) {
-            if (status == BluetoothGatt.GATT_SUCCESS) synchronized(entry) { entry.mtu = mtuValue }
+            if (status == BluetoothGatt.GATT_SUCCESS) {
+                synchronized(entry) { entry.mtu = mtuValue }
+            }
+            // Once MTU negotiation finishes, proceed with service discovery cleanly
+            gatt.discoverServices()
         }
 
         @SuppressLint("MissingPermission")
@@ -406,6 +464,14 @@ class BluetoothPeerTransport(
             if (newState == BluetoothProfile.STATE_DISCONNECTED) {
                 serverEntries.remove(device.address)
                 updateMeshStatus()
+            }
+        }
+
+        override fun onMtuChanged(device: BluetoothDevice, mtu: Int) {
+            serverEntries[device.address]?.let { se ->
+                synchronized(se) {
+                    se.mtu = mtu
+                }
             }
         }
 
@@ -537,7 +603,7 @@ internal object BleFrameCodec {
  */
 internal class BleFrameAssembler(
     private val maxFrameBytes: Int,
-    private val maxInFlight: Int = 32,
+    private val maxInFlight: Int = 128,  // Matches Bitchat TransportConfig.bleMaxInFlightAssemblies
     private val streamTtlMs: Long = 30_000L,
 ) {
     private data class StreamKey(val id: String)   // hex of 8-byte fragmentID
