@@ -392,8 +392,10 @@ class MainActivity : Activity(), SutraTransmissionListener {
             }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         }
 
+        val savedPhrase = getSharedPreferences("sutra", MODE_PRIVATE).getString("pairing_phrase", "").orEmpty()
         pairingPhrase = EditText(this).apply {
             hint = "Shared pairing phrase (12+ characters)"
+            if (savedPhrase.isNotBlank()) setText(savedPhrase)
             setSingleLine()
         }
         val securityAndMetrics = LinearLayout(this).apply {
@@ -401,8 +403,14 @@ class MainActivity : Activity(), SutraTransmissionListener {
             addView(Button(this@MainActivity).apply {
                 text = "Secure session"
                 setOnClickListener {
-                    runCatching { requireNotNull(transmission).setPairingPhrase(pairingPhrase.text.toString()) }
-                        .onFailure { networkStatus.text = it.message }
+                    val phrase = pairingPhrase.text.toString()
+                    runCatching {
+                        requireNotNull(transmission).setPairingPhrase(phrase)
+                    }.onSuccess {
+                        val active = transmission?.isSecurityActive() == true
+                        val secStatus = if (active) "🔒 Authenticated AES-GCM active" else "⚠️ Plaintext (unencrypted demo mode)"
+                        networkStatus.text = "SUTRA ready • $secStatus"
+                    }.onFailure { networkStatus.text = it.message }
                 }
             }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
             addView(Button(this@MainActivity).apply {

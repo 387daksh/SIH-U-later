@@ -19,7 +19,39 @@ data class SpeechResult(
     val backend: String,
     val milliseconds: Long,
     val confidence: Double = Double.NaN,
+    val wordConfidences: List<Double> = emptyList(),
 )
+
+fun alignWordConfidences(
+    fullText: String,
+    tokenSpans: List<Pair<String, Double>>,
+    defaultConfidence: Double = 0.5,
+): List<Double> {
+    val wordRegex = Regex("[\\p{L}\\p{M}\\p{N}]+(?:['’][\\p{L}\\p{M}\\p{N}]+)*")
+    val words = wordRegex.findAll(fullText).toList()
+    if (words.isEmpty()) return emptyList()
+    if (tokenSpans.isEmpty()) return List(words.size) { defaultConfidence }
+
+    var offset = 0
+    val tokenRanges = tokenSpans.map { (str, conf) ->
+        val range = offset until (offset + str.length)
+        offset += str.length
+        range to conf
+    }
+
+    return words.map { match ->
+        val range = match.range
+        val overlapping = tokenRanges.filter { (tRange, _) ->
+            maxOf(range.first, tRange.first) <= minOf(range.last, tRange.last)
+        }
+        if (overlapping.isNotEmpty()) {
+            overlapping.sumOf { it.second } / overlapping.size
+        } else {
+            defaultConfidence
+        }
+    }
+}
+
 enum class RoutingMode { AUTO, ENGLISH, INDIC }
 
 fun resolveModelDir(context: Context): File {
@@ -107,7 +139,7 @@ private class WhisperRuntime(private val env: OrtEnvironment, root: File) : Clos
                     val crossV = encoded[1] as OnnxTensor
                     if (verifyLanguage && englishProbability(crossK, crossV) < config.getDouble("english_threshold")) return null
                     val decodedText = decodeEnglish(crossK, crossV)
-                    return SpeechResult("english", decodedText.text, "whisper-tiny-int8", 0, decodedText.confidence)
+                    return SpeechResult("english", decodedText.text, "whisper-tiny-int8", 0, decodedText.confidence, decodedText.wordConfidences)
                 }
             }
         }
@@ -128,7 +160,7 @@ private class WhisperRuntime(private val env: OrtEnvironment, root: File) : Clos
         }
     }
 
-    private data class WhisperText(val text: String, val confidence: Double)
+    private data class WhisperText(val text: String, val confidence: Double, val wordConfidences: List<Double>)
     private data class TokenChoice(val token: Int, val marginConfidence: Double)
 
     private fun decodeEnglish(crossK: OnnxTensor, crossV: OnnxTensor): WhisperText {
@@ -137,12 +169,14 @@ private class WhisperRuntime(private val env: OrtEnvironment, root: File) : Clos
             noTimestamps.toLong()), 0, zeroK, zeroV, crossK, crossV)
         zeroK.close(); zeroV.close()
         val generated = ArrayList<Int>()
+        val tokenConfidences = ArrayList<Double>()
         var confidenceSum = 0.0
         var offset = 4L
         while (generated.size < context - 4) {
             val choice = bestToken(owner, generated.isEmpty())
             if (choice.token == eot) break
             generated += choice.token
+            tokenConfidences += choice.marginConfidence
             confidenceSum += choice.marginConfidence
             val old = owner
             owner = runDecoder(longArrayOf(choice.token.toLong()), offset++, old[1] as OnnxTensor,
@@ -150,11 +184,15 @@ private class WhisperRuntime(private val env: OrtEnvironment, root: File) : Clos
             old.close()
         }
         owner.close()
-        val bytes = ByteArrayOutputStream()
-        generated.forEach { tokens[it]?.let { value -> bytes.write(value) } }
+        val tokenStrings = generated.map { tokens[it]?.toString(Charsets.UTF_8).orEmpty() }
+        val tokenSpans = tokenStrings.zip(tokenConfidences)
+        val fullTokenString = tokenStrings.joinToString("")
+        val avgConfidence = if (generated.isEmpty()) 0.0 else confidenceSum / generated.size
+        val wordConfidences = alignWordConfidences(fullTokenString, tokenSpans, avgConfidence)
         return WhisperText(
-            bytes.toByteArray().toString(Charsets.UTF_8).trim(),
-            if (generated.isEmpty()) 0.0 else confidenceSum / generated.size,
+            fullTokenString.trim(),
+            avgConfidence,
+            wordConfidences,
         )
     }
 
@@ -267,25 +305,30 @@ private class IndicRuntime(private val env: OrtEnvironment, root: File) : Closea
                 path[frame] = best
             }
             val text = StringBuilder(); var confidence = 0.0; var tokenCount = 0; var start = 0
+            val tokenList = ArrayList<Pair<String, Double>>()
             while (start < count) {
                 var end = start + 1
                 while (end < count && path[end] == path[start]) end++
                 val local = path[start]
                 if (local != blank) {
-                    text.append(vocab.getValue(code)[local]); tokenCount++
+                    val rawStr = vocab.getValue(code)[local]
+                    text.append(rawStr); tokenCount++
                     val global = indices[local]
                     var bestPosterior = 0.0
                     for (frame in start until end)
                         bestPosterior = maxOf(bestPosterior, exp(logits.get(frame * width + global) - normalizers[frame]))
                     confidence += bestPosterior
+                    tokenList.add(rawStr.replace("▁", " ") to bestPosterior)
                 }
                 start = end
             }
             val average = if (tokenCount == 0) 0.0 else confidence / tokenCount
             if (average > winnerConfidence) {
                 winnerConfidence = average
-                winner = SpeechResult(language, text.toString().replace("▁", " ").trim(),
-                    "indic-conformer-600m-hybrid-int8", 0, average)
+                val fullTokenString = tokenList.joinToString("") { it.first }
+                val wordConfidences = alignWordConfidences(fullTokenString, tokenList, average)
+                winner = SpeechResult(language, fullTokenString.trim(),
+                    "indic-conformer-600m-hybrid-int8", 0, average, wordConfidences)
             }
         }
         return requireNotNull(winner)
