@@ -81,6 +81,9 @@ object SutraFlags {
     const val HAS_REPAIR = 1 shl 3
 }
 
+internal fun SutraMessage.shouldRelayLive(fresh: Boolean): Boolean =
+    fresh && type == SutraMessageType.TEXT_FINAL && destinationId == 0L
+
 object SutraCodec {
     private const val MAGIC = 0x5354
     private const val VERSION = 1
