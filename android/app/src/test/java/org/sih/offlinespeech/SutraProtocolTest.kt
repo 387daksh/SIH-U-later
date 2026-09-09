@@ -1,10 +1,23 @@
 package org.sih.offlinespeech
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class SutraProtocolTest {
+    @Test
+    fun onlyFreshBroadcastTranscriptsUseTheLiveRelay() {
+        val broadcast = SutraMessage(
+            SutraMessageType.TEXT_FINAL, SutraLanguage.ENGLISH, "help".toByteArray()
+        )
+
+        assertTrue(broadcast.shouldRelayLive(fresh = true))
+        assertFalse(broadcast.shouldRelayLive(fresh = false))
+        assertFalse(broadcast.copy(destinationId = 42).shouldRelayLive(fresh = true))
+        assertFalse(broadcast.copy(type = SutraMessageType.RECEIVED_ACK).shouldRelayLive(fresh = true))
+    }
+
     @Test
     fun multilingualEnvelopeRoundTripsAndRejectsCorruption() {
         val original = SutraMessage(

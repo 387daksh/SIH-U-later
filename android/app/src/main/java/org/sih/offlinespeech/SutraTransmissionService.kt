@@ -191,13 +191,9 @@ class SutraTransmissionService : Service(), PeerTransportListener {
                     sendAck(message, SutraMessageType.RECEIVED_ACK)
                     val fresh = store.recordReceipt(id)
                     listener?.onTransmissionMessage(message, null, !fresh)
+                    if (message.shouldRelayLive(fresh)) relayLive(message, plain)
                     if (fresh) {
                         speakOrQueue(message)
-                        if (message.flags and SutraFlags.ALERT != 0) {
-                            // ponytail: one bounded epidemic copy; add per-peer copy budgets only after a 3-phone trace needs them.
-                            store.enqueue(message, plain)
-                            store.metric(id, "relay_stored", "alert=true")
-                        }
                     }
                 }
                 SutraMessageType.ALERT_CORE -> listener?.onTransmissionMessage(message, null, false)
@@ -216,6 +212,18 @@ class SutraTransmissionService : Service(), PeerTransportListener {
                 SutraMessageType.HELLO -> listener?.onTransmissionMessage(message, null, false)
             }
         }
+    }
+
+    private fun relayLive(message: SutraMessage, plain: ByteArray) {
+        val alert = message.flags and SutraFlags.ALERT != 0
+        if (alert) {
+            // ponytail: one bounded epidemic copy; add per-peer copy budgets only after a larger trace needs them.
+            store.enqueue(message, plain)
+            store.metric(message.id.toString(), "relay_stored", "alert=true")
+        }
+        runCatching { sendFrame(security?.seal(plain) ?: plain) }
+            .onSuccess { store.metric(message.id.toString(), "relay_forwarded", "alert=$alert") }
+            .onFailure { store.metric(message.id.toString(), "relay_unavailable", it.message.orEmpty()) }
     }
 
     private fun flushOutbox() {
