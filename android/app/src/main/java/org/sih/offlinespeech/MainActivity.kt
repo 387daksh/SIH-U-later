@@ -60,9 +60,12 @@ class MainActivity : Activity(), SutraTransmissionListener {
     private lateinit var vadIndicator: TextView
     private lateinit var result: TextView
     private lateinit var latestTranscript: TextView
+    private lateinit var translatedTranscript: TextView
     private lateinit var transcriptMeta: TextView
     private lateinit var pushToTalkHint: TextView
     private lateinit var deliveryLadder: LinearLayout
+    private lateinit var mapController: MapPageController
+    private var preferredLanguage: String = "english"
     private lateinit var startStopButton: Button
     private lateinit var pushToTalkButton: Button
     private lateinit var normalButton: Button
@@ -131,6 +134,8 @@ class MainActivity : Activity(), SutraTransmissionListener {
         window.navigationBarColor = surface
 
         deviceProfile = DeviceProfile.detect(this)
+        preferredLanguage = getSharedPreferences("sutra", MODE_PRIVATE).getString("preferred_language", "english") ?: "english"
+        mapController = MapPageController(this)
         sourceId = getSharedPreferences("sutra", MODE_PRIVATE).let { preferences ->
             if (preferences.contains("terminal_id")) preferences.getLong("terminal_id", 0)
             else SecureRandom().nextLong().let { generated ->
@@ -184,6 +189,16 @@ class MainActivity : Activity(), SutraTransmissionListener {
             setLineSpacing(0f, 1.25f)
             setTextColor(mutedInk)
             setPadding(0, dp(9), 0, dp(4))
+        }
+
+        translatedTranscript = TextView(this).apply {
+            text = ""
+            textSize = 14f
+            setLineSpacing(0f, 1.2f)
+            setTextColor(blue)
+            setTypeface(null, Typeface.BOLD)
+            visibility = View.GONE
+            setPadding(0, dp(2), 0, dp(4))
         }
 
         pushToTalkHint = TextView(this).apply {
@@ -260,8 +275,9 @@ class MainActivity : Activity(), SutraTransmissionListener {
 
         alertButton = Button(this).apply {
             text = "Emergency alert"
-            contentDescription = "Choose emergency alert mode"
+            contentDescription = "Tap to arm emergency alert mode"
             styleSegmentButton(selected = false, alert = true)
+            // Single tap toggles alert mode on/off (no category picker needed)
             setOnClickListener { confirmAlertMode() }
         }
 
@@ -395,7 +411,8 @@ class MainActivity : Activity(), SutraTransmissionListener {
             }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         }
 
-        val savedPhrase = getSharedPreferences("sutra", MODE_PRIVATE).getString("pairing_phrase", "").orEmpty()
+        val savedPhrase = getSharedPreferences("sutra", MODE_PRIVATE).getString("pairing_phrase", null)
+            ?: SutraTransmissionService.DEFAULT_PAIRING_PHRASE
         pairingPhrase = EditText(this).apply {
             hint = "Shared pairing phrase (12+ characters)"
             if (savedPhrase.isNotBlank()) setText(savedPhrase)
@@ -434,6 +451,7 @@ class MainActivity : Activity(), SutraTransmissionListener {
         val talkTranscriptCard = card().apply {
             addView(transcriptMeta)
             addView(latestTranscript)
+            addView(translatedTranscript)
             addView(deliveryLadderView())
             addView(LinearLayout(this@MainActivity).apply {
                 orientation = LinearLayout.HORIZONTAL
@@ -591,7 +609,8 @@ class MainActivity : Activity(), SutraTransmissionListener {
             "Sent, received, and playback-confirmed messages.",
             transcriptCard,
         )
-        val pages = arrayOf(talkPage, devicesPage, historyPage)
+        val mapPage = mapController.createPageView()
+        val pages = arrayOf(talkPage, devicesPage, historyPage, mapPage)
         val content = FrameLayout(this).apply {
             pages.forEach { addView(it, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)) }
         }
@@ -608,8 +627,15 @@ class MainActivity : Activity(), SutraTransmissionListener {
                 text = "History"
                 setCompoundDrawablesWithIntrinsicBounds(0, android.R.drawable.ic_menu_recent_history, 0, 0)
             },
+            TextView(this).apply {
+                text = "Map"
+                setCompoundDrawablesWithIntrinsicBounds(0, android.R.drawable.ic_dialog_map, 0, 0)
+            },
         )
         val showPage: (Int) -> Unit = { selected ->
+            if (selected == 3 && checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+                requestPermissions(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION), 2)
+            }
             pages.forEachIndexed { index, page -> page.visibility = if (index == selected) View.VISIBLE else View.GONE }
             navButtons.forEachIndexed { index, button ->
                 button.background = rippleBackground(if (index == selected) Color.rgb(231, 242, 240) else surface, 12)
@@ -860,6 +886,10 @@ class MainActivity : Activity(), SutraTransmissionListener {
         transcriptMeta.text = "DETECT LANGUAGE AUTOMATICALLY"
         latestTranscript.text = "Speak in any of the 10 supported languages. The detected language is shown after transcription."
         latestTranscript.setTextColor(mutedInk)
+        if (::translatedTranscript.isInitialized) {
+            translatedTranscript.text = ""
+            translatedTranscript.visibility = View.GONE
+        }
         if (::deliveryLadder.isInitialized) deliveryLadder.visibility = View.GONE
         pushToTalkButton.text = "Hold to talk"
         pushToTalkButton.styleTalkButton(if (alertMode) accent else ink)
@@ -882,17 +912,20 @@ class MainActivity : Activity(), SutraTransmissionListener {
     }
 
     private fun confirmAlertMode() {
-        val categories = arrayOf("Medical", "Trapped", "Fire", "Danger", "Evacuate", "Supplies required", "Safe")
-        AlertDialog.Builder(this)
-            .setTitle("Emergency alert")
-            .setMessage("Pick the category first. It is sent ahead of your words as a tiny language-independent code.")
-            .setItems(categories) { _, index -> setAlertMode(true, categories[index]) }
-            .setNegativeButton("Cancel", null)
-            .show()
+        // If already armed, disarm with one tap
+        if (alertMode) {
+            setAlertMode(false)
+            return
+        }
+        setAlertMode(true, "EMERGENCY")
+        Toast.makeText(this, "🚨 Emergency alert armed. Speak your emergency message.", Toast.LENGTH_SHORT).show()
     }
 
     private fun showSettings() {
+        val langInfo = IndicTranslator.supportedLanguages.find { it.key == preferredLanguage }
+        val currentLangLabel = "${langInfo?.nativeName ?: ""} (${langInfo?.englishName ?: preferredLanguage})"
         val choices = arrayOf(
+            "Change preferred language: $currentLangLabel",
             "Automatic language detection: ${if (routingMode == RoutingMode.AUTO) "On" else "Off"}",
             "Forced ASR routing: $routingMode",
             "Emergency playback access",
@@ -903,17 +936,22 @@ class MainActivity : Activity(), SutraTransmissionListener {
             .setItems(choices) { _, index ->
                 when (index) {
                     0 -> {
+                        startActivity(Intent(this, LanguagePreferenceActivity::class.java).apply {
+                            putExtra("force_change", true)
+                        })
+                    }
+                    1 -> {
                         routingMode = RoutingMode.AUTO
                         routeButton.text = "Routing: AUTO"
                         saveRoutingMode()
                     }
-                    1 -> {
+                    2 -> {
                         routingMode = RoutingMode.entries[(routingMode.ordinal + 1) % RoutingMode.entries.size]
                         routeButton.text = "Routing: $routingMode"
                         saveRoutingMode()
                     }
-                    2 -> startActivity(Intent(android.provider.Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS))
-                    3 -> status.visibility = if (status.visibility == View.VISIBLE) View.GONE else View.VISIBLE
+                    3 -> startActivity(Intent(android.provider.Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS))
+                    4 -> status.visibility = if (status.visibility == View.VISIBLE) View.GONE else View.VISIBLE
                 }
             }
             .setNegativeButton("Close", null)
@@ -981,10 +1019,11 @@ class MainActivity : Activity(), SutraTransmissionListener {
 
     private fun refreshBluetoothPeers() {
         if (Build.VERSION.SDK_INT >= 31 && checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) return
-        bluetoothPeers = runCatching { transmission?.bluetoothPeers().orEmpty() }.getOrDefault(emptyList())
+        val peers = runCatching { transmission?.bluetoothPeers().orEmpty() }.getOrDefault(emptyList())
+        bluetoothPeers = peers
         bluetoothPeerAdapter.clear()
         bluetoothPeerAdapter.addAll(
-            bluetoothPeers.map { "${it.name} (${it.address})" }.ifEmpty { listOf("No paired Bluetooth phones") },
+            peers.map { "${it.name} (${it.address})" }.ifEmpty { listOf("No paired Bluetooth phones") },
         )
         bluetoothPeerAdapter.notifyDataSetChanged()
     }
@@ -1188,14 +1227,33 @@ class MainActivity : Activity(), SutraTransmissionListener {
                 val sttEngine = pipeline ?: OfflineSpeechPipeline(modelDir).also { pipeline = it }
                 val answer = sttEngine.transcribe(audio, mode)
                 transmission?.recordMetric(transmissionId.toString(), "asr_final", "inference_ms=${answer.milliseconds},language=${answer.language}")
+
+                // Verify alert criteria: ONLY evaluated if Emergency Alert mode was actively pressed
+                var finalAlert = isAlert
+                val coords = mapController.getCurrentCoordinates()
+                if (finalAlert) {
+                    val monthlyCount = transmission?.monthlyAlertCount() ?: 0
+                    val hasEmergencyKeyword = CriticalFieldDetector.containsEmergencyKeyword(answer.text)
+                    if (monthlyCount >= 3 && !hasEmergencyKeyword) {
+                        finalAlert = false
+                        runOnUiThread {
+                            Toast.makeText(this@MainActivity, "Alert limit reached & no emergency keywords detected. Sent as normal message.", Toast.LENGTH_LONG).show()
+                        }
+                    } else {
+                        transmission?.recordAlert(transmissionId.toString(), category ?: "EMERGENCY")
+                        mapController.addAlertPin(category ?: "EMERGENCY", answer.text, coords?.first, coords?.second, sourceId)
+                    }
+                }
+
                 val layers = SutraSemanticEncoder.build(
                     language = answer.language,
                     text = answer.text,
                     confidence = answer.confidence.takeIf(Double::isFinite) ?: 0.5,
-                    alert = isAlert,
+                    alert = finalAlert,
                     alertCategory = category,
                     sourceId = sourceId,
                     id = transmissionId,
+                    coordinates = coords,
                 )
                 val wireBytes = layers.messages.sumOf { SutraCodec.encode(it).size }
                 val connected = transmission?.isConnected() == true
@@ -1205,6 +1263,11 @@ class MainActivity : Activity(), SutraTransmissionListener {
                     "backend=${answer.backend} audio_ms=${audio.size * 1000 / 16000} " +
                     "inference_ms=${answer.milliseconds} confidence=${answer.confidence} " +
                     "sutra_bytes=$wireBytes queued=$queued")
+
+                val translated = IndicTranslator.translate(answer.text, answer.language, preferredLanguage)
+                val targetLangInfo = IndicTranslator.supportedLanguages.find { it.key == preferredLanguage }
+                val targetLabel = targetLangInfo?.nativeName ?: preferredLanguage.uppercase()
+
                 runOnUiThread {
                     lastText = answer.text
                     lastLanguage = answer.language
@@ -1216,8 +1279,19 @@ class MainActivity : Activity(), SutraTransmissionListener {
                     latestTranscript.text = answer.text
                     latestTranscript.textSize = 18f
                     latestTranscript.setTextColor(ink)
+
+                    if (translated.isNotBlank() && answer.language.lowercase() != preferredLanguage.lowercase()) {
+                        translatedTranscript.text = "$targetLabel: $translated"
+                        translatedTranscript.visibility = View.VISIBLE
+                    } else {
+                        translatedTranscript.visibility = View.GONE
+                    }
+
                     val delivery = if (queued) "Queued for delivery" else "Sent"
-                    appendConversation("You · ${answer.language.uppercase()} · ${answer.milliseconds} ms\n${answer.text}\n$delivery · $wireBytes bytes\n\n")
+                    val subRow = if (translated.isNotBlank() && answer.language.lowercase() != preferredLanguage.lowercase()) {
+                        "$targetLabel: $translated\n"
+                    } else ""
+                    appendConversation("You · ${answer.language.uppercase()} · ${answer.milliseconds} ms\n${answer.text}\n$subRow$delivery · $wireBytes bytes\n\n")
                     showDelivery(if (queued) DeliveryStep.QUEUED else DeliveryStep.SENT)
                     vadIndicator.text = if (listening) "Listening for speech" else "Ready to talk"
                 }
@@ -1263,6 +1337,12 @@ class MainActivity : Activity(), SutraTransmissionListener {
         runOnUiThread {
             this.status.text = status
             friendlyConnectionStatus(status).let { (state, transport) -> updateConnectionLine(state, transport) }
+            if (status.contains("connected", ignoreCase = true)) {
+                val transport = if (status.contains("bluetooth", ignoreCase = true)) "Bluetooth" else "Wi-Fi Direct"
+                mapController.updatePeer("peer-active", "Connected Peer", transport, true)
+            } else if (status.contains("disconnected", ignoreCase = true) || status.contains("closed", ignoreCase = true) || status.contains("failed", ignoreCase = true)) {
+                mapController.clearConnectedPeers()
+            }
         }
     }
 
@@ -1271,23 +1351,58 @@ class MainActivity : Activity(), SutraTransmissionListener {
             when (message.type) {
                 SutraMessageType.ALERT_CORE -> {
                     val fields = runCatching { CriticalFieldCodec.decode(message.payload) }.getOrDefault(emptyList())
-                    appendConversation("EMERGENCY ALERT\n${fields.joinToString { it.text }.ifBlank { "Emergency message" }}\n\n")
+                    val alertText = fields.filter { it.kind == CriticalKind.EMERGENCY }.joinToString { it.text }.ifBlank { "Emergency alert received" }
+                    val category = fields.firstOrNull { it.kind == CriticalKind.EMERGENCY }?.text ?: "EMERGENCY"
+                    val geoField = fields.firstOrNull { it.kind == CriticalKind.LOCATION_HINT && it.text.startsWith("geo:") }
+                    var rxLat: Double? = null
+                    var rxLon: Double? = null
+                    if (geoField != null) {
+                        val parts = geoField.text.removePrefix("geo:").split(",")
+                        if (parts.size == 2) {
+                            rxLat = parts[0].toDoubleOrNull()
+                            rxLon = parts[1].toDoubleOrNull()
+                        }
+                    }
+                    appendConversation("EMERGENCY ALERT\n$alertText\n\n")
+                    mapController.addAlertPin(category, alertText, rxLat, rxLon, message.sourceId)
+                    if (rxLat != null && rxLon != null) {
+                        mapController.updatePeer("peer-${message.sourceId}", "Peer #${message.sourceId % 10000}", "Connected Peer", true, rxLat, rxLon)
+                    }
                 }
                 SutraMessageType.TEXT_FINAL -> {
                     if (duplicate) networkStatus.text = "Duplicate safely ignored"
                     else {
                         val text = runCatching { SutraCodec.utf8(message.payload) }.getOrElse { "[invalid UTF-8]" }
                         lastText = text
-                        lastLanguage = message.language.pipelineName
+                        val srcLang = message.language.pipelineName
+                        lastLanguage = srcLang
                         speakButton.isEnabled = text.isNotBlank()
                         talkReplayButton.isEnabled = text.isNotBlank()
                         talkCopyButton.isEnabled = text.isNotBlank()
-                        transcriptMeta.text = "RECEIVED · ${message.language.pipelineName.uppercase()}"
+                        transcriptMeta.text = "RECEIVED · ${srcLang.uppercase()}"
                         latestTranscript.text = text
                         latestTranscript.textSize = 18f
                         latestTranscript.setTextColor(ink)
+
+                        val translated = IndicTranslator.translate(text, srcLang, preferredLanguage)
+                        val targetLangInfo = IndicTranslator.supportedLanguages.find { it.key == preferredLanguage }
+                        val targetLabel = targetLangInfo?.nativeName ?: preferredLanguage.uppercase()
+                        if (translated.isNotBlank() && srcLang.lowercase() != preferredLanguage.lowercase()) {
+                            translatedTranscript.text = "$targetLabel: $translated"
+                            translatedTranscript.visibility = View.VISIBLE
+                        } else {
+                            translatedTranscript.visibility = View.GONE
+                        }
+
                         if (::deliveryLadder.isInitialized) deliveryLadder.visibility = View.GONE
-                        appendConversation("Peer · ${message.language.pipelineName.uppercase()}\n$text\nReceived · Playing automatically\n\n")
+                        val subRow = if (translated.isNotBlank() && srcLang.lowercase() != preferredLanguage.lowercase()) {
+                            "$targetLabel: $translated\n"
+                        } else ""
+                        appendConversation("Peer · ${srcLang.uppercase()}\n$text\n${subRow}Received · Playing automatically\n\n")
+
+                        if (message.flags and SutraFlags.ALERT != 0) {
+                            mapController.addAlertPin("EMERGENCY", text, null, null, message.sourceId)
+                        }
                     }
                 }
                 SutraMessageType.REPAIR_EVIDENCE -> {
@@ -1331,6 +1446,17 @@ class MainActivity : Activity(), SutraTransmissionListener {
         bindService(Intent(this, SutraTransmissionService::class.java), serviceConnection, Context.BIND_AUTO_CREATE)
     }
 
+    override fun onResume() {
+        super.onResume()
+        preferredLanguage = getSharedPreferences("sutra", MODE_PRIVATE).getString("preferred_language", "english") ?: "english"
+        if (::mapController.isInitialized) mapController.onResume()
+    }
+
+    override fun onPause() {
+        if (::mapController.isInitialized) mapController.onPause()
+        super.onPause()
+    }
+
     override fun onStop() {
         transmission?.setListener(null)
         if (serviceBound) unbindService(serviceConnection)
@@ -1348,6 +1474,7 @@ class MainActivity : Activity(), SutraTransmissionListener {
         vadEngine?.close()
         vadEngine = null
         wifiDirect?.close()
+        if (::mapController.isInitialized) mapController.onDestroy()
         sttWorker.execute { pipeline?.close(); pipeline = null }
         sttWorker.shutdown()
         super.onDestroy()

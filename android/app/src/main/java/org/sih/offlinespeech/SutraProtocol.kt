@@ -207,16 +207,16 @@ object CriticalFieldDetector {
         "শূন্য এক দুই তিন চার পাঁচ ছয় সাত আট নয় দশ"
     )
     private val emergencies = words(
-        "help emergency fire ambulance police doctor hospital trapped evacuate danger medicine blood",
-        "मदद आपातकाल आग एम्बुलेंस पुलिस डॉक्टर अस्पताल फँसा खतरा दवा खून",
-        "મદદ આગ એમ્બ્યુલન્સ પોલીસ ડોક્ટર હોસ્પિટલ જોખમ",
-        "मदत आग रुग्णवाहिका पोलीस डॉक्टर रुग्णालय धोका",
-        "ಸಹಾಯ ಬೆಂಕಿ ಆಂಬ್ಯುಲೆನ್ಸ್ ಪೊಲೀಸ್ ವೈದ್ಯ ಆಸ್ಪತ್ರೆ ಅಪಾಯ",
-        "സഹായം തീ ആംബുലൻസ് പോലീസ് ഡോക്ടർ ആശുപത്രി അപകടം",
-        "உதவி தீ ஆம்புலன்ஸ் காவல் மருத்துவர் மருத்துவமனை ஆபத்து",
-        "సహాయం మంట అంబులెన్స్ పోలీసు వైద్యుడు ఆసుపత్రి ప్రమాదం",
-        "ସାହାଯ୍ୟ ନିଆଁ ଆମ୍ବୁଲାନ୍ସ ପୋଲିସ ଡାକ୍ତର ଡାକ୍ତରଖାନା ବିପଦ",
-        "সাহায্য আগুন অ্যাম্বুলেন্স পুলিশ ডাক্তার হাসপাতাল বিপদ"
+        "help emergency fire ambulance police doctor hospital trapped evacuate danger medicine blood injury bleeding accident attack casualty oxygen earthquake flood collapse wound hurt",
+        "मदद आपातकाल आग एम्बुलेंस पुलिस डॉक्टर अस्पताल फँसा खतरा दवा खून चोट घायल दुर्घटना हमला बचाव",
+        "મદદ આગ એમ્બ્યુલન્સ પોલીસ ડોક્ટર હોસ્પિટલ જોખમ ઇજા ઘાયલ અકસ્માત બચાવ",
+        "मदत आग रुग्णवाहिका पोलीस डॉक्टर रुग्णालय धोका जखमी अपघात जखम",
+        "ಸಹಾಯ ಬೆಂಕಿ ಆಂಬ್ಯುಲೆನ್ಸ್ ಪೊಲೀಸ್ ವೈದ್ಯ ಆಸ್ಪತ್ರೆ ಅಪಾಯ ಗಾಯ ಅಪಘಾತ",
+        "സഹായം തീ ആംബുലൻസ് പോലീസ് ഡോക്ടർ ആശുപത്രി അപകടം പരുക്ക് രക്തസ്രാവം",
+        "உதவி தீ ஆம்புலன்ஸ் காவல் மருத்துவர் மருத்துவமனை ஆபத்து காயம் விபத்து",
+        "సహాయం మంట అంబులెన్స్ పోలీసు వైద్యుడు ఆసుపత్రి ప్రమాదం గాయం రక్తస్రావం",
+        "ସାହାଯ୍ୟ ନିଆଁ ଆମ୍ବୁଲାନ୍ସ ପୋଲିସ ଡାକ୍ତର ଡାକ୍ତରଖାନା ବିପଦ ଆଘାତ ଦୁର୍ଘଟଣା",
+        "সাহায্য আগুন অ্যাম্বুলেন্স পুলিশ ডাক্তার হাসপাতাল বিপদ আঘাত দুর্ঘটনা"
     )
     private val locationHints = words(
         "gate room floor building road street bridge village station coordinates location",
@@ -230,6 +230,9 @@ object CriticalFieldDetector {
         "ଗେଟ କୋଠରୀ ମହଲା କୋଠା ରାସ୍ତା ସେତୁ ଗାଁ ଷ୍ଟେସନ ସ୍ଥାନ",
         "গেট ঘর তলা ভবন রাস্তা সেতু গ্রাম স্টেশন স্থান"
     )
+
+    fun containsEmergencyKeyword(text: String): Boolean =
+        detect(text).any { it.kind == CriticalKind.EMERGENCY }
 
     fun detect(text: String, wordConfidences: List<Double> = emptyList()): List<CriticalField> =
         token.findAll(text).mapIndexedNotNull { index, match ->
@@ -262,6 +265,7 @@ object SutraSemanticEncoder {
         destinationId: Long = 0,
         id: SutraId = SutraId.random(),
         wordConfidences: List<Double> = emptyList(),
+        coordinates: Pair<Double, Double>? = null,
     ): SutraLayerSet {
         require(text.isNotBlank()) { "Cannot transmit an empty transcript" }
         val languageCode = SutraLanguage.fromPipeline(language)
@@ -269,9 +273,13 @@ object SutraSemanticEncoder {
             List(Regex("[\\p{L}\\p{M}\\p{N}]+(?:['’][\\p{L}\\p{M}\\p{N}]+)*").findAll(text).count()) { confidence }
         } else wordConfidences
         val detectedFields = CriticalFieldDetector.detect(text, fallbackConfidences)
-        val fields = if (alert && !alertCategory.isNullOrBlank()) {
+        val withAlertField = if (alert && !alertCategory.isNullOrBlank()) {
             listOf(CriticalField(alertCategory, CriticalKind.EMERGENCY, 1.0)) + detectedFields
         } else detectedFields
+        val fields = if (coordinates != null) {
+            val geoField = CriticalField("geo:%.5f,%.5f".format(java.util.Locale.US, coordinates.first, coordinates.second), CriticalKind.LOCATION_HINT, 1.0)
+            listOf(geoField) + withAlertField
+        } else withAlertField
         val uncertain = fields.filter { it.confidence < REPAIR_THRESHOLD }
         val commonFlags = SutraFlags.FINAL or SutraFlags.REQUIRES_ACK or
             (if (alert) SutraFlags.ALERT else 0) or (if (uncertain.isNotEmpty()) SutraFlags.HAS_REPAIR else 0)

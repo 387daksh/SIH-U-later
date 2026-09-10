@@ -12,8 +12,12 @@ import android.media.AudioFocusRequest
 import android.media.AudioFormat
 import android.media.AudioManager
 import android.media.AudioTrack
+import android.media.ToneGenerator
 import android.os.Binder
+import android.os.Build
 import android.os.IBinder
+import android.os.VibrationEffect
+import android.os.Vibrator
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import android.util.Log
@@ -58,8 +62,9 @@ interface SutraTransmissionListener {
 class SutraTransmissionService : Service(), PeerTransportListener {
     companion object {
         private const val CHANNEL = "sutra_connection"
-        private const val NOTIFICATION_ID = 4102
-        private const val ACTION_STOP = "org.sih.offlinespeech.STOP_TRANSMISSION"
+        const val NOTIFICATION_ID = 4102
+        const val ACTION_STOP = "org.sih.offlinespeech.STOP_TRANSMISSION"
+        const val DEFAULT_PAIRING_PHRASE = "sutra-mesh-offline-2026"
     }
 
     inner class LocalBinder : Binder() { val service: SutraTransmissionService get() = this@SutraTransmissionService }
@@ -72,6 +77,7 @@ class SutraTransmissionService : Service(), PeerTransportListener {
     private val speechQueue = ArrayDeque<SutraMessage>()
     private lateinit var wifi: TcpPeerTransport
     private lateinit var bluetooth: BluetoothPeerTransport
+
     private lateinit var store: SutraStore
     private lateinit var audioManager: AudioManager
     private var tts: TextToSpeech? = null
@@ -79,7 +85,11 @@ class SutraTransmissionService : Service(), PeerTransportListener {
     private var onnxTts: IndicOnnxTts? = null
     private var onnxTtsAttempted = false
     private var security: SecureFrameCodec? = null
+    private val defaultSecurity by lazy {
+        runCatching { SecureFrameCodec.fromPhrase(DEFAULT_PAIRING_PHRASE) }.getOrNull()
+    }
     private var focusRequest: AudioFocusRequest? = null
+    private var originalAlarmVolume: Int? = null
     @Volatile private var listener: SutraTransmissionListener? = null
     private var sourceId = 0L
 
@@ -93,10 +103,19 @@ class SutraTransmissionService : Service(), PeerTransportListener {
             if (preferences.contains("terminal_id")) preferences.getLong("terminal_id", 0)
             else SecureRandom().nextLong().also { preferences.edit().putLong("terminal_id", it).apply() }
         }
-        getSharedPreferences("sutra", MODE_PRIVATE).getString("pairing_phrase", null)
-            ?.takeIf { it.length >= 12 }?.let { security = SecureFrameCodec.fromPhrase(it) }
+        val savedPhrase = getSharedPreferences("sutra", MODE_PRIVATE).getString("pairing_phrase", null)
+        val activePhrase = if (savedPhrase != null) {
+            savedPhrase.takeIf { it.isNotBlank() }
+        } else {
+            // Out of the box, all SUTRA devices share the default authenticated encryption mesh key
+            DEFAULT_PAIRING_PHRASE
+        }
+        activePhrase?.takeIf { it.length >= 12 }?.let {
+            security = runCatching { SecureFrameCodec.fromPhrase(it) }.getOrNull()
+        }
         wifi = TcpPeerTransport(this)
         bluetooth = BluetoothPeerTransport(this, this)
+        runCatching { bluetooth.listen() }
         initialiseTts()
         store.metric(null, "service_started")
     }
@@ -121,6 +140,7 @@ class SutraTransmissionService : Service(), PeerTransportListener {
     fun bluetoothListen() = bluetooth.listen()
     fun bluetoothConnect(address: String) = bluetooth.connect(address)
     fun bluetoothPeers(): List<BluetoothPeer> = bluetooth.bondedPeers()
+    fun fetchSutraPeers(onResult: (List<BluetoothPeer>) -> Unit) = bluetooth.fetchSutraPeers(onResult)
     fun disconnectAll() { wifi.disconnect(); bluetooth.disconnect() }
     fun isConnected(): Boolean = wifi.isConnected || bluetooth.isConnected
     fun isSecurityActive(): Boolean = security != null
@@ -128,8 +148,8 @@ class SutraTransmissionService : Service(), PeerTransportListener {
     fun setPairingPhrase(phrase: String) {
         if (phrase.isBlank()) {
             security = null
-            getSharedPreferences("sutra", MODE_PRIVATE).edit().remove("pairing_phrase").apply()
-            status("Encryption disabled for laptop diagnostics")
+            getSharedPreferences("sutra", MODE_PRIVATE).edit().putString("pairing_phrase", "").apply()
+            status("Encryption disabled (open plaintext mode)")
             return
         }
         security = SecureFrameCodec.fromPhrase(phrase)
@@ -156,6 +176,12 @@ class SutraTransmissionService : Service(), PeerTransportListener {
     fun recordMetric(messageId: String?, event: String, detail: String = "") =
         store.metric(messageId, event, detail)
 
+    fun recordAlert(messageId: String = "", detail: String = "") =
+        store.recordAlert(messageId, detail)
+
+    fun monthlyAlertCount(): Int =
+        store.monthlyAlertCount()
+
     fun speakLocal(text: String, language: String): Boolean {
         if (text.isBlank()) return false
         if (hasOnnxTts(language)) {
@@ -167,15 +193,34 @@ class SutraTransmissionService : Service(), PeerTransportListener {
 
     override fun onTransportStatus(status: String) {
         status(status)
-        if (status.contains("connected", ignoreCase = true)) flushOutbox()
+        if (status.contains("connected", ignoreCase = true)) {
+            store.clearStalePendingFrames()
+            flushOutbox()
+        }
     }
 
     override fun onTransportMessage(bytes: ByteArray) {
         io.execute {
-            val plain = runCatching { security?.open(bytes) ?: bytes }.getOrElse { error ->
-                store.metric(null, "rx_security_rejected", error.message.orEmpty())
-                status("Rejected unauthenticated/wrong-phrase frame")
-                return@execute
+            val isEncryptedFrame = bytes.size >= 3 && bytes[0] == 0x53.toByte() && bytes[1] == 0x47.toByte()
+            val isPlaintextFrame = bytes.size >= 2 && bytes[0] == 0x53.toByte() && bytes[1] == 0x54.toByte()
+
+            val plain = if (isEncryptedFrame) {
+                // Try local phrase first, then fall back to default shared mesh key
+                val decrypted = runCatching { security?.open(bytes) }.getOrNull()
+                    ?: runCatching { defaultSecurity?.open(bytes) }.getOrNull()
+
+                if (decrypted == null) {
+                    store.metric(null, "rx_security_rejected", "Decryption failed with local and default keys")
+                    status("⚠️ Encrypted frame received: Pairing phrase mismatch. Set matching phrase on both phones.")
+                    return@execute
+                }
+                decrypted
+            } else {
+                if (security != null) {
+                    store.metric(null, "rx_unencrypted_warn", "Peer sent plaintext; decoding anyway (encryption asymmetry)")
+                    status("ℹ️ Peer connected in open mode — messages accepted")
+                }
+                bytes
             }
             val message = runCatching { SutraCodec.decode(plain) }.getOrElse { error ->
                 store.metric(null, "rx_invalid", error.message.orEmpty())
@@ -193,10 +238,16 @@ class SutraTransmissionService : Service(), PeerTransportListener {
                     listener?.onTransmissionMessage(message, null, !fresh)
                     if (message.shouldRelayLive(fresh)) relayLive(message, plain)
                     if (fresh) {
+                        if (message.flags and SutraFlags.ALERT != 0) {
+                            triggerEmergencyAlertFeedback()
+                        }
                         speakOrQueue(message)
                     }
                 }
-                SutraMessageType.ALERT_CORE -> listener?.onTransmissionMessage(message, null, false)
+                SutraMessageType.ALERT_CORE -> {
+                    triggerEmergencyAlertFeedback()
+                    listener?.onTransmissionMessage(message, null, false)
+                }
                 SutraMessageType.REPAIR_EVIDENCE -> {
                     sendAck(message, SutraMessageType.REPAIR_REQUEST)
                     listener?.onTransmissionMessage(message, null, false)
@@ -450,8 +501,48 @@ class SutraTransmissionService : Service(), PeerTransportListener {
         }
     }
 
+    private var originalMusicVolume: Int? = null
+
+    fun triggerEmergencyAlertFeedback() {
+        runCatching {
+            // 1. Maximize STREAM_MUSIC (used by TTS and audio engines)
+            if (originalMusicVolume == null) {
+                originalMusicVolume = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
+            }
+            val maxMusic = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+            audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, maxMusic, AudioManager.FLAG_SHOW_UI)
+
+            // 2. Maximize STREAM_ALARM
+            if (originalAlarmVolume == null) {
+                originalAlarmVolume = audioManager.getStreamVolume(AudioManager.STREAM_ALARM)
+            }
+            val maxAlarm = audioManager.getStreamMaxVolume(AudioManager.STREAM_ALARM)
+            audioManager.setStreamVolume(AudioManager.STREAM_ALARM, maxAlarm, 0)
+
+            // 3. Maximize STREAM_NOTIFICATION
+            val maxNotif = audioManager.getStreamMaxVolume(AudioManager.STREAM_NOTIFICATION)
+            audioManager.setStreamVolume(AudioManager.STREAM_NOTIFICATION, maxNotif, 0)
+
+            // 4. Play emergency alert siren / tone immediately using ToneGenerator
+            val toneGen = ToneGenerator(AudioManager.STREAM_ALARM, 100)
+            toneGen.startTone(ToneGenerator.TONE_CDMA_EMERGENCY_RINGBACK, 1200)
+
+            // 5. Heavy vibration pattern (unmissable alert)
+            val vibrator = getSystemService(Vibrator::class.java)
+            if (Build.VERSION.SDK_INT >= 26) {
+                vibrator?.vibrate(VibrationEffect.createWaveform(longArrayOf(0, 500, 200, 500, 200, 500), -1))
+            } else {
+                @Suppress("DEPRECATION")
+                vibrator?.vibrate(longArrayOf(0, 500, 200, 500, 200, 500), -1)
+            }
+        }
+    }
+
     private fun requestAudioFocus(alert: Boolean) {
-        val gain = if (alert) AudioManager.AUDIOFOCUS_GAIN_TRANSIENT else AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK
+        if (alert) {
+            triggerEmergencyAlertFeedback()
+        }
+        val gain = if (alert) AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_EXCLUSIVE else AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK
         focusRequest = AudioFocusRequest.Builder(gain)
             .setAudioAttributes(AudioAttributes.Builder().setUsage(if (alert) AudioAttributes.USAGE_ALARM else AudioAttributes.USAGE_ASSISTANCE_ACCESSIBILITY).build())
             .setOnAudioFocusChangeListener { }
@@ -461,6 +552,14 @@ class SutraTransmissionService : Service(), PeerTransportListener {
     private fun abandonAudioFocus() {
         focusRequest?.let(audioManager::abandonAudioFocusRequest)
         focusRequest = null
+        originalAlarmVolume?.let { savedVol ->
+            runCatching { audioManager.setStreamVolume(AudioManager.STREAM_ALARM, savedVol, 0) }
+            originalAlarmVolume = null
+        }
+        originalMusicVolume?.let { savedVol ->
+            runCatching { audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, savedVol, 0) }
+            originalMusicVolume = null
+        }
     }
 
     private fun status(value: String) {

@@ -40,6 +40,8 @@ class WifiDirectController(
     }
     private val handler = Handler(activity.mainLooper)
     private val devices = LinkedHashMap<String, WifiP2pDevice>()
+    // Only devices confirmed via DNS-SD (app=sutra) are shown to the user
+    private val sutraConfirmedAddresses = LinkedHashSet<String>()
     private var registered = false
     private var groupSignature: String? = null
     private var serviceRequest: WifiP2pDnsSdServiceRequest? = null
@@ -53,6 +55,22 @@ class WifiDirectController(
                     listener.onWifiDirectStatus(if (enabled) "Wi-Fi Direct ready" else "Enable Wi-Fi")
                 }
                 WifiP2pManager.WIFI_P2P_CONNECTION_CHANGED_ACTION -> requestConnectionInfo()
+                WifiP2pManager.WIFI_P2P_PEERS_CHANGED_ACTION -> {
+                    if (hasPermission()) {
+                        manager.requestPeers(channel) { peerList ->
+                            // Update device name/info for already-SUTRA-confirmed addresses only.
+                            // We intentionally do NOT call addDevice() here for unconfirmed peers,
+                            // so non-SUTRA devices (phones, laptops, etc.) are never shown.
+                            peerList.deviceList.forEach { p2pDevice ->
+                                if (sutraConfirmedAddresses.contains(p2pDevice.deviceAddress)) {
+                                    devices[p2pDevice.deviceAddress] = p2pDevice
+                                }
+                            }
+                            // Emit only SUTRA-confirmed peers
+                            emitPeers()
+                        }
+                    }
+                }
             }
         }
     }
@@ -62,6 +80,7 @@ class WifiDirectController(
         val filter = IntentFilter().apply {
             addAction(WifiP2pManager.WIFI_P2P_STATE_CHANGED_ACTION)
             addAction(WifiP2pManager.WIFI_P2P_CONNECTION_CHANGED_ACTION)
+            addAction(WifiP2pManager.WIFI_P2P_PEERS_CHANGED_ACTION)
         }
         if (Build.VERSION.SDK_INT >= 33) {
             activity.registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED)
@@ -75,17 +94,31 @@ class WifiDirectController(
     fun discover() {
         requirePermission()
         devices.clear()
+        sutraConfirmedAddresses.clear()
         listener.onWifiDirectPeers(emptyList())
+
+        // Trigger fast active P2P probe requests immediately across channels 1, 6, 11
+        manager.discoverPeers(channel, action(
+            success = { listener.onWifiDirectStatus("Scanning for nearby devices...") },
+            failure = {},
+        ))
+
         manager.setDnsSdResponseListeners(
             channel,
             WifiP2pManager.DnsSdServiceResponseListener { instance, registration, device ->
-                if (instance == INSTANCE && registration.startsWith(SERVICE)) addDevice(device)
+                // DNS-SD service response confirms this is a SUTRA app instance
+                if (instance == INSTANCE && registration.startsWith(SERVICE)) {
+                    sutraConfirmedAddresses.add(device.deviceAddress)
+                    addDevice(device)
+                }
             },
             WifiP2pManager.DnsSdTxtRecordListener { fullDomainName, record, device ->
                 val matchesService = fullDomainName.contains(INSTANCE) || fullDomainName.contains(SERVICE)
                 val matchesProtocol = record["protocol"] == "1"
                 val matchesApp = record["app"] == "sutra" || matchesService
                 if (matchesService && matchesProtocol && matchesApp) {
+                    // TXT record confirmed: this device is running SUTRA
+                    sutraConfirmedAddresses.add(device.deviceAddress)
                     addDevice(device, record["name"])
                 }
             },
@@ -197,11 +230,24 @@ class WifiDirectController(
     }
 
     private fun addDevice(device: WifiP2pDevice, advertisedName: String? = null) {
-        device.deviceName = advertisedName ?: device.deviceName
+        val existing = devices[device.deviceAddress]
+        val resolvedName = advertisedName
+            ?: existing?.deviceName?.takeIf { it.isNotBlank() && it != "SUTRA phone" }
+            ?: device.deviceName.takeIf { it.isNotBlank() }
+            ?: "SUTRA phone"
+        device.deviceName = resolvedName
         devices[device.deviceAddress] = device
-        listener.onWifiDirectPeers(devices.values.map {
-            WifiDirectPeer(it.deviceName.ifBlank { "SUTRA phone" }, it.deviceAddress)
-        })
+        // Only show devices that are SUTRA-confirmed
+        sutraConfirmedAddresses.add(device.deviceAddress)
+        emitPeers()
+    }
+
+    /** Emits only SUTRA-confirmed peers to the listener. */
+    private fun emitPeers() {
+        val sutraPeers = devices.values
+            .filter { sutraConfirmedAddresses.contains(it.deviceAddress) }
+            .map { WifiDirectPeer(it.deviceName.ifBlank { "SUTRA phone" }, it.deviceAddress) }
+        listener.onWifiDirectPeers(sutraPeers)
     }
 
     private fun requestConnectionInfo() {

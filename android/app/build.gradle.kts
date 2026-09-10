@@ -26,5 +26,6 @@ android {
 
 dependencies {
     implementation("com.microsoft.onnxruntime:onnxruntime-android:1.20.0")
+    implementation("org.osmdroid:osmdroid-android:6.1.18")
     testImplementation("junit:junit:4.13.2")
 }

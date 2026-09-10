@@ -9,15 +9,20 @@ import java.io.File
 
 data class PendingFrame(val key: String, val messageId: String, val bytes: ByteArray)
 
-class SutraStore(context: Context) : SQLiteOpenHelper(context, "sutra.db", null, 1), AutoCloseable {
+class SutraStore(context: Context) : SQLiteOpenHelper(context, "sutra.db", null, 2), AutoCloseable {
     override fun onCreate(db: SQLiteDatabase) {
         db.execSQL("CREATE TABLE outbox(frame_key TEXT PRIMARY KEY, message_id TEXT NOT NULL, frame BLOB NOT NULL, created_ms INTEGER NOT NULL, attempts INTEGER NOT NULL DEFAULT 0)")
         db.execSQL("CREATE INDEX outbox_message_id ON outbox(message_id)")
         db.execSQL("CREATE TABLE receipts(message_id TEXT PRIMARY KEY, created_ms INTEGER NOT NULL, played INTEGER NOT NULL DEFAULT 0)")
         db.execSQL("CREATE TABLE metrics(id INTEGER PRIMARY KEY AUTOINCREMENT, message_id TEXT, event TEXT NOT NULL, elapsed_ns INTEGER NOT NULL, wall_ms INTEGER NOT NULL, detail TEXT NOT NULL)")
+        db.execSQL("CREATE TABLE alert_log(id INTEGER PRIMARY KEY AUTOINCREMENT, message_id TEXT, sent_ms INTEGER NOT NULL, detail TEXT NOT NULL)")
     }
 
-    override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) = Unit
+    override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
+        if (oldVersion < 2) {
+            db.execSQL("CREATE TABLE IF NOT EXISTS alert_log(id INTEGER PRIMARY KEY AUTOINCREMENT, message_id TEXT, sent_ms INTEGER NOT NULL, detail TEXT NOT NULL)")
+        }
+    }
 
     @Synchronized
     fun enqueue(message: SutraMessage, bytes: ByteArray) {
@@ -101,5 +106,38 @@ class SutraStore(context: Context) : SQLiteOpenHelper(context, "sutra.db", null,
             }
         }
         return count
+    }
+
+    @Synchronized
+    fun recordAlert(messageId: String = "", detail: String = "") {
+        val values = ContentValues().apply {
+            put("message_id", messageId)
+            put("sent_ms", System.currentTimeMillis())
+            put("detail", detail)
+        }
+        writableDatabase.insert("alert_log", null, values)
+    }
+
+    @Synchronized
+    fun monthlyAlertCount(): Int {
+        val monthAgo = System.currentTimeMillis() - (30L * 24 * 60 * 60 * 1000L)
+        readableDatabase.rawQuery("SELECT COUNT(*) FROM alert_log WHERE sent_ms > ?", arrayOf(monthAgo.toString())).use { cursor ->
+            return if (cursor.moveToFirst()) cursor.getInt(0) else 0
+        }
+    }
+
+    @Synchronized
+    fun clearStalePendingFrames(maxAgeMs: Long = 60_000L) {
+        val cutoff = System.currentTimeMillis() - maxAgeMs
+        // Wire type 3 is ALERT_CORE (${message.id}:${message.type.wire})
+        // 1. Remove pending frames that were already transmitted on a previous connection (attempts > 0) unless it's an ALERT_CORE
+        writableDatabase.delete("outbox", "attempts > 0 AND frame_key NOT LIKE '%:3'", null)
+        // 2. Remove any normal speech messages older than maxAgeMs
+        writableDatabase.delete("outbox", "created_ms < ? AND frame_key NOT LIKE '%:3'", arrayOf(cutoff.toString()))
+    }
+
+    @Synchronized
+    fun clearNonAlertOutbox() {
+        writableDatabase.delete("outbox", "frame_key NOT LIKE '%:3'", null)
     }
 }
