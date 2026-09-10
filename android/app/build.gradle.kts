@@ -11,8 +11,8 @@ android {
         applicationId = "org.sih.offlinespeech"
         minSdk = 26
         targetSdk = 35
-        versionCode = 8
-        versionName = "0.7-sutra-ui"
+        versionCode = 9
+        versionName = "0.8-proximity-map"
         ndk {
             abiFilters += "arm64-v8a"
         }
