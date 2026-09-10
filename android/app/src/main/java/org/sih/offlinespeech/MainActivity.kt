@@ -77,6 +77,8 @@ class MainActivity : Activity(), SutraTransmissionListener {
     private lateinit var wifiPeerSpinner: Spinner
     private lateinit var bluetoothPeerAdapter: ArrayAdapter<String>
     private lateinit var bluetoothPeerSpinner: Spinner
+    private lateinit var proximityMap: ProximityMapView
+    private lateinit var proximityStatus: TextView
     private lateinit var pairingPhrase: EditText
 
     private lateinit var deviceProfile: DeviceProfile
@@ -364,6 +366,14 @@ class MainActivity : Activity(), SutraTransmissionListener {
             this, android.R.layout.simple_spinner_item, mutableListOf("No paired Bluetooth phones"),
         ).also { it.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item) }
         bluetoothPeerSpinner = Spinner(this).apply { adapter = bluetoothPeerAdapter }
+        proximityMap = ProximityMapView(this)
+        proximityStatus = TextView(this).apply {
+            text = "Scan to estimate the range of paired, discoverable phones"
+            textSize = 12.5f
+            setTextColor(mutedInk)
+            gravity = Gravity.CENTER
+            setPadding(0, dp(6), 0, dp(6))
+        }
         val bluetoothButtons = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             addView(Button(this@MainActivity).apply {
@@ -381,14 +391,20 @@ class MainActivity : Activity(), SutraTransmissionListener {
                 setOnClickListener {
                     if (ensureBluetoothPermission()) {
                         val peer = bluetoothPeers.getOrNull(bluetoothPeerSpinner.selectedItemPosition)
+                        proximityMap.setTarget(peer?.address)
                         runCatching { requireNotNull(transmission).bluetoothConnect(peer?.address ?: "") }
                             .onFailure { networkStatus.text = it.message }
                     }
                 }
             }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
             addView(Button(this@MainActivity).apply {
-                text = "Refresh"
-                setOnClickListener { if (ensureBluetoothPermission()) refreshBluetoothPeers() }
+                text = "Scan range"
+                setOnClickListener {
+                    if (ensureBluetoothPermission()) {
+                        refreshBluetoothPeers()
+                        transmission?.bluetoothScan()
+                    }
+                }
             }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         }
 
@@ -495,6 +511,26 @@ class MainActivity : Activity(), SutraTransmissionListener {
             addView(wifiDirectButtons)
         }
 
+        val proximityCard = card().apply {
+            addView(sectionTitle("Bluetooth proximity map"))
+            addView(TextView(this@MainActivity).apply {
+                text = "Shows the paired phone receiving your speech and estimates distance from Bluetooth RSSI. Keep the other phone discoverable while scanning."
+                textSize = 13f
+                setTextColor(mutedInk)
+                setPadding(0, dp(8), 0, dp(4))
+            })
+            addView(proximityMap, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(280)))
+            addView(proximityStatus)
+            addView(bluetoothPeerSpinner)
+            addView(bluetoothButtons)
+            addView(TextView(this@MainActivity).apply {
+                text = "Approximation only: walls, pockets and antenna direction affect RSSI. The last scan is retained while audio is transferred."
+                textSize = 11f
+                setTextColor(mutedInk)
+                setPadding(0, dp(7), 0, 0)
+            })
+        }
+
         val transcriptActions = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             addView(speakButton, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
@@ -531,13 +567,6 @@ class MainActivity : Activity(), SutraTransmissionListener {
                 setTextColor(mutedInk)
             })
             addView(routeButton)
-            addView(TextView(this@MainActivity).apply {
-                text = "Bluetooth fallback (pair phones once in Android Settings)"
-                setTextColor(mutedInk)
-                setPadding(0, dp(12), 0, 0)
-            })
-            addView(bluetoothPeerSpinner)
-            addView(bluetoothButtons)
             addView(pairingPhrase)
             addView(securityAndMetrics)
             addView(TextView(this@MainActivity).apply {
@@ -580,6 +609,7 @@ class MainActivity : Activity(), SutraTransmissionListener {
             "Devices",
             "Connect directly over Wi-Fi Direct or Bluetooth.",
             connectionCard,
+            proximityCard,
             advancedToggle,
             advancedPanel,
         )
@@ -963,12 +993,10 @@ class MainActivity : Activity(), SutraTransmissionListener {
     }
 
     private fun ensureBluetoothPermission(): Boolean {
-        if (Build.VERSION.SDK_INT < 31) return true
-        val permissions = arrayOf(
-            Manifest.permission.BLUETOOTH_SCAN,
-            Manifest.permission.BLUETOOTH_CONNECT,
+        val permissions = if (Build.VERSION.SDK_INT >= 31) arrayOf(
+            Manifest.permission.BLUETOOTH_SCAN, Manifest.permission.BLUETOOTH_CONNECT,
             Manifest.permission.BLUETOOTH_ADVERTISE,
-        )
+        ) else arrayOf(Manifest.permission.ACCESS_FINE_LOCATION)
         val missing = permissions.filter { checkSelfPermission(it) != PackageManager.PERMISSION_GRANTED }
         if (missing.isEmpty()) return true
         requestPermissions(missing.toTypedArray(), 3)
@@ -978,12 +1006,31 @@ class MainActivity : Activity(), SutraTransmissionListener {
 
     private fun refreshBluetoothPeers() {
         if (Build.VERSION.SDK_INT >= 31 && checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) return
-        bluetoothPeers = runCatching { transmission?.bluetoothPeers().orEmpty() }.getOrDefault(emptyList())
+        updateBluetoothPeers(runCatching { transmission?.bluetoothPeers().orEmpty() }.getOrDefault(emptyList()), false)
+    }
+
+    private fun updateBluetoothPeers(peers: List<BluetoothPeer>, scanning: Boolean) {
+        val selectedAddress = bluetoothPeers.getOrNull(bluetoothPeerSpinner.selectedItemPosition)?.address
+        bluetoothPeers = peers
         bluetoothPeerAdapter.clear()
         bluetoothPeerAdapter.addAll(
-            bluetoothPeers.map { "${it.name} (${it.address})" }.ifEmpty { listOf("No paired Bluetooth phones") },
+            peers.map { peer ->
+                val range = peer.distanceMetres?.let { " · ~${"%.1f".format(it)} m · ${peer.rssi} dBm" }.orEmpty()
+                "${if (peer.connected) "Receiving: " else ""}${peer.name}$range"
+            }.ifEmpty { listOf("No paired Bluetooth phones") },
         )
         bluetoothPeerAdapter.notifyDataSetChanged()
+        selectedAddress?.let { address ->
+            peers.indexOfFirst { it.address == address }.takeIf { it >= 0 }?.let(bluetoothPeerSpinner::setSelection)
+        }
+        proximityMap.updatePeers(peers)
+        val connected = peers.firstOrNull { it.connected }
+        proximityStatus.text = when {
+            scanning -> "Scanning nearby phones… RSSI updates as devices respond"
+            connected != null -> "Audio route: ${connected.name}${connected.distanceMetres?.let { " · last estimate ~${"%.1f".format(it)} m" }.orEmpty()}"
+            peers.any { it.distanceMetres != null } -> "Scan complete · select a phone and tap BT connect"
+            else -> "No range yet · make the paired phone discoverable, then scan"
+        }
     }
 
     private fun installVadIfMissing(target: File) {
@@ -1321,6 +1368,10 @@ class MainActivity : Activity(), SutraTransmissionListener {
                 SutraMessageType.HELLO -> Unit
             }
         }
+    }
+
+    override fun onBluetoothPeers(peers: List<BluetoothPeer>, scanning: Boolean) {
+        runOnUiThread { updateBluetoothPeers(peers, scanning) }
     }
 
     override fun onStart() {

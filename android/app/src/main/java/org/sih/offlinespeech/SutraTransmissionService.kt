@@ -53,6 +53,7 @@ internal fun pcmFloatBufferBytes(minimumBytes: Int, sampleRate: Int): Int {
 interface SutraTransmissionListener {
     fun onTransmissionStatus(status: String)
     fun onTransmissionMessage(message: SutraMessage, elapsedMs: Long?, duplicate: Boolean)
+    fun onBluetoothPeers(peers: List<BluetoothPeer>, scanning: Boolean) = Unit
 }
 
 class SutraTransmissionService : Service(), PeerTransportListener {
@@ -96,7 +97,9 @@ class SutraTransmissionService : Service(), PeerTransportListener {
         getSharedPreferences("sutra", MODE_PRIVATE).getString("pairing_phrase", null)
             ?.takeIf { it.length >= 12 }?.let { security = SecureFrameCodec.fromPhrase(it) }
         wifi = TcpPeerTransport(this)
-        bluetooth = BluetoothPeerTransport(this, this)
+        bluetooth = BluetoothPeerTransport(this, this) { peers, scanning ->
+            listener?.onBluetoothPeers(peers, scanning)
+        }
         initialiseTts()
         store.metric(null, "service_started")
     }
@@ -121,6 +124,7 @@ class SutraTransmissionService : Service(), PeerTransportListener {
     fun bluetoothListen() = bluetooth.listen()
     fun bluetoothConnect(address: String) = bluetooth.connect(address)
     fun bluetoothPeers(): List<BluetoothPeer> = bluetooth.bondedPeers()
+    fun bluetoothScan() = bluetooth.scan()
     fun disconnectAll() { wifi.disconnect(); bluetooth.disconnect() }
     fun isConnected(): Boolean = wifi.isConnected || bluetooth.isConnected
     fun isSecurityActive(): Boolean = security != null
