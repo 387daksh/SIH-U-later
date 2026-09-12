@@ -34,8 +34,7 @@ class ProximityMapView(context: Context) : View(context) {
         peers = value
         contentDescription = if (value.isEmpty()) "Proximity map. No Bluetooth phones detected"
         else "Proximity map. " + value.joinToString { peer ->
-            val distance = peer.distanceMetres?.let { "approximately ${"%.1f".format(it)} metres" } ?: "distance unavailable"
-            "${peer.name}, $distance${if (peer.connected) ", connected" else ""}"
+            "${peer.name}${if (peer.connected) ", connected" else ""}. Schematic layout, not location."
         }
         invalidate()
     }
@@ -58,7 +57,7 @@ class ProximityMapView(context: Context) : View(context) {
         canvas.drawColor(Color.rgb(248, 250, 251))
         listOf(0.33f, 0.66f, 1f).forEachIndexed { index, scale ->
             canvas.drawCircle(cx, cy, radius * scale, ringPaint)
-            canvas.drawText(listOf("1 m", "5 m", "10+ m")[index], cx, cy - radius * scale + density(13f), labelPaint)
+            if (index == 2) canvas.drawText("Connections · schematic", cx, density(16f), labelPaint)
         }
 
         nodePaint.color = Color.rgb(15, 29, 51)
@@ -69,12 +68,7 @@ class ProximityMapView(context: Context) : View(context) {
 
         peers.forEach { peer ->
             val estimated = peer.distanceMetres
-            val normalized = when {
-                estimated == null -> 0.92f
-                estimated <= 1.0 -> 0.27f + estimated.toFloat() * 0.06f
-                estimated <= 5.0 -> 0.33f + ((estimated - 1.0) / 4.0 * 0.33).toFloat()
-                else -> 0.66f + ((estimated.coerceAtMost(10.0) - 5.0) / 5.0 * 0.31).toFloat()
-            }
+            val normalized = 0.8f
             val angle = ((peer.address.hashCode().toLong() and 0xffff) / 65535.0 * 2.0 * PI) - PI / 2.0
             val x = cx + cos(angle).toFloat() * radius * normalized
             val y = cy + sin(angle).toFloat() * radius * normalized
@@ -91,9 +85,9 @@ class ProximityMapView(context: Context) : View(context) {
             labelPaint.textSize = density(10.5f)
             val shortName = peer.name.take(16)
             canvas.drawText(shortName, x, y + density(25f), labelPaint)
-            peer.distanceMetres?.let {
+            peer.rssi?.let {
                 labelPaint.color = Color.rgb(91, 103, 121)
-                canvas.drawText("~${"%.1f".format(it)} m", x, y + density(39f), labelPaint)
+                canvas.drawText("$it dBm", x, y + density(39f), labelPaint)
             }
         }
     }

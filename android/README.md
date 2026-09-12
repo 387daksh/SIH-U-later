@@ -144,11 +144,11 @@ Install the same APK and model bundle on both phones. No router, hotspot, Intern
 
 Bluetooth discovery and connection also run automatically. Use **Make this phone visible** on a new phone and approve Android's pairing prompt. Fresh broadcast transcripts are relayed once across the middle phone's active Wi-Fi/Bluetooth links; duplicate IDs are acknowledged but played once. If no link is available, the bounded SQLite outbox sends pending frames after reconnection. Received alerts retain one bounded store-forward copy for a later peer contact.
 
-### Bluetooth proximity map
+### Team map and Bluetooth signal view
 
-Expand **Show signal map** in **Devices** for the local Bluetooth signal view. The app smooths discovery RSSI and converts it to a rough distance with a log-distance path-loss model (`-59 dBm` at one metre, path-loss exponent `2.2`). Directions are illustrative, not measured positions. Manual **Scan range** and peer selection remain under **Show advanced connection tools**.
+Open **Map** for the north-up offline field view or select **Streets** for online OpenStreetMap tiles. Use **Share my location** to opt in on each updated phone. Device rows show reported GPS distances and receipt age; **Compare** measures two fresh locations. Accuracy envelopes and unresolved directions prevent uncalibrated precision claims. The floating menu explains sharing, accuracy and phone location settings. See [Team map architecture, research and validation](../docs/TEAM_MAP.md).
 
-RSSI ranging is intentionally labelled approximate. Walls, people, pockets, device antennas and radio power can change the result substantially. For a demo venue, measure RSSI at one metre with the actual phone pair and adjust `DEFAULT_TX_POWER_AT_ONE_METRE` in `BluetoothDistanceEstimator.kt`; adjust the path-loss exponent for the room only if you have measurements at several known distances. Classic Bluetooth discovery does not provide continuous RSSI on an active RFCOMM stream, so scanning is disabled while that data connection is active to protect message delivery.
+Expand **Show signal map** in **Devices** for a schematic Bluetooth connection view with RSSI in dBm. Its node layout is not geographic. Uncalibrated metre labels have been removed. Classic Bluetooth discovery does not provide continuous RSSI on an active RFCOMM stream, so scanning is disabled while that data connection is active to protect message delivery.
 
 The IP field remains only for laptop diagnostics. Android cannot deliver to arbitrary phones: the receiving device must have this app installed, permissions granted, and Wi-Fi/BT receive mode enabled. The pairing phrase provides application-layer AES-GCM authentication, but it is not a fully provisioned public-key identity system. Bluetooth currently uses RFCOMM stream sockets; BLE GATT fragmentation remains necessary for BLE-only embedded devices.
 

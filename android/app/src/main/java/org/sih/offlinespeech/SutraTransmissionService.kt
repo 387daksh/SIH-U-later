@@ -55,6 +55,7 @@ internal fun pcmFloatBufferBytes(minimumBytes: Int, sampleRate: Int): Int {
 }
 
 interface SutraTransmissionListener {
+    fun onTeamChanged(peers: List<TeamPeer>) = Unit
     fun onConversationChanged() = Unit
     fun onTransmissionStatus(status: String)
     fun onTransmissionMessage(message: SutraMessage, elapsedMs: Long?, duplicate: Boolean)
@@ -74,7 +75,11 @@ class SutraTransmissionService : Service(), PeerTransportListener {
     inner class LocalBinder : Binder() { val service: SutraTransmissionService get() = this@SutraTransmissionService }
 
     private val binder = LocalBinder()
-    private val io = Executors.newSingleThreadExecutor()
+    private val io = Executors.newSingleThreadScheduledExecutor()
+    private val team = TeamDirectory()
+    private val teamSession = SecureRandom().nextLong()
+    private var teamSequence = 0L
+    @Volatile private var sharedFix: TeamFix? = null
     private val ttsWorker = Executors.newSingleThreadExecutor()
     private val sentAt = ConcurrentHashMap<String, Long>()
     private val pendingSpeech = ConcurrentHashMap<String, SutraMessage>()
@@ -141,6 +146,7 @@ class SutraTransmissionService : Service(), PeerTransportListener {
         bluetooth.startAutomatic()
         initialiseTts()
         store.metric(null, "service_started")
+        io.scheduleWithFixedDelay({ runCatching { publishTeamPosition() } }, 2, 10, TimeUnit.SECONDS)
     }
 
     override fun onBind(intent: Intent?): IBinder = binder
@@ -157,6 +163,25 @@ class SutraTransmissionService : Service(), PeerTransportListener {
         listener = value
         value?.onWifiPeers(wifiPeers)
         value?.onConversationChanged()
+        value?.onTeamChanged(team.snapshot(android.os.SystemClock.elapsedRealtime()))
+    }
+
+    // Called by the visible activity only; pausing or opting out withdraws the shared fix.
+    fun updateSharedFix(fix: TeamFix?) {
+        val changedAvailability = (sharedFix == null) != (fix == null)
+        sharedFix = fix
+        if (changedAvailability) io.execute { runCatching { publishTeamPosition() } }
+    }
+
+    private fun publishTeamPosition() {
+        if (!isConnected()) return
+        val now = android.os.SystemClock.elapsedRealtime()
+        val name = android.os.Build.MODEL.take(30).ifBlank { "SUTRA phone" }
+        val beacon = TeamBeacon(teamSession, ++teamSequence, name, fix = sharedFix?.takeIf { it.fresh(now) })
+        val message = SutraMessage(SutraMessageType.HELLO, SutraLanguage.UNDETERMINED,
+            TeamPositionCodec.encode(beacon, now), sourceId = sourceId)
+        val bytes = SutraCodec.encode(message)
+        sendFrame(security?.seal(bytes) ?: bytes)
     }
 
     fun resumeAutomaticConnections() {
@@ -255,6 +280,7 @@ class SutraTransmissionService : Service(), PeerTransportListener {
     }
 
     override fun onTransportMessage(bytes: ByteArray) {
+        val receivedMs = android.os.SystemClock.elapsedRealtime()
         io.execute {
             val isEncryptedFrame = bytes.size >= 3 && bytes[0] == 0x53.toByte() && bytes[1] == 0x47.toByte()
             val isPlaintextFrame = bytes.size >= 2 && bytes[0] == 0x53.toByte() && bytes[1] == 0x54.toByte()
@@ -284,6 +310,17 @@ class SutraTransmissionService : Service(), PeerTransportListener {
             }
             if (message.sourceId == sourceId) return@execute
             if (message.destinationId != 0L && message.destinationId != sourceId) return@execute
+            if (message.type == SutraMessageType.HELLO) {
+                val now = android.os.SystemClock.elapsedRealtime()
+                val beacon = team.accept(message, receivedMs) ?: return@execute
+                listener?.onTeamChanged(team.snapshot(now))
+                if (beacon.hops < TeamPositionCodec.MAX_HOPS) {
+                    val forwarded = message.copy(payload = TeamPositionCodec.encode(beacon.copy(hops = beacon.hops + 1), now))
+                    val frame = SutraCodec.encode(forwarded)
+                    runCatching { sendFrame(security?.seal(frame) ?: frame) }
+                }
+                return@execute
+            }
             val id = message.id.toString()
             store.metric(id, "rx_validated", "type=${message.type},bytes=${bytes.size}")
             when (message.type) {

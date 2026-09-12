@@ -148,6 +148,7 @@ class MainActivity : Activity(), SutraTransmissionListener {
             updateConnectionLine(transmission?.connectionSummary().orEmpty())
             onConversationChanged()
             prepareAutomaticConnections()
+            mapController.syncSharing()
         }
 
         override fun onServiceDisconnected(name: ComponentName) {
@@ -165,18 +166,13 @@ class MainActivity : Activity(), SutraTransmissionListener {
             window.setDecorFitsSystemWindows(false)
             window.statusBarColor = Color.TRANSPARENT
             window.navigationBarColor = Color.TRANSPARENT
-            window.insetsController?.setSystemBarsAppearance(
-                WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS,
-                WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS or
-                    WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS,
-            )
         } else {
             window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR
         }
 
         deviceProfile = DeviceProfile.detect(this)
         preferredLanguage = getSharedPreferences("sutra", MODE_PRIVATE).getString("preferred_language", "english") ?: "english"
-        mapController = MapPageController(this)
+        mapController = MapPageController(this) { fix -> transmission?.updateSharedFix(fix) }
         sourceId = getSharedPreferences("sutra", MODE_PRIVATE).let { preferences ->
             if (preferences.contains("terminal_id")) preferences.getLong("terminal_id", 0)
             else SecureRandom().nextLong().let { generated ->
@@ -821,7 +817,8 @@ class MainActivity : Activity(), SutraTransmissionListener {
         )
         val showPage: (Int) -> Unit = { selected ->
             if (selected != 0 && pushToTalkRecording) endPushToTalk(cancel = true)
-            if (selected == 3 && checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            if (selected == 3 && checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED &&
+                checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
                 requestPermissions(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION), 2)
             }
             pages.forEachIndexed { index, page ->
@@ -914,6 +911,14 @@ class MainActivity : Activity(), SutraTransmissionListener {
             }
         }
         setContentView(root)
+        if (Build.VERSION.SDK_INT >= 30) root.post {
+            // The window's decor does not exist on every device until content is attached.
+            root.windowInsetsController?.setSystemBarsAppearance(
+                WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS,
+                WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS or
+                    WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS,
+            )
+        }
         root.requestApplyInsets()
         showPage(0)
 
@@ -1311,6 +1316,10 @@ class MainActivity : Activity(), SutraTransmissionListener {
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == 51) {
+            mapController.startLocationUpdates()
+            mapController.syncSharing()
+        }
         if (requestCode in listOf(2, 3, 40)) {
             transmission?.refreshAutomaticConnections()
             prepareAutomaticConnections()
@@ -1346,7 +1355,7 @@ class MainActivity : Activity(), SutraTransmissionListener {
         bluetoothPeerAdapter.clear()
         bluetoothPeerAdapter.addAll(
             peers.map { peer ->
-                val range = peer.distanceMetres?.let { " · ~${"%.1f".format(it)} m · ${peer.rssi} dBm" }.orEmpty()
+                val range = peer.rssi?.let { " · signal $it dBm" }.orEmpty()
                 "${if (peer.connected) "Connected: " else ""}${peer.name}$range"
             }.ifEmpty { listOf("No paired Bluetooth phones") },
         )
@@ -1720,12 +1729,6 @@ class MainActivity : Activity(), SutraTransmissionListener {
                 discoveryStatus.text = status
             }
             updateConnectionLine(transmission?.connectionSummary() ?: status)
-            if (transmission?.isConnected() == true) {
-                val transport = if (status.contains("bluetooth", ignoreCase = true)) "Bluetooth" else "Wi-Fi Direct"
-                mapController.updatePeer("peer-active", "Connected Peer", transport, true)
-            } else if (status.contains("disconnected", ignoreCase = true) || status.contains("closed", ignoreCase = true) || status.contains("failed", ignoreCase = true)) {
-                mapController.clearConnectedPeers()
-            }
         }
     }
 
@@ -1748,9 +1751,6 @@ class MainActivity : Activity(), SutraTransmissionListener {
                     }
                     appendConversation("EMERGENCY ALERT\n$alertText\n\n")
                     mapController.addAlertPin(category, alertText, rxLat, rxLon, message.sourceId)
-                    if (rxLat != null && rxLon != null) {
-                        mapController.updatePeer("peer-${message.sourceId}", "Peer #${message.sourceId % 10000}", "Connected Peer", true, rxLat, rxLon)
-                    }
                 }
                 SutraMessageType.TEXT_FINAL -> {
                     if (duplicate) networkStatus.text = "Duplicate safely ignored"
@@ -1836,6 +1836,10 @@ class MainActivity : Activity(), SutraTransmissionListener {
             updateBluetoothPeers(peers, scanning)
             updateConnectionLine(transmission?.connectionSummary().orEmpty())
         }
+    }
+
+    override fun onTeamChanged(peers: List<TeamPeer>) {
+        runOnUiThread { if (::mapController.isInitialized) mapController.updateTeam(peers) }
     }
 
     override fun onWifiPeers(peers: List<WifiDirectPeer>) {

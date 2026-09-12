@@ -29,7 +29,7 @@ object MapDistanceCalculator {
 
     /**
      * Calculates great-circle distance between two geographic coordinates using the Haversine formula.
-     * Returns distance in meters with sub-meter precision.
+     * Numeric distance in meters; physical accuracy depends on the input fixes.
      */
     fun haversineDistanceMeters(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
         val phi1 = Math.toRadians(lat1)

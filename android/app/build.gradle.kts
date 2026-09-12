@@ -11,8 +11,8 @@ android {
         applicationId = "org.sih.offlinespeech"
         minSdk = 26
         targetSdk = 35
-        versionCode = 13
-        versionName = "0.11-studio-ui"
+        versionCode = 16
+        versionName = "0.12.1-team-map"
         ndk {
             abiFilters += "arm64-v8a"
         }
