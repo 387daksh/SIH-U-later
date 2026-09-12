@@ -35,7 +35,7 @@ class ProximityMapView(context: Context) : View(context) {
         contentDescription = if (value.isEmpty()) "Proximity map. No Bluetooth phones detected"
         else "Proximity map. " + value.joinToString { peer ->
             val distance = peer.distanceMetres?.let { "approximately ${"%.1f".format(it)} metres" } ?: "distance unavailable"
-            "${peer.name}, $distance${if (peer.connected) ", receiving audio" else ""}"
+            "${peer.name}, $distance${if (peer.connected) ", connected" else ""}"
         }
         invalidate()
     }

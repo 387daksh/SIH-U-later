@@ -1,389 +1,276 @@
 package org.sih.offlinespeech
 
+import android.Manifest
 import android.annotation.SuppressLint
-import android.bluetooth.BluetoothAdapter
-import android.bluetooth.BluetoothDevice
-import android.bluetooth.BluetoothManager
-import android.bluetooth.BluetoothServerSocket
-import android.bluetooth.BluetoothSocket
-import android.content.BroadcastReceiver
-import android.content.Context
-import android.content.Intent
-import android.content.IntentFilter
+import android.bluetooth.*
+import android.content.*
+import android.content.pm.PackageManager
 import android.os.Build
-import java.io.DataInputStream
-import java.io.DataOutputStream
+import android.os.Handler
+import android.os.Looper
 import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
+import kotlin.random.Random
 
-data class BluetoothPeer(
-    val name: String,
-    val address: String,
-    val rssi: Int? = null,
-    val distanceMetres: Double? = null,
-    val connected: Boolean = false,
-)
+data class BluetoothPeer(val name: String, val address: String, val rssi: Int? = null,
+    val distanceMetres: Double? = null, val connected: Boolean = false)
 
-class BluetoothPeerTransport(
-    context: Context,
-    private val listener: PeerTransportListener,
-    private val peerListener: (List<BluetoothPeer>, Boolean) -> Unit = { _, _ -> },
-) : AutoCloseable {
+@SuppressLint("MissingPermission")
+class BluetoothPeerTransport(context: Context, private val listener: PeerTransportListener,
+    private val peerListener: (List<BluetoothPeer>, Boolean) -> Unit = { _, _ -> }) : AutoCloseable {
     companion object {
         val SERVICE_UUID: UUID = UUID.fromString("f5a40f45-8a20-4fa9-89d1-bad77c49f5c2")
-        private const val MAX_FRAME_BYTES = SutraCodec.MAX_PAYLOAD_BYTES + 1024
     }
-
-    private val appContext = context.applicationContext
+    private val app = context.applicationContext
     private val adapter = context.getSystemService(BluetoothManager::class.java)?.adapter
-    private val worker = Executors.newCachedThreadPool()
-    private val writeLock = Any()
-    private val peerLock = Any()
-    private val peers = LinkedHashMap<String, BluetoothPeer>()
+    private val handler = Handler(Looper.getMainLooper())
+    private val workers = Executors.newCachedThreadPool()
+    private val connector = Executors.newSingleThreadExecutor()
+    private val links = FramedPeerLinks(SutraCodec.MAX_PAYLOAD_BYTES + 1024)
+    private val peers = ConcurrentHashMap<String, BluetoothPeer>()
+    private val candidates = LinkedHashMap<String, BluetoothDevice>()
+    private val confirmed = mutableSetOf<String>()
+    private val connecting = ConcurrentHashMap<String, BluetoothSocket>()
+    private val queued = ConcurrentHashMap.newKeySet<String>()
+    private val listening = AtomicBoolean()
+    private val generation = AtomicInteger()
     @Volatile private var server: BluetoothServerSocket? = null
-    @Volatile private var socket: BluetoothSocket? = null
-    @Volatile private var scanning = false
-    @Volatile private var activeAddress: String? = null
-    private var receiverRegistered = false
+    @Volatile private var closed = false
+    private var automatic = false
+    private var scanning = false
+    private var queryAddress: String? = null
+    private val queried = mutableSetOf<String>()
+    private var queryCallback: ((List<BluetoothPeer>) -> Unit)? = null
+    val isConnected get() = links.size > 0
+    val peerCount get() = links.size
 
-    private val discoveryReceiver = object : BroadcastReceiver() {
-        @SuppressLint("MissingPermission")
+    private fun permitted() = if (Build.VERSION.SDK_INT >= 31) {
+        listOf(Manifest.permission.BLUETOOTH_SCAN, Manifest.permission.BLUETOOTH_CONNECT,
+            Manifest.permission.BLUETOOTH_ADVERTISE).all {
+            app.checkSelfPermission(it) == PackageManager.PERMISSION_GRANTED
+        }
+    } else app.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+
+    private val cycle = object : Runnable {
+        override fun run() {
+            if (!automatic || closed) return
+            runCatching {
+                if (permitted() && adapter?.isEnabled == true) { listen(); scan() }
+            }.onFailure { listener.onTransportStatus("Bluetooth discovery paused: ${it.message}") }
+            handler.postDelayed(this, 45_000L + Random.nextLong(8_000))
+        }
+    }
+    fun startAutomatic() {
+        if (closed) return
+        automatic = true
+        handler.removeCallbacks(cycle)
+        handler.post(cycle)
+    }
+    fun stopAutomatic() {
+        automatic = false
+        handler.removeCallbacks(cycle)
+        handler.removeCallbacks(queryTimeout)
+        queryAddress = null
+        queryCallback = null
+        candidates.clear()
+        queried.clear()
+    }
+    private val queryTimeout = Runnable { queryAddress = null; queryNext() }
+    private fun queryNext() {
+        if (closed || !permitted() || adapter?.isDiscovering == true || queryAddress != null || queued.isNotEmpty()) return
+        val device = candidates.values.firstOrNull { it.address !in queried && !links.contains(it.address) }
+        if (device == null) {
+            queryCallback?.invoke(snapshot().filter { it.address in confirmed || it.connected })
+            queryCallback = null
+            return
+        }
+        queried.add(device.address)
+        queryAddress = device.address
+        handler.postDelayed(queryTimeout, 4_000)
+        if (!runCatching { device.fetchUuidsWithSdp() }.getOrDefault(false)) {
+            handler.removeCallbacks(queryTimeout)
+            queryAddress = null
+            handler.post { queryNext() }
+        }
+    }
+    private val receiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
+            if (closed || !permitted()) return
+            @Suppress("DEPRECATION")
+            val device = intent.getParcelableExtra<BluetoothDevice>(BluetoothDevice.EXTRA_DEVICE)
             when (intent.action) {
-                BluetoothAdapter.ACTION_DISCOVERY_STARTED -> {
-                    scanning = true
-                    publishPeers()
-                    listener.onTransportStatus("Scanning Bluetooth signal strength")
+                BluetoothAdapter.ACTION_STATE_CHANGED -> if (
+                    intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, -1) == BluetoothAdapter.STATE_ON && automatic) {
+                    handler.removeCallbacks(cycle); handler.post(cycle)
                 }
-                BluetoothAdapter.ACTION_DISCOVERY_FINISHED -> {
-                    scanning = false
-                    publishPeers()
-                    listener.onTransportStatus("Bluetooth proximity scan complete")
-                }
-                BluetoothDevice.ACTION_FOUND -> {
-                    @Suppress("DEPRECATION")
-                    val device = intent.getParcelableExtra<BluetoothDevice>(BluetoothDevice.EXTRA_DEVICE) ?: return
-                    if (device.bondState != BluetoothDevice.BOND_BONDED) return
+                BluetoothAdapter.ACTION_DISCOVERY_STARTED -> { scanning = true; publish() }
+                BluetoothAdapter.ACTION_DISCOVERY_FINISHED -> { scanning = false; publish(); queryNext() }
+                BluetoothDevice.ACTION_FOUND -> if (device != null) {
+                    if (candidates.size < 64 || device.address in candidates) candidates[device.address] = device
                     val measured = intent.getShortExtra(BluetoothDevice.EXTRA_RSSI, Short.MIN_VALUE).toInt()
-                    if (measured == Short.MIN_VALUE.toInt()) return
-                    synchronized(peerLock) {
-                        val old = peers[device.address]
-                        val smoothed = BluetoothDistanceEstimator.smooth(old?.rssi, measured)
-                        peers[device.address] = BluetoothPeer(
-                            name = runCatching { device.name }.getOrNull() ?: old?.name ?: "Nearby phone",
-                            address = device.address,
-                            rssi = smoothed,
-                            distanceMetres = BluetoothDistanceEstimator.metres(smoothed),
-                            connected = device.address == activeAddress,
-                        )
+                    val old = peers[device.address]
+                    val rssi = if (measured == Short.MIN_VALUE.toInt()) old?.rssi
+                        else BluetoothDistanceEstimator.smooth(old?.rssi, measured)
+                    peers[device.address] = BluetoothPeer(device.name ?: "Nearby phone", device.address,
+                        rssi, rssi?.let(BluetoothDistanceEstimator::metres), links.contains(device.address))
+                    publish()
+                }
+                BluetoothDevice.ACTION_UUID -> if (device != null && device.address == queryAddress) {
+                    @Suppress("DEPRECATION")
+                    val uuids = intent.getParcelableArrayExtra(BluetoothDevice.EXTRA_UUID)
+                    if (uuids?.any { it.toString() == SERVICE_UUID.toString() } == true) {
+                        confirmed.add(device.address)
+                        peers.putIfAbsent(device.address, BluetoothPeer(device.name ?: "SUTRA phone", device.address))
+                        if (automatic) {
+                            val epoch = generation.get()
+                            // Random backoff resolves simultaneous inbound/outbound duplicate attempts.
+                            handler.postDelayed({
+                                if (automatic && epoch == generation.get() && !closed) connect(device.address)
+                            }, Random.nextLong(500, 3_000))
+                        }
                     }
-                    publishPeers()
+                    handler.removeCallbacks(queryTimeout)
+                    queryAddress = null
+                    publish()
+                    queryNext()
                 }
             }
         }
     }
-
     init {
         val filter = IntentFilter().apply {
+            addAction(BluetoothAdapter.ACTION_STATE_CHANGED)
             addAction(BluetoothAdapter.ACTION_DISCOVERY_STARTED)
             addAction(BluetoothAdapter.ACTION_DISCOVERY_FINISHED)
             addAction(BluetoothDevice.ACTION_FOUND)
+            addAction(BluetoothDevice.ACTION_UUID)
         }
-        try {
-            if (Build.VERSION.SDK_INT >= 33) {
-                appContext.registerReceiver(discoveryReceiver, filter, Context.RECEIVER_EXPORTED)
-            } else {
-                @Suppress("DEPRECATION")
-                appContext.registerReceiver(discoveryReceiver, filter)
-            }
-            receiverRegistered = true
-        } catch (_: Exception) {
-            receiverRegistered = false
-        }
+        // Bluetooth events may originate in the separate privileged Bluetooth process.
+        if (Build.VERSION.SDK_INT >= 33) app.registerReceiver(receiver, filter, Context.RECEIVER_EXPORTED)
+        else { @Suppress("DEPRECATION") app.registerReceiver(receiver, filter) }
     }
-
-    // Callback invoked when fetchSutraPeers() completes
-    private var pendingPeerCallback: ((List<BluetoothPeer>) -> Unit)? = null
-    private val uuidReceiver = object : BroadcastReceiver() {
-        @SuppressLint("MissingPermission")
-        override fun onReceive(ctx: Context, intent: Intent) {
-            if (intent.action != BluetoothDevice.ACTION_UUID) return
-            val device = if (Build.VERSION.SDK_INT >= 33) {
-                intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE, BluetoothDevice::class.java)
-            } else {
-                @Suppress("DEPRECATION")
-                intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE)
-            } ?: return
-            @Suppress("DEPRECATION")
-            val uuids = if (Build.VERSION.SDK_INT >= 33) {
-                intent.getParcelableArrayExtra(BluetoothDevice.EXTRA_UUID, android.os.ParcelUuid::class.java)
-            } else {
-                intent.getParcelableArrayExtra(BluetoothDevice.EXTRA_UUID)
-            }
-            val hasSutra = uuids?.any { it.toString().equals(SERVICE_UUID.toString(), ignoreCase = true) } == true
-            if (hasSutra) {
-                pendingResults[device.address] = BluetoothPeer(device.name ?: "SUTRA device", device.address)
-            }
-            pendingCount--
-            if (pendingCount <= 0) {
-                runCatching { appContext.unregisterReceiver(this) }
-                uuidReceiverRegistered = false
-                val peers = pendingResults.values.sortedBy(BluetoothPeer::name)
-                pendingPeerCallback?.invoke(peers)
-                pendingPeerCallback = null
-            }
-        }
+    fun bondedPeers(): List<BluetoothPeer> {
+        if (!permitted()) return emptyList()
+        runCatching { adapter?.bondedDevices?.forEach { device ->
+            val old = peers[device.address]
+            peers[device.address] = BluetoothPeer(device.name ?: "Bluetooth phone", device.address,
+                old?.rssi, old?.distanceMetres, links.contains(device.address))
+        } }
+        return snapshot()
     }
-    private val pendingResults = LinkedHashMap<String, BluetoothPeer>()
-    private var pendingCount = 0
-    private var uuidReceiverRegistered = false
-
-    val isConnected: Boolean get() = socket?.isConnected == true
-
-    /**
-     * Returns ALL bonded (paired) devices — used for the legacy "connect by address" flow.
-     * To filter to SUTRA-only use [fetchSutraPeers].
-     */
-    @SuppressLint("MissingPermission")
-    fun bondedPeers(): List<BluetoothPeer> = try {
-        adapter?.bondedDevices?.forEach { device ->
-            synchronized(peerLock) {
-                val old = peers[device.address]
-                peers[device.address] = BluetoothPeer(
-                    device.name ?: old?.name ?: "Bluetooth phone", device.address,
-                    old?.rssi, old?.distanceMetres, device.address == activeAddress,
-                )
-            }
-        }
-        snapshot()
-    } catch (_: SecurityException) {
-        emptyList()
-    } catch (_: Exception) {
-        emptyList()
-    }
-
-    /**
-     * Asynchronously scans bonded devices for the SUTRA SERVICE_UUID and calls [onResult]
-     * with only those that have the SUTRA app installed.
-     * Falls back to all bonded devices if UUID discovery is unavailable.
-     */
-    @SuppressLint("MissingPermission")
     fun fetchSutraPeers(onResult: (List<BluetoothPeer>) -> Unit) {
-        val bonded = try { adapter?.bondedDevices?.toList() ?: emptyList() }
-        catch (_: Exception) { emptyList() }
-
-        if (bonded.isEmpty()) { onResult(emptyList()); return }
-
-        // Register UUID broadcast receiver before triggering fetches
-        pendingResults.clear()
-        pendingCount = bonded.size
-        pendingPeerCallback = onResult
-
-        if (!uuidReceiverRegistered) {
-            val filter = IntentFilter(BluetoothDevice.ACTION_UUID)
-            if (Build.VERSION.SDK_INT >= 33) {
-                appContext.registerReceiver(uuidReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
-            } else {
-                @Suppress("DEPRECATION")
-                appContext.registerReceiver(uuidReceiver, filter)
-            }
-            uuidReceiverRegistered = true
-        }
-
-        // fetchUuidsWithSdp() triggers ACTION_UUID broadcast per device
-        val allTriggered = bonded.all { device ->
-            runCatching { device.fetchUuidsWithSdp() }.getOrDefault(false)
-        }
-        if (!allTriggered) {
-            // fetchUuidsWithSdp unsupported or failed — fall back to all bonded peers
-            runCatching { appContext.unregisterReceiver(uuidReceiver) }
-            uuidReceiverRegistered = false
-            pendingPeerCallback = null
-            onResult(bondedPeers())
-        }
+        if (!permitted()) { onResult(emptyList()); return }
+        queryCallback = onResult
+        adapter?.bondedDevices?.forEach { candidates[it.address] = it }
+        queried.clear()
+        queryNext()
     }
-
-    @SuppressLint("MissingPermission")
     fun scan() {
-        val currentAdapter = adapter ?: run {
-            listener.onTransportStatus("Bluetooth unavailable on this device")
-            return
-        }
-        if (isConnected) {
-            listener.onTransportStatus("Disconnect Bluetooth before running a proximity scan")
-            return
-        }
-        bondedPeers()
-        runCatching {
-            if (currentAdapter.isDiscovering) currentAdapter.cancelDiscovery()
-            currentAdapter.startDiscovery()
-        }.onSuccess { started ->
-            if (!started) listener.onTransportStatus("Bluetooth scan could not start; check that Bluetooth is enabled")
-        }.onFailure { error ->
-            listener.onTransportStatus("Bluetooth scan failed: ${error.message}")
-        }
+        val currentAdapter = adapter ?: return
+        if (!permitted() || closed || !currentAdapter.isEnabled) return
+        if (currentAdapter.isDiscovering || queryAddress != null || queued.isNotEmpty()) return
+        candidates.clear()
+        currentAdapter.bondedDevices.forEach { candidates[it.address] = it }
+        queried.clear()
+        if (!runCatching { currentAdapter.startDiscovery() }.getOrDefault(false)) queryNext()
     }
-
-    @SuppressLint("MissingPermission")
     fun listen() {
-        val currentAdapter = adapter ?: run {
-            listener.onTransportStatus("Bluetooth unavailable on this device")
-            return
-        }
-        disconnect()
-        worker.execute {
+        val currentAdapter = adapter ?: return
+        if (closed || !permitted() || !currentAdapter.isEnabled || !listening.compareAndSet(false, true)) return
+        val epoch = generation.get()
+        workers.execute {
+            var local: BluetoothServerSocket? = null
             try {
-                val listening = try {
-                    currentAdapter.listenUsingInsecureRfcommWithServiceRecord("SUTRA Offline Speech", SERVICE_UUID)
-                } catch (_: Exception) {
-                    currentAdapter.listenUsingRfcommWithServiceRecord("SUTRA Offline Speech", SERVICE_UUID)
-                }.also { server = it }
-                listener.onTransportStatus("Bluetooth receive mode ready")
-                while (server === listening) attach(listening.accept())
+                local = currentAdapter.listenUsingRfcommWithServiceRecord("SUTRA Offline Speech", SERVICE_UUID)
+                server = local
+                if (closed || epoch != generation.get()) return@execute
+                while (!closed && epoch == generation.get()) {
+                    val peer = local.accept()
+                    workers.execute { attach(peer, epoch) }
+                }
             } catch (error: Exception) {
-                if (server != null) listener.onTransportStatus("Bluetooth listen failed: ${error.message}")
+                if (!closed && epoch == generation.get()) listener.onTransportStatus("Bluetooth listener: ${error.message}")
             } finally {
-                runCatching { server?.close() }
-                server = null
+                runCatching { local?.close() }
+                if (server === local) server = null
+                listening.set(false)
             }
         }
     }
-
-    @SuppressLint("MissingPermission")
     fun connect(address: String) {
-        require(address.isNotBlank()) { "Select a paired Bluetooth phone" }
-        val currentAdapter = adapter ?: run {
-            listener.onTransportStatus("Bluetooth unavailable on this device")
-            return
-        }
-        disconnect()
-        worker.execute {
+        require(BluetoothAdapter.checkBluetoothAddress(address)) { "Select a discovered Bluetooth phone" }
+        if (closed || !permitted() || links.contains(address) || links.size >= 16 || !queued.add(address)) return
+        listen()
+        val epoch = generation.get()
+        connector.execute {
+            var socket: BluetoothSocket? = null
             try {
-                currentAdapter.cancelDiscovery()
-                listener.onTransportStatus("Opening Bluetooth fallback")
-                val device = currentAdapter.getRemoteDevice(address)
-                var activeSocket: BluetoothSocket? = null
-                var lastErr: Exception? = null
-
-                // Candidate 1: Insecure RFCOMM with SUTRA SERVICE_UUID (fastest, no OS PIN prompt)
-                try {
-                    val s = device.createInsecureRfcommSocketToServiceRecord(SERVICE_UUID)
-                    s.connect()
-                    activeSocket = s
-                } catch (e: Exception) {
-                    lastErr = e
-                }
-
-                // Candidate 2: Secure RFCOMM with SUTRA SERVICE_UUID
-                if (activeSocket == null) {
-                    try {
-                        val s = device.createRfcommSocketToServiceRecord(SERVICE_UUID)
-                        s.connect()
-                        activeSocket = s
-                    } catch (e: Exception) {
-                        lastErr = e
-                    }
-                }
-
-                // Candidate 3: Reflection channel 1 (bypasses SDP completely)
-                if (activeSocket == null) {
-                    try {
-                        val method = device.javaClass.getMethod("createRfcommSocket", Int::class.javaPrimitiveType)
-                        val s = method.invoke(device, 1) as BluetoothSocket
-                        s.connect()
-                        activeSocket = s
-                    } catch (e: Exception) {
-                        lastErr = e
-                    }
-                }
-
-                val peer = activeSocket ?: throw (lastErr ?: IllegalStateException("Could not connect to Bluetooth device"))
-                attach(peer)
-            } catch (error: Exception) {
-                listener.onTransportStatus("Bluetooth connection failed: ${error.message}")
-                // Auto-return to listening mode so peer can connect back
-                runCatching { listen() }
-            }
-        }
-    }
-
-    fun send(bytes: ByteArray) {
-        require(bytes.size in 1..MAX_FRAME_BYTES) { "Invalid Bluetooth frame size" }
-        val active = socket ?: error("No Bluetooth peer is connected")
-        val header = java.nio.ByteBuffer.allocate(4).order(java.nio.ByteOrder.BIG_ENDIAN).putInt(bytes.size).array()
-        synchronized(writeLock) {
-            val output = active.outputStream
-            output.write(header)
-            output.write(bytes)
-            output.flush()
-        }
-    }
-
-    private fun attach(peer: BluetoothSocket) {
-        socket = peer
-        activeAddress = peer.remoteDevice.address
-        updateConnectedPeer(peer.remoteDevice)
-        listener.onTransportStatus("Bluetooth connected to ${runCatching { peer.remoteDevice.name }.getOrNull() ?: "peer"}")
-        try {
-            val input = DataInputStream(peer.inputStream)
-            while (peer.isConnected) {
-                val size = input.readInt()
-                // Length-prefixed stream framing: if frame size is corrupted, stream synchronization is lost.
-                // The connection must be torn down and renegotiated.
-                require(size in 1..MAX_FRAME_BYTES) { "Bluetooth framing desync (frame size $size exceeds limit $MAX_FRAME_BYTES)" }
-                listener.onTransportMessage(ByteArray(size).also(input::readFully))
-            }
-        } catch (error: Exception) {
-            if (socket === peer) listener.onTransportStatus("Bluetooth disconnected: ${error.message}")
-        } finally {
-            runCatching { peer.close() }
-            if (socket === peer) {
+                if (epoch != generation.get() || closed || links.contains(address)) return@execute
+                adapter?.cancelDiscovery()
+                socket = adapter?.getRemoteDevice(address)?.createRfcommSocketToServiceRecord(SERVICE_UUID)
+                    ?: return@execute
+                connecting[address] = socket
+                val pending = socket
+                val timeout = Runnable { if (connecting[address] === pending) runCatching { pending.close() } }
+                handler.postDelayed(timeout, 15_000)
+                try { socket.connect() } finally { handler.removeCallbacks(timeout) }
+                connecting.remove(address, socket)
+                val connectedSocket = socket
+                workers.execute { attach(connectedSocket, epoch) }
                 socket = null
-                activeAddress = null
-                updateConnectedPeer(null)
+            } catch (error: Exception) {
+                if (!closed && epoch == generation.get()) listener.onTransportStatus("Bluetooth retry pending: ${error.message}")
+            } finally {
+                socket?.let { connecting.remove(address, it); runCatching { it.close() } }
+                queued.remove(address)
+                if (!closed) handler.post { queryNext() }
             }
         }
     }
-
-    @SuppressLint("MissingPermission")
-    private fun updateConnectedPeer(device: BluetoothDevice?) {
-        synchronized(peerLock) {
-            peers.replaceAll { address, old -> old.copy(connected = address == device?.address) }
-            if (device != null && !peers.containsKey(device.address)) {
-                peers[device.address] = BluetoothPeer(
-                    runCatching { device.name }.getOrNull() ?: "Bluetooth phone",
-                    device.address, connected = true,
-                )
+    private fun attach(socket: BluetoothSocket, epoch: Int) {
+        var link: FramedPeerLinks.Link? = null
+        val address = socket.remoteDevice.address
+        try {
+            synchronized(links) {
+                if (closed || epoch != generation.get()) { socket.close(); return }
+                link = links.add(address, socket, socket.inputStream, socket.outputStream)
             }
+            val active = link ?: return
+            peers.putIfAbsent(address, BluetoothPeer(runCatching { socket.remoteDevice.name }.getOrNull() ?: "SUTRA phone", address))
+            publish()
+            listener.onTransportStatus("Bluetooth connected: ${links.size} peer(s)")
+            while (!closed) listener.onTransportMessage(links.receive(active))
+        } catch (_: Exception) {
+            // The automatic cycle retries missing peers; surviving links stay open.
+        } finally {
+            link?.let { links.remove(address, it) }
+            runCatching { socket.close() }
+            publish()
+            listener.onTransportStatus("Bluetooth peers remaining: ${links.size}")
         }
-        publishPeers()
     }
-
-    private fun snapshot(): List<BluetoothPeer> = synchronized(peerLock) {
-        peers.values.sortedWith(compareByDescending<BluetoothPeer> { it.connected }.thenBy { it.name }).toList()
-    }
-
-    private fun publishPeers() = peerListener(snapshot(), scanning)
-
+    fun send(bytes: ByteArray) = links.send(bytes)
+    private fun snapshot() = peers.values.map { it.copy(connected = links.contains(it.address)) }
+        .sortedWith(compareByDescending<BluetoothPeer> { it.connected }.thenBy { it.name })
+    private fun publish() = peerListener(snapshot(), scanning)
     fun disconnect() {
-        adapter?.let { current -> runCatching { if (current.isDiscovering) current.cancelDiscovery() } }
+        stopAutomatic()
+        generation.incrementAndGet()
+        runCatching { adapter?.cancelDiscovery() }
         runCatching { server?.close() }
-        server = null
-        runCatching { socket?.close() }
-        socket = null
-        activeAddress = null
-        updateConnectedPeer(null)
+        connecting.values.forEach { runCatching { it.close() } }
+        synchronized(links) { links.close() }
+        publish()
     }
-
     override fun close() {
-        pendingPeerCallback = null
-        if (uuidReceiverRegistered) {
-            runCatching { appContext.unregisterReceiver(uuidReceiver) }
-            uuidReceiverRegistered = false
-        }
+        closed = true
         disconnect()
-        if (receiverRegistered) runCatching { appContext.unregisterReceiver(discoveryReceiver) }
-        receiverRegistered = false
-        worker.shutdownNow()
+        handler.removeCallbacksAndMessages(null)
+        runCatching { app.unregisterReceiver(receiver) }
+        connector.shutdownNow()
+        workers.shutdownNow()
     }
 }

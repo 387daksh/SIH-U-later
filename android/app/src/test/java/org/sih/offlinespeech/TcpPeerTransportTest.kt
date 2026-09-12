@@ -5,8 +5,51 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.LinkedBlockingQueue
 
 class TcpPeerTransportTest {
+    @Test
+    fun clientMessageReachesTwoOtherClientsAndSurvivesOneLeaving() {
+        val port = 38_476
+        val hostReady = CountDownLatch(1)
+        val connected = CountDownLatch(6)
+        lateinit var host: TcpPeerTransport
+        host = TcpPeerTransport(object : PeerTransportListener {
+            override fun onTransportStatus(status: String) {
+                if (status.contains("host ready")) hostReady.countDown()
+                if (status.startsWith("Wi-Fi connected:")) connected.countDown()
+            }
+            override fun onTransportMessage(bytes: ByteArray) { host.send(bytes) }
+        }, port)
+        fun client(inbox: LinkedBlockingQueue<ByteArray>) = TcpPeerTransport(object : PeerTransportListener {
+            override fun onTransportStatus(status: String) {
+                if (status.startsWith("Wi-Fi connected:")) connected.countDown()
+            }
+            override fun onTransportMessage(bytes: ByteArray) { inbox.offer(bytes) }
+        }, port)
+        val firstInbox = LinkedBlockingQueue<ByteArray>()
+        val secondInbox = LinkedBlockingQueue<ByteArray>()
+        val sender = client(LinkedBlockingQueue())
+        val first = client(firstInbox)
+        val second = client(secondInbox)
+        try {
+            host.host()
+            assertTrue(hostReady.await(3, TimeUnit.SECONDS))
+            listOf(sender, first, second).forEach { it.connect("127.0.0.1") }
+            assertTrue(connected.await(3, TimeUnit.SECONDS))
+            sender.send("all three".toByteArray())
+            assertArrayEquals("all three".toByteArray(), firstInbox.poll(3, TimeUnit.SECONDS))
+            assertArrayEquals("all three".toByteArray(), secondInbox.poll(3, TimeUnit.SECONDS))
+            second.close()
+            host.host()
+            first.connect("127.0.0.1")
+            sender.send("still connected".toByteArray())
+            assertArrayEquals("still connected".toByteArray(), firstInbox.poll(3, TimeUnit.SECONDS))
+        } finally {
+            sender.close(); first.close(); second.close(); host.close()
+        }
+    }
+
     @Test
     fun hostAndClientExchangeOneFramedMessage() {
         val port = 38_474
@@ -83,6 +126,9 @@ class TcpPeerTransportTest {
             first.connect("127.0.0.1")
             second.connect("127.0.0.1")
             assertTrue(connected.await(3, TimeUnit.SECONDS))
+            // Repeated group-info callbacks must not close an established group.
+            host.host()
+            first.connect("127.0.0.1")
             host.send(expected)
             assertTrue(received.await(3, TimeUnit.SECONDS))
         } finally {

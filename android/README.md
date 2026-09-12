@@ -6,6 +6,68 @@ It also contains the SUTRA transmission prototype: a compact binary multilingual
 
 ## Prepare the models
 
+### Visual design (0.11)
+
+The UI uses a shared warm-paper, navy and teal palette across Talk, Devices and
+language selection. Talk has an illustrated empty state, softer message bubbles,
+translation dividers, compact replay actions and a rounded recording dock. The ring
+around the microphone moves only during active recording; motion follows the system
+animation setting. New message cards and tab changes use short fade transitions.
+
+Emergency mode has a persistent banner across tabs. **Cancel** discards any active
+recording and exits emergency mode. Switching away from Talk cancels an active held
+or tap recording too. Message-mode controls are locked while recording.
+
+Devices shows initial avatars and a **Name** action. Nicknames are saved locally per
+transport address, up to 40 characters; they are not broadcast identities or a claim
+that Wi-Fi and Bluetooth entries are the same phone. Routine scan updates preserve
+the displayed rows when names and connection states have not changed.
+
+### Conversation UI (0.10)
+
+Talk now shows message cards above fixed recording controls. Each card keeps its
+original language, optional translation, Replay/Copy actions, and its own delivery
+state. **Heard** means a `PLAYBACK_FINISHED` acknowledgement was received; the count
+is distinct acknowledging source IDs for that message, not a claim that all nearby
+phones or humans heard it. Duplicate and delayed receipts cannot move progress backwards.
+Incoming playback errors retain the text and offer replay. ONNX playback must fully
+drain before completion is acknowledged.
+
+Hold to record and release to send, or use **Tap to record** and **Send recording**.
+Moving outside the held button, choosing **Cancel recording**, or leaving the activity
+cancels that recording. The recording pulse respects disabled system animations.
+Emergency mode requires confirmation and resets after a successfully submitted message.
+Hindi message cards offer **Emphasize a word**; select a word, then Replay. Once selected,
+words in the transcript can be tapped to change the selection. This remains local replay
+pitch control using the existing calibration, not STT-derived alignment.
+
+Devices shows searching, connecting, permission-needed and ready states. Search/retry
+appears when action is needed. Radio link counts and disconnect controls are in
+**Show advanced connection tools**. Link counts are not unique phone counts.
+The latest 32 message cards survive activity recreation while the foreground service
+lives; they are session history, not a persistent chat archive. The durable outbox is unchanged.
+
+### Automatic peer connections (0.9)
+
+Open SUTRA on every phone and allow Nearby devices. Discovery and reconnection run in
+the foreground service, including while another app screen is open. Wi-Fi DNS-SD
+identifies SUTRA instances, prefers an existing group owner, and elects one initiator
+when idle phones meet. The owner accepts multiple TCP clients. Bluetooth scans nearby
+and paired devices, confirms the SUTRA service UUID with SDP, and connects automatically;
+it keeps its listener and existing peer streams open while adding another peer.
+Normal Android connection/pairing prompts still require approval. New Bluetooth phones
+must allow the discoverability prompt (up to five minutes); use **Make this phone visible** to renew
+that window. Radio/hotspot limitations and hardware connection limits still apply.
+
+Diagnostics shows Wi-Fi and Bluetooth **link counts**, which can include two links to
+the same phone. **Pause & disconnect** pauses automatic connections on both transports;
+**Resume automatic connections** resumes them. **Search again** starts another discovery cycle.
+Manual connect controls are under **Show advanced connection tools**. The Devices list
+distinguishes discovered Wi-Fi devices, Bluetooth candidates, and connected Bluetooth peers.
+Messages use the existing receipt deduplication and live relay across active links.
+These changes require the updated APK on all test phones. Local socket/policy tests
+do not substitute for a three-phone radio test.
+
 From the repository root:
 
 ```powershell
@@ -19,7 +81,7 @@ The generated bundle remains untracked under `artifacts/android_models`. It is 7
 - **Silero VAD ONNX v6.2.1**: Pinned by SHA-256 and used for real-time pause segmentation.
 - **Whisper (English)**: Hybrid FP32 encoder + INT8 decoder.
 - **IndicConformer (9 Indian Languages)**: Hybrid INT8 model with 9-language CTC decoding.
-- **Indic-TTS `en+hi`**: `fastpitch_en+hi.qdq-safe.onnx` + `hifigan_en+hi.minmax.onnx`, staged under stable `tts/en-hi` names with `meta.json`.
+- **Indic-TTS `en+hi`**: `fastpitch_en+hi.prosody.onnx` + `hifigan_en+hi.minmax.onnx`, staged under stable `tts/en-hi` names with `meta.json`.
 
 Only those two selected ONNX graphs are staged; the 422 MB notebook export also contains fp32 and rejected/alternative quantizations that the app does not need. The selected pair is about 88.9 MB. If `models/tts/en-hi` is absent, staging prints a warning and the APK keeps the system-voice fallback.
 
@@ -29,7 +91,7 @@ To add TTS to a phone that already has the 800 MB model installation, push only 
 $adb = ".\.android-sdk\platform-tools\adb.exe"
 $remote = "/sdcard/Android/data/org.sih.offlinespeech/files/models/tts/en-hi"
 & $adb shell mkdir -p $remote
-& $adb push ".\models\tts\en-hi\fastpitch_en+hi.qdq-safe.onnx" "$remote/fastpitch.onnx"
+& $adb push ".\models\tts\en-hi\fastpitch_en+hi.prosody.onnx" "$remote/fastpitch.onnx"
 & $adb push ".\models\tts\en-hi\hifigan_en+hi.minmax.onnx" "$remote/hifigan.onnx"
 & $adb push ".\models\tts\en-hi\meta.json" "$remote/meta.json"
 ```
@@ -66,25 +128,25 @@ Pop-Location
 & $adb shell am start -n org.sih.offlinespeech/.MainActivity
 ```
 
-Grant microphone permission, leave **Routing: AUTO** selected, tap **Start continuous listening**, and speak naturally with pauses between sentences. Tap the routing button to force English or Indic only when diagnosing a routing failure; forced routing also avoids loading the unused ASR backend. Tap **Speak latest result** to exercise the same receiver TTS path: AI4Bharat Indic-TTS for English/Hindi when staged, otherwise the installed offline system voice.
+Grant microphone permission and hold **Hold to talk**, then release to send. Alternatively tap **Hands-free** and speak with pauses between sentences. Routing defaults to AUTO; its manual override is in the advanced connection tools. Choose **Emphasize a word** on a Hindi message, then **Replay** to apply the calibrated +25 Hz pitch bias. Choose **Neutral replay** to clear emphasis. AI4Bharat Indic-TTS is used for English/Hindi when staged; otherwise the installed offline system voice is used.
 
 ## Two-phone SUTRA test
 
 Install the same APK and model bundle on both phones. No router, hotspot, Internet connection, or IP address is required: Android Wi-Fi Direct creates the local link.
 
-1. Enable Wi-Fi on both phones and grant **Nearby devices** and notification permissions.
-2. Enter the same 12+ character pairing phrase on both phones and tap **Secure session**. Different phrases are rejected by AES-GCM authentication.
-3. Tap **Find nearby** on both phones. Only devices advertising the SUTRA DNS-SD service are listed.
-4. On either phone, select the other phone and tap **Connect**. Accept Android's Wi-Fi Direct invitation if shown; socket roles are negotiated automatically.
-5. Leave **Message: NORMAL**, start listening, and speak. The receiver displays and speaks the text; the sender shows `RECEIVED_ACK`, `PLAYBACK_STARTED`, and `PLAYBACK_FINISHED` with elapsed milliseconds.
-6. Toggle **Message: ALERT** and speak a sentence containing a negation, number, emergency term, or location hint. `ALERT_CORE` is sent before the transcript and the receiver requests alarm audio focus.
+1. Enable Wi-Fi and Bluetooth on both phones and grant **Nearby devices** and notification permissions.
+2. If you changed the shared pairing phrase, use **Show advanced connection tools** to enter the same phrase on both phones and tap **Secure session**. Different phrases are rejected by AES-GCM authentication.
+3. Open **Devices** on both phones. Discovery starts automatically; use **Search again** to retry.
+4. Accept Android's Wi-Fi Direct invitation or Bluetooth pairing/visibility prompts if shown. Wait for an active link count; a discovered candidate alone does not prove a connection.
+5. Leave **Normal message** selected, hold the microphone, speak, and release. The receiver displays and speaks the text; the sender's delivery indicators advance with receipt and playback acknowledgements.
+6. Select **Emergency alert** and speak a sentence containing a negation, number, emergency term, or location hint. `ALERT_CORE` is sent before the transcript and the receiver requests alarm audio focus.
 7. Background the receiver. Its foreground `connectedDevice|mediaPlayback` service keeps the socket, outbox, deduplication and TTS alive.
 
-For Bluetooth fallback, pair the phones once in Android Settings. Tap **BT receive** on one and **Scan range**, select that phone, then **BT connect** on the other. Fresh broadcast transcripts are relayed once across the middle phone's active Wi-Fi/Bluetooth links; duplicate IDs are acknowledged but played once. If no link is available, the bounded SQLite outbox sends pending frames after reconnection. Received alerts retain one bounded store-forward copy for a later peer contact.
+Bluetooth discovery and connection also run automatically. Use **Make this phone visible** on a new phone and approve Android's pairing prompt. Fresh broadcast transcripts are relayed once across the middle phone's active Wi-Fi/Bluetooth links; duplicate IDs are acknowledged but played once. If no link is available, the bounded SQLite outbox sends pending frames after reconnection. Received alerts retain one bounded store-forward copy for a later peer contact.
 
 ### Bluetooth proximity map
 
-The **Devices** tab includes a local radar-style proximity map with no Internet, map SDK, API key, or GPS dependency. Pair both phones in Android Settings, tap **BT receive** on the receiver so it is discoverable, then tap **Scan range** on the sender. The app smooths Bluetooth discovery RSSI and converts it to a rough distance with a log-distance path-loss model (`-59 dBm` at one metre, path-loss exponent `2.2`). Select the peer and tap **BT connect**; the active speech recipient is highlighted with a route line and the last range estimate remains visible during transfer.
+Expand **Show signal map** in **Devices** for the local Bluetooth signal view. The app smooths discovery RSSI and converts it to a rough distance with a log-distance path-loss model (`-59 dBm` at one metre, path-loss exponent `2.2`). Directions are illustrative, not measured positions. Manual **Scan range** and peer selection remain under **Show advanced connection tools**.
 
 RSSI ranging is intentionally labelled approximate. Walls, people, pockets, device antennas and radio power can change the result substantially. For a demo venue, measure RSSI at one metre with the actual phone pair and adjust `DEFAULT_TX_POWER_AT_ONE_METRE` in `BluetoothDistanceEstimator.kt`; adjust the path-loss exponent for the room only if you have measurements at several known distances. Classic Bluetooth discovery does not provide continuous RSSI on an active RFCOMM stream, so scanning is disabled while that data connection is active to protect message delivery.
 

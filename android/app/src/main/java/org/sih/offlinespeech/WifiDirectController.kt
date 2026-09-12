@@ -1,291 +1,264 @@
 package org.sih.offlinespeech
 
 import android.Manifest
-import android.app.Activity
-import android.content.BroadcastReceiver
-import android.content.Context
-import android.content.Intent
-import android.content.IntentFilter
+import android.annotation.SuppressLint
+import android.content.*
 import android.content.pm.PackageManager
 import android.net.wifi.WpsInfo
-import android.net.wifi.p2p.WifiP2pConfig
-import android.net.wifi.p2p.WifiP2pDevice
-import android.net.wifi.p2p.WifiP2pManager
-import android.net.wifi.p2p.nsd.WifiP2pDnsSdServiceInfo
-import android.net.wifi.p2p.nsd.WifiP2pDnsSdServiceRequest
+import android.net.wifi.p2p.*
+import android.net.wifi.p2p.nsd.*
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 
 data class WifiDirectPeer(val name: String, val address: String)
-
 interface WifiDirectListener {
     fun onWifiDirectStatus(status: String)
     fun onWifiDirectPeers(peers: List<WifiDirectPeer>)
     fun onWifiDirectGroup(isOwner: Boolean, ownerAddress: String?)
+    fun onWifiDirectGroupLost() = Unit
 }
 
-class WifiDirectController(
-    private val activity: Activity,
-    private val listener: WifiDirectListener,
-) : AutoCloseable {
+@SuppressLint("MissingPermission")
+class WifiDirectController(private val context: Context, private val listener: WifiDirectListener,
+    private val nodeId: String = "legacy") : AutoCloseable {
     companion object {
         private const val INSTANCE = "_sutra"
         private const val SERVICE = "_sutra-speech._tcp"
     }
-
-    private val manager = activity.getSystemService(Context.WIFI_P2P_SERVICE) as WifiP2pManager
-    private val channel = manager.initialize(activity, activity.mainLooper) {
-        listener.onWifiDirectStatus("Wi-Fi Direct channel lost")
-    }
-    private val handler = Handler(activity.mainLooper)
-    private val devices = LinkedHashMap<String, WifiP2pDevice>()
-    // Only devices confirmed via DNS-SD (app=sutra) are shown to the user
-    private val sutraConfirmedAddresses = LinkedHashSet<String>()
+    private val manager = context.getSystemService(Context.WIFI_P2P_SERVICE) as WifiP2pManager
+    private val handler = Handler(Looper.getMainLooper())
+    private var channel: WifiP2pManager.Channel? = null
+    private val devices = LinkedHashMap<String, WifiDirectPeer>()
+    private val candidates = LinkedHashMap<String, AutoPeer>()
     private var registered = false
-    private var groupSignature: String? = null
-    private var serviceRequest: WifiP2pDnsSdServiceRequest? = null
-
+    private var automatic = false
+    private var closed = false
+    private var operation = false
+    private var operationEpoch = 0
+    private var connectingUntil = 0L
+    private var grouped = false
+    private var owner = false
+    private var permissionReported = false
+    private var lastAttempt = 0L
+    private val tick = object : Runnable {
+        override fun run() {
+            if (!automatic || closed) return
+            if (hasPermission()) {
+                permissionReported = false
+                requestConnectionInfo()
+                if (!grouped || owner) discover()
+            } else if (!permissionReported) {
+                listener.onWifiDirectStatus("Allow Nearby devices to connect automatically")
+                permissionReported = true
+            }
+            handler.postDelayed(this, 15_000)
+        }
+    }
     private val receiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             when (intent.action) {
                 WifiP2pManager.WIFI_P2P_STATE_CHANGED_ACTION -> {
-                    val enabled = intent.getIntExtra(WifiP2pManager.EXTRA_WIFI_STATE, -1) ==
-                        WifiP2pManager.WIFI_P2P_STATE_ENABLED
-                    listener.onWifiDirectStatus(if (enabled) "Wi-Fi Direct ready" else "Enable Wi-Fi")
+                    val enabled = intent.getIntExtra(WifiP2pManager.EXTRA_WIFI_STATE, -1) == WifiP2pManager.WIFI_P2P_STATE_ENABLED
+                    if (!enabled) {
+                        operationEpoch++; operation = false; connectingUntil = 0
+                        grouped = false; owner = false
+                        listener.onWifiDirectGroupLost()
+                        listener.onWifiDirectStatus("Wi-Fi Direct disabled; enable Wi-Fi and check hotspot settings")
+                    } else if (automatic) { handler.removeCallbacks(tick); handler.post(tick) }
                 }
                 WifiP2pManager.WIFI_P2P_CONNECTION_CHANGED_ACTION -> requestConnectionInfo()
-                WifiP2pManager.WIFI_P2P_PEERS_CHANGED_ACTION -> {
-                    if (hasPermission()) {
-                        manager.requestPeers(channel) { peerList ->
-                            // Update device name/info for already-SUTRA-confirmed addresses only.
-                            // We intentionally do NOT call addDevice() here for unconfirmed peers,
-                            // so non-SUTRA devices (phones, laptops, etc.) are never shown.
-                            peerList.deviceList.forEach { p2pDevice ->
-                                if (sutraConfirmedAddresses.contains(p2pDevice.deviceAddress)) {
-                                    devices[p2pDevice.deviceAddress] = p2pDevice
-                                }
-                            }
-                            // Emit only SUTRA-confirmed peers
-                            emitPeers()
-                        }
-                    }
-                }
             }
         }
     }
-
+    private fun openChannel(): WifiP2pManager.Channel {
+        channel?.let { return it }
+        return manager.initialize(context, Looper.getMainLooper()) {
+            channel = null
+            operationEpoch++; operation = false; grouped = false; owner = false
+            listener.onWifiDirectGroupLost()
+            listener.onWifiDirectStatus("Wi-Fi Direct channel lost; reconnecting")
+        }.also { channel = it }
+    }
     fun start() {
-        if (registered) return
+        if (registered || closed) return
         val filter = IntentFilter().apply {
             addAction(WifiP2pManager.WIFI_P2P_STATE_CHANGED_ACTION)
             addAction(WifiP2pManager.WIFI_P2P_CONNECTION_CHANGED_ACTION)
-            addAction(WifiP2pManager.WIFI_P2P_PEERS_CHANGED_ACTION)
         }
-        if (Build.VERSION.SDK_INT >= 33) {
-            activity.registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED)
-        } else {
-            @Suppress("DEPRECATION")
-            activity.registerReceiver(receiver, filter)
-        }
+        if (Build.VERSION.SDK_INT >= 33) context.registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED)
+        else { @Suppress("DEPRECATION") context.registerReceiver(receiver, filter) }
         registered = true
+        openChannel()
     }
-
+    fun startAutomatic() {
+        if (closed) return
+        start()
+        automatic = true
+        handler.removeCallbacks(tick)
+        handler.post(tick)
+    }
+    fun stopAutomatic() {
+        automatic = false
+        operationEpoch++; operation = false; connectingUntil = 0
+        handler.removeCallbacksAndMessages(null)
+        channel?.let { runCatching { manager.stopPeerDiscovery(it, action({}, {})) } }
+    }
     fun discover() {
-        requirePermission()
-        devices.clear()
-        sutraConfirmedAddresses.clear()
-        listener.onWifiDirectPeers(emptyList())
-
-        // Trigger fast active P2P probe requests immediately across channels 1, 6, 11
-        manager.discoverPeers(channel, action(
-            success = { listener.onWifiDirectStatus("Scanning for nearby devices...") },
-            failure = {},
-        ))
-
-        manager.setDnsSdResponseListeners(
-            channel,
-            WifiP2pManager.DnsSdServiceResponseListener { instance, registration, device ->
-                // DNS-SD service response confirms this is a SUTRA app instance
-                if (instance == INSTANCE && registration.startsWith(SERVICE)) {
-                    sutraConfirmedAddresses.add(device.deviceAddress)
-                    addDevice(device)
-                }
-            },
-            WifiP2pManager.DnsSdTxtRecordListener { fullDomainName, record, device ->
-                val matchesService = fullDomainName.contains(INSTANCE) || fullDomainName.contains(SERVICE)
-                val matchesProtocol = record["protocol"] == "1"
-                val matchesApp = record["app"] == "sutra" || matchesService
-                if (matchesService && matchesProtocol && matchesApp) {
-                    // TXT record confirmed: this device is running SUTRA
-                    sutraConfirmedAddresses.add(device.deviceAddress)
-                    addDevice(device, record["name"])
-                }
-            },
-        )
-        // Sequentially chain advertise -> service search so wpa_supplicant doesn't fail with BUSY (2)
-        advertise {
-            startServiceSearch()
+        if (closed || !hasPermission() || operation || (grouped && !owner)) return
+        val now = SystemClock.elapsedRealtime()
+        if (now < connectingUntil) return
+        if (connectingUntil != 0L) {
+            connectingUntil = 0
+            channel?.let { manager.cancelConnect(it, action({}, {})) }
+            return
         }
-    }
-
-    private fun startServiceSearch(retryCount: Int = 0) {
-        val request = WifiP2pDnsSdServiceRequest.newInstance(INSTANCE, SERVICE)
-        serviceRequest = request
-
-        val executeDiscovery = {
-            manager.addServiceRequest(channel, request, action(
-                success = {
-                    manager.discoverServices(channel, action(
-                        success = { listener.onWifiDirectStatus("Searching for nearby SUTRA apps...") },
-                        failure = { reason ->
-                            if (reason == WifiP2pManager.BUSY && retryCount < 3) {
-                                listener.onWifiDirectStatus("Wi-Fi Direct busy; retrying in 500ms...")
-                                handler.postDelayed({ startServiceSearch(retryCount + 1) }, 500)
-                            } else {
-                                listener.onWifiDirectStatus("Service search: ${errorText(reason)}")
-                            }
-                        },
-                    ))
-                },
-                failure = { reason ->
-                    if (reason == WifiP2pManager.BUSY && retryCount < 3) {
-                        listener.onWifiDirectStatus("Wi-Fi Direct busy; retrying in 500ms...")
-                        handler.postDelayed({ startServiceSearch(retryCount + 1) }, 500)
-                    } else {
-                        listener.onWifiDirectStatus("Could not add search (${errorText(reason)})")
-                    }
-                },
-            ))
+        val ch = openChannel()
+        operation = true
+        val epoch = ++operationEpoch
+        val fail: (Int) -> Unit = { reason ->
+            if (epoch == operationEpoch && !closed) {
+                operation = false
+                listener.onWifiDirectStatus(if (reason == WifiP2pManager.BUSY)
+                    "Wi-Fi Direct busy; will retry automatically. Check hotspot if this persists."
+                    else "Wi-Fi Direct search failed ($reason); retrying automatically")
+            }
         }
-
-        // Even if clearServiceRequests fails (or returns busy), proceed directly to addServiceRequest
-        manager.clearServiceRequests(channel, action(
-            success = { executeDiscovery() },
-            failure = { executeDiscovery() },
-        ))
+        fun step(next: () -> Unit) = action({
+            if (!closed && epoch == operationEpoch) next()
+        }, fail)
+        handler.postDelayed({
+            if (epoch == operationEpoch && operation) {
+                operationEpoch++; operation = false
+                listener.onWifiDirectStatus("Wi-Fi Direct search timed out; retrying")
+            }
+        }, 12_000)
+        manager.setDnsSdResponseListeners(ch, { instance, registration, device ->
+            if (!closed && instance == INSTANCE && registration.startsWith(SERVICE)) {
+                devices[device.deviceAddress] = WifiDirectPeer(device.deviceName.ifBlank { "SUTRA phone" }, device.deviceAddress)
+                listener.onWifiDirectPeers(devices.values.toList())
+            }
+        }, { domain, record, device ->
+            if (!closed && domain.contains(INSTANCE) && record["app"] == "sutra" && record["protocol"] == "1") {
+                val address = device.deviceAddress
+                devices[address] = WifiDirectPeer(record["name"] ?: device.deviceName, address)
+                val node = record["node"]
+                if (node != null && node.length <= 64 && record["role"] in listOf("idle", "owner", "client")) {
+                    candidates[address] = AutoPeer(address, node, record["role"]!!, SystemClock.elapsedRealtime())
+                }
+                listener.onWifiDirectPeers(devices.values.toList())
+            }
+        })
+        // Stop the old search first. Never run discoverPeers and discoverServices in parallel.
+        manager.stopPeerDiscovery(ch, step {
+            manager.clearLocalServices(ch, step {
+                val info = WifiP2pDnsSdServiceInfo.newInstance(INSTANCE, SERVICE, mapOf(
+                    "app" to "sutra", "protocol" to "1", "node" to nodeId,
+                    "role" to if (!grouped) "idle" else if (owner) "owner" else "client",
+                    "name" to "${Build.MANUFACTURER} ${Build.MODEL}"))
+                manager.addLocalService(ch, info, step {
+                    manager.clearServiceRequests(ch, step {
+                        manager.addServiceRequest(ch, WifiP2pDnsSdServiceRequest.newInstance(INSTANCE, SERVICE), step {
+                            manager.discoverServices(ch, step {
+                                operation = false
+                                listener.onWifiDirectStatus("Automatically searching for SUTRA phones")
+                                handler.postDelayed({
+                                    if (automatic && !closed && epoch == operationEpoch && !grouped &&
+                                        SystemClock.elapsedRealtime() - lastAttempt > 30_000) {
+                                        chooseAutoPeer(nodeId, candidates.values, SystemClock.elapsedRealtime())
+                                            ?.let { connect(it.address) }
+                                    }
+                                }, 5_000)
+                            })
+                        })
+                    })
+                })
+            })
+        })
     }
-
     fun connect(address: String) {
-        requirePermission()
-        val device = devices[address] ?: throw IllegalArgumentException("Select a discovered SUTRA phone")
+        check(hasPermission()) { "Grant Nearby devices permission first" }
+        require(devices.containsKey(address)) { "Select a discovered SUTRA phone" }
+        if (closed || grouped || SystemClock.elapsedRealtime() < connectingUntil) return
+        operationEpoch++; operation = false
+        lastAttempt = SystemClock.elapsedRealtime()
+        connectingUntil = lastAttempt + 30_000
         val config = WifiP2pConfig().apply {
-            deviceAddress = device.deviceAddress
+            deviceAddress = address
             wps.setup = WpsInfo.PBC
+            groupOwnerIntent = if (candidates[address]?.role == "owner") 0 else 15
         }
-        listener.onWifiDirectStatus("Connecting to ${device.deviceName.ifBlank { device.deviceAddress }}")
-        manager.connect(channel, config, action(
-            success = {},
-            failure = { listener.onWifiDirectStatus("Wi-Fi Direct connect failed ($it)") },
-        ))
+        val ch = openChannel()
+        val epoch = operationEpoch
+        manager.stopPeerDiscovery(ch, action({
+            if (closed || epoch != operationEpoch) return@action
+            manager.connect(ch, config, action({
+                listener.onWifiDirectStatus("Connecting to ${devices[address]?.name}; accept Android's prompt if shown")
+            }, {
+                connectingUntil = 0
+                listener.onWifiDirectStatus("Wi-Fi connection failed ($it); automatic retry pending")
+            }))
+        }, {
+            connectingUntil = 0
+            listener.onWifiDirectStatus("Wi-Fi Direct busy; automatic retry pending")
+        }))
     }
-
-    fun disconnect() {
-        groupSignature = null
-        manager.removeGroup(channel, action(
-            success = { listener.onWifiDirectStatus("Wi-Fi Direct disconnected") },
-            failure = { listener.onWifiDirectStatus("Disconnect failed ($it)") },
-        ))
-    }
-
-    private fun advertise(onComplete: (() -> Unit)? = null) {
-        val service = WifiP2pDnsSdServiceInfo.newInstance(
-            INSTANCE,
-            SERVICE,
-            mapOf("app" to "sutra", "protocol" to "1", "name" to "${Build.MANUFACTURER} ${Build.MODEL}"),
-        )
-        manager.clearLocalServices(channel, action(
-            success = {
-                manager.addLocalService(channel, service, action(
-                    success = {
-                        listener.onWifiDirectStatus("SUTRA receive mode advertised")
-                        onComplete?.invoke()
-                    },
-                    failure = { reason ->
-                        listener.onWifiDirectStatus("Could not advertise SUTRA (${errorText(reason)})")
-                        onComplete?.invoke()
-                    },
-                ))
-            },
-            failure = {
-                manager.addLocalService(channel, service, action(
-                    success = {
-                        listener.onWifiDirectStatus("SUTRA receive mode advertised")
-                        onComplete?.invoke()
-                    },
-                    failure = {
-                        onComplete?.invoke()
-                    },
-                ))
-            },
-        ))
-    }
-
-    private fun errorText(code: Int): String = when (code) {
-        WifiP2pManager.ERROR -> "internal error"
-        WifiP2pManager.P2P_UNSUPPORTED -> "P2P unsupported"
-        WifiP2pManager.BUSY -> "radio busy"
-        WifiP2pManager.NO_SERVICE_REQUESTS -> "no service requests"
-        else -> "code $code"
-    }
-
-    private fun addDevice(device: WifiP2pDevice, advertisedName: String? = null) {
-        val existing = devices[device.deviceAddress]
-        val resolvedName = advertisedName
-            ?: existing?.deviceName?.takeIf { it.isNotBlank() && it != "SUTRA phone" }
-            ?: device.deviceName.takeIf { it.isNotBlank() }
-            ?: "SUTRA phone"
-        device.deviceName = resolvedName
-        devices[device.deviceAddress] = device
-        // Only show devices that are SUTRA-confirmed
-        sutraConfirmedAddresses.add(device.deviceAddress)
-        emitPeers()
-    }
-
-    /** Emits only SUTRA-confirmed peers to the listener. */
-    private fun emitPeers() {
-        val sutraPeers = devices.values
-            .filter { sutraConfirmedAddresses.contains(it.deviceAddress) }
-            .map { WifiDirectPeer(it.deviceName.ifBlank { "SUTRA phone" }, it.deviceAddress) }
-        listener.onWifiDirectPeers(sutraPeers)
-    }
-
     private fun requestConnectionInfo() {
-        if (!hasPermission()) return
-        manager.requestConnectionInfo(channel) { info ->
-            if (!info.groupFormed) {
-                groupSignature = null
-                return@requestConnectionInfo
-            }
-            val address = info.groupOwnerAddress?.hostAddress
-            val signature = "${info.isGroupOwner}:$address"
-            if (signature != groupSignature) {
-                groupSignature = signature
-                listener.onWifiDirectGroup(info.isGroupOwner, address)
+        if (closed || !hasPermission()) return
+        val ch = openChannel()
+        manager.requestConnectionInfo(ch) { info ->
+            if (closed || channel !== ch) return@requestConnectionInfo
+            val changed = grouped != info.groupFormed || owner != info.isGroupOwner
+            if (grouped && !info.groupFormed) listener.onWifiDirectGroupLost()
+            grouped = info.groupFormed
+            owner = info.isGroupOwner
+            if (grouped) {
+                connectingUntil = 0
+                listener.onWifiDirectGroup(owner, info.groupOwnerAddress?.hostAddress)
+                if (changed) {
+                    operationEpoch++; operation = false
+                    // Refresh the advertised role so later phones join this existing group.
+                    if (owner) handler.post { discover() }
+                    else manager.clearLocalServices(ch, action({
+                        if (!closed && grouped && !owner) manager.addLocalService(ch,
+                            WifiP2pDnsSdServiceInfo.newInstance(INSTANCE, SERVICE, mapOf(
+                                "app" to "sutra", "protocol" to "1", "node" to nodeId,
+                                "role" to "client", "name" to "${Build.MANUFACTURER} ${Build.MODEL}")),
+                            action({}, {}))
+                    }, {}))
+                }
             }
         }
     }
-
+    fun disconnect() {
+        stopAutomatic()
+        grouped = false; owner = false
+        channel?.let { ch ->
+            runCatching { manager.cancelConnect(ch, action({}, {})) }
+            runCatching { manager.removeGroup(ch, action({}, {})) }
+        }
+        listener.onWifiDirectGroupLost()
+    }
     private fun hasPermission(): Boolean {
         val permission = if (Build.VERSION.SDK_INT >= 33) Manifest.permission.NEARBY_WIFI_DEVICES
-        else Manifest.permission.ACCESS_FINE_LOCATION
-        return activity.checkSelfPermission(permission) == PackageManager.PERMISSION_GRANTED
+            else Manifest.permission.ACCESS_FINE_LOCATION
+        return context.checkSelfPermission(permission) == PackageManager.PERMISSION_GRANTED
     }
-
-    private fun requirePermission() = check(hasPermission()) { "Grant Nearby devices permission first" }
-
-    private fun action(success: () -> Unit, failure: (Int) -> Unit) =
-        object : WifiP2pManager.ActionListener {
-            override fun onSuccess() = success()
-            override fun onFailure(reason: Int) = failure(reason)
-        }
-
+    private fun action(success: () -> Unit, failure: (Int) -> Unit) = object : WifiP2pManager.ActionListener {
+        override fun onSuccess() = success()
+        override fun onFailure(reason: Int) = failure(reason)
+    }
     override fun close() {
-        serviceRequest?.let { request -> runCatching { manager.removeServiceRequest(channel, request, action({}, {})) } }
-        runCatching { manager.clearLocalServices(channel, action({}, {})) }
-        if (registered) {
-            runCatching { activity.unregisterReceiver(receiver) }
-            registered = false
+        closed = true
+        stopAutomatic()
+        channel?.let { ch ->
+            runCatching { manager.clearServiceRequests(ch, action({}, {})) }
+            runCatching { manager.clearLocalServices(ch, action({}, {})) }
+            if (Build.VERSION.SDK_INT >= 27) runCatching { ch.close() }
         }
+        channel = null
+        if (registered) runCatching { context.unregisterReceiver(receiver) }
+        registered = false
     }
 }

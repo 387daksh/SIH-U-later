@@ -2,6 +2,7 @@ package org.sih.offlinespeech
 
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class IndicOnnxTtsTest {
@@ -18,6 +19,15 @@ class IndicOnnxTtsTest {
     @Test
     fun splitsLongUnpunctuatedTextAtWords() {
         assertEquals(listOf("ab ab", "ab"), processor.chunks("AB AB AB"))
+    }
+
+    @Test
+    fun buildsOneWordPitchBiasAndTerminalPause() {
+        val withPeriod = IndicTtsTextProcessor(listOf("<PAD>", " ", ".", "a", "b"), 20)
+        val (tokens, pitch, duration) = withPeriod.prosodyInputs("ab ab", "ab", 0.4f)
+        assertArrayEquals(longArrayOf(3, 4, 1, 3, 4, 2), tokens)
+        assertArrayEquals(floatArrayOf(0.4f, 0.4f, 0f, 0f, 0f, 0f), pitch, 0f)
+        assertTrue(duration.all { it == 1f })
     }
 
     @Test

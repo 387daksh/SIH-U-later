@@ -1,6 +1,7 @@
 package org.sih.offlinespeech
 
 import android.Manifest
+import android.animation.ValueAnimator
 import android.app.Activity
 import android.app.AlertDialog
 import android.app.NotificationManager
@@ -27,11 +28,14 @@ import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
+import android.view.WindowInsets
+import android.view.WindowInsetsController
 import android.view.WindowManager
 import android.widget.Button
 import android.widget.ArrayAdapter
 import android.widget.EditText
 import android.widget.FrameLayout
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.Spinner
@@ -43,36 +47,56 @@ import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicInteger
 
 class MainActivity : Activity(), SutraTransmissionListener {
-    private val ink = Color.rgb(15, 29, 51)
+    private val ink = SutraPalette.ink
     private val inkPressed = Color.rgb(22, 48, 79)
-    private val mutedInk = Color.rgb(91, 103, 121)
+    private val mutedInk = SutraPalette.muted
     private val accent = Color.rgb(179, 38, 30)
-    private val success = Color.rgb(11, 97, 86)
+    private val success = SutraPalette.teal
     private val blue = Color.rgb(40, 81, 127)
     private val amber = Color.rgb(138, 100, 18)
     private val surface = Color.WHITE
-    private val canvas = Color.rgb(241, 242, 244)
-    private val divider = Color.rgb(226, 230, 235)
+    private val canvas = SutraPalette.paper
+    private val divider = SutraPalette.line
     private val sttWorker = Executors.newSingleThreadExecutor()
     private val pendingSegments = AtomicInteger()
 
     private lateinit var status: TextView
+    private lateinit var discoveryStatus: TextView
+    private lateinit var connectionTitle: TextView
+    private lateinit var linkCounts: TextView
+    private lateinit var nearbyList: LinearLayout
+    private lateinit var searchButton: Button
+    private lateinit var disconnectButton: Button
+    private lateinit var connectionHint: TextView
+    private lateinit var conversationView: ConversationView
+    private lateinit var conversationScroll: ScrollView
+    private lateinit var emptyConversation: View
+    private lateinit var tapRecordButton: Button
+    private lateinit var cancelRecordingButton: Button
+    private lateinit var emergencyBanner: View
+    private lateinit var conversationHeading: View
+    private var renderedPeerRows: List<String>? = null
+    private var recordWithTap = false
+    private var latestWifiStatus = ""
+    private var lastConversationKey: String? = null
+    private var conversationLoaded = false
+    private val heardMessages = mutableSetOf<String>()
     private lateinit var vadIndicator: TextView
     private lateinit var result: TextView
     private lateinit var latestTranscript: TextView
     private lateinit var translatedTranscript: TextView
     private lateinit var transcriptMeta: TextView
     private lateinit var pushToTalkHint: TextView
-    private lateinit var deliveryLadder: LinearLayout
     private lateinit var mapController: MapPageController
     private var preferredLanguage: String = "english"
     private lateinit var startStopButton: Button
-    private lateinit var pushToTalkButton: Button
+    private lateinit var pushToTalkButton: RecordingButton
     private lateinit var normalButton: Button
     private lateinit var talkReplayButton: Button
     private lateinit var talkCopyButton: Button
     private lateinit var routeButton: Button
     private lateinit var speakButton: Button
+    private lateinit var emphasisWord: EditText
     private lateinit var alertButton: Button
     private lateinit var networkStatus: TextView
     private lateinit var peerAddress: EditText
@@ -96,16 +120,16 @@ class MainActivity : Activity(), SutraTransmissionListener {
     private var pipeline: OfflineSpeechPipeline? = null
     private val pushToTalkLock = Any()
     private val pushToTalkChunks = ArrayList<FloatArray>()
-    private val deliverySteps = ArrayList<Pair<View, TextView>>()
 
     private var segmentCount = 0
     private var lastText = ""
     private var lastLanguage = "english"
     private var sourceId = 0L
+    private var nearbyPermissionRequested = false
+    private var bluetoothSetupRequested = false
     private var alertMode = false
     private var alertCategory: String? = null
     private var pushToTalkStartedAt = 0L
-    private var latestOutgoingId: SutraId? = null
     @Volatile private var listening = false
     @Volatile private var pushToTalkRecording = false
     @Volatile private var routingMode = RoutingMode.AUTO
@@ -116,17 +140,20 @@ class MainActivity : Activity(), SutraTransmissionListener {
                 it.setListener(this@MainActivity)
             }
             serviceBound = true
+            wifiDirect = transmission?.wifiDirect
             refreshBluetoothPeers()
             val active = transmission?.isSecurityActive() == true
             val secStatus = if (active) "🔒 Authenticated AES-GCM active" else "⚠️ Plaintext (unencrypted demo mode)"
             networkStatus.text = "SUTRA receiver service ready • $secStatus"
-            updateConnectionLine("No device connected", "Not connected")
+            updateConnectionLine(transmission?.connectionSummary().orEmpty())
+            onConversationChanged()
+            prepareAutomaticConnections()
         }
 
         override fun onServiceDisconnected(name: ComponentName) {
             serviceBound = false
             transmission = null
-            networkStatus.text = "SUTRA receiver service stopped"
+            updateConnectionLine("Connection service stopped")
         }
     }
 
@@ -134,6 +161,18 @@ class MainActivity : Activity(), SutraTransmissionListener {
         super.onCreate(state)
         window.statusBarColor = ink
         window.navigationBarColor = surface
+        if (Build.VERSION.SDK_INT >= 30) {
+            window.setDecorFitsSystemWindows(false)
+            window.statusBarColor = Color.TRANSPARENT
+            window.navigationBarColor = Color.TRANSPARENT
+            window.insetsController?.setSystemBarsAppearance(
+                WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS,
+                WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS or
+                    WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS,
+            )
+        } else {
+            window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR
+        }
 
         deviceProfile = DeviceProfile.detect(this)
         preferredLanguage = getSharedPreferences("sutra", MODE_PRIVATE).getString("preferred_language", "english") ?: "english"
@@ -178,16 +217,17 @@ class MainActivity : Activity(), SutraTransmissionListener {
         }
 
         transcriptMeta = TextView(this).apply {
-            text = "DETECT LANGUAGE AUTOMATICALLY"
-            textSize = 11f
-            letterSpacing = 0.08f
+            text = "Every voice. Closer."
+            textSize = 30f
+            letterSpacing = -0.025f
             setTypeface(null, Typeface.BOLD)
-            setTextColor(success)
+            setTextColor(ink)
         }
 
         latestTranscript = TextView(this).apply {
-            text = "Speak in any of the 10 supported languages. The detected language is shown after transcription."
-            textSize = 15f
+            text = "Speak in your language.\nStart a conversation with your nearby team."
+            textSize = 16f
+            gravity = Gravity.CENTER
             setLineSpacing(0f, 1.25f)
             setTextColor(mutedInk)
             setPadding(0, dp(9), 0, dp(4))
@@ -212,27 +252,48 @@ class MainActivity : Activity(), SutraTransmissionListener {
         }
 
         startStopButton = Button(this).apply {
-            text = "Start"
+            text = "Hands-free"
             contentDescription = "Start hands-free listening"
             styleTextButton(success)
             setOnClickListener { toggleListening() }
         }
 
-        pushToTalkButton = Button(this).apply {
+        pushToTalkButton = RecordingButton(this).apply {
             text = "Hold to talk"
             contentDescription = "Hold to record a message, then release to send"
             textSize = 16f
-            setCompoundDrawablesWithIntrinsicBounds(0, android.R.drawable.ic_btn_speak_now, 0, 0)
+            setCompoundDrawablesWithIntrinsicBounds(R.drawable.ic_sutra_mic, 0, 0, 0)
             compoundDrawablePadding = dp(8)
             compoundDrawableTintList = ColorStateList.valueOf(Color.WHITE)
             styleTalkButton(ink)
             setOnTouchListener { _, event ->
+                if (recordWithTap && pushToTalkRecording) return@setOnTouchListener false
                 when (event.actionMasked) {
-                    MotionEvent.ACTION_DOWN -> beginPushToTalk()
-                    MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> endPushToTalk()
+                    MotionEvent.ACTION_DOWN -> { recordWithTap = false; beginPushToTalk() }
+                    MotionEvent.ACTION_UP -> endPushToTalk()
+                    MotionEvent.ACTION_MOVE -> if (event.x < 0 || event.y < 0 ||
+                        event.x > pushToTalkButton.width || event.y > pushToTalkButton.height) endPushToTalk(cancel = true)
+                    MotionEvent.ACTION_CANCEL -> endPushToTalk(cancel = true)
                 }
                 true
             }
+            // Accessibility click actions use tap-to-start/tap-to-send without a held gesture.
+            setOnClickListener {
+                if (pushToTalkRecording) endPushToTalk() else { recordWithTap = true; beginPushToTalk() }
+            }
+        }
+        tapRecordButton = Button(this).apply {
+            text = "Tap to record"
+            styleTextButton(success)
+            setOnClickListener {
+                if (pushToTalkRecording) endPushToTalk() else { recordWithTap = true; beginPushToTalk() }
+            }
+        }
+        cancelRecordingButton = Button(this).apply {
+            text = "Cancel recording"
+            styleTextButton(accent)
+            visibility = View.GONE
+            setOnClickListener { endPushToTalk(cancel = true) }
         }
 
         routeButton = Button(this).apply {
@@ -252,6 +313,16 @@ class MainActivity : Activity(), SutraTransmissionListener {
             isEnabled = false
             styleSecondaryButton()
             setOnClickListener { speakResult() }
+        }
+
+        emphasisWord = EditText(this).apply {
+            hint = "Hindi word to emphasize (optional)"
+            contentDescription = "Optional Hindi word to emphasize during replay"
+            isSingleLine = true
+            textSize = 14f
+            visibility = View.GONE
+            setTextColor(ink)
+            setHintTextColor(mutedInk)
         }
 
         talkReplayButton = Button(this).apply {
@@ -324,43 +395,15 @@ class MainActivity : Activity(), SutraTransmissionListener {
         ).also { it.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item) }
         wifiPeerSpinner = Spinner(this).apply { adapter = wifiPeerAdapter }
 
-        wifiDirect = runCatching { WifiDirectController(this, object : WifiDirectListener {
-            override fun onWifiDirectStatus(statusText: String) {
-                runOnUiThread { networkStatus.text = "Nearby SOS: $statusText" }
-            }
-
-            override fun onWifiDirectPeers(peers: List<WifiDirectPeer>) {
-                runOnUiThread {
-                    wifiPeers = peers
-                    wifiPeerAdapter.clear()
-                    wifiPeerAdapter.addAll(
-                        peers.map { "${it.name} (${it.address})" }
-                            .ifEmpty { listOf("No nearby SUTRA phones found") }
-                    )
-                    wifiPeerAdapter.notifyDataSetChanged()
-                }
-            }
-
-            override fun onWifiDirectGroup(isOwner: Boolean, ownerAddress: String?) {
-                runOnUiThread {
-                    networkStatus.text = if (isOwner) {
-                        "Nearby SOS group created; waiting for receiver"
-                    } else {
-                        "Nearby SOS group joined; opening local link"
-                    }
-                }
-                if (isOwner) transmission?.wifiHost()
-                else if (ownerAddress != null) transmission?.wifiConnect(ownerAddress)
-            }
-        }).also { it.start() } }.onFailure {
-            networkStatus.text = "Wi-Fi Direct unavailable; use Bluetooth fallback"
-        }.getOrNull()
+        // Discovery belongs to the foreground service, not this screen.
 
         val wifiDirectButtons = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             addView(Button(this@MainActivity).apply {
-                text = "Find nearby"
+                text = "Search now"
                 setOnClickListener {
+                    transmission?.resumeAutomaticConnections()
+                    prepareAutomaticConnections()
                     if (ensureWifiDirectPermission()) wifiDirect?.discover()
                 }
             }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
@@ -375,8 +418,7 @@ class MainActivity : Activity(), SutraTransmissionListener {
             addView(Button(this@MainActivity).apply {
                 text = "Disconnect"
                 setOnClickListener {
-                    wifiDirect?.disconnect()
-                    transmission?.wifiDisconnect()
+                    transmission?.disconnectAll()
                 }
             }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         }
@@ -396,14 +438,8 @@ class MainActivity : Activity(), SutraTransmissionListener {
         val bluetoothButtons = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             addView(Button(this@MainActivity).apply {
-                text = "BT receive"
-                setOnClickListener {
-                    if (ensureBluetoothPermission()) {
-                        startActivity(Intent(BluetoothAdapter.ACTION_REQUEST_DISCOVERABLE).putExtra(BluetoothAdapter.EXTRA_DISCOVERABLE_DURATION, 300))
-                        transmission?.bluetoothListen()
-                        refreshBluetoothPeers()
-                    }
-                }
+                text = "Be visible"
+                setOnClickListener { requestBluetoothVisibility() }
             }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
             addView(Button(this@MainActivity).apply {
                 text = "BT connect"
@@ -464,35 +500,35 @@ class MainActivity : Activity(), SutraTransmissionListener {
         styleButtonRow(securityAndMetrics)
         styleButtonRow(networkButtons)
 
-        val talkTranscriptCard = card().apply {
+        val talkTranscriptCard = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+            setPadding(dp(24), dp(18), dp(24), dp(24))
+            addView(ImageView(this@MainActivity).apply {
+                setImageResource(R.drawable.sutra_voice_art)
+                importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+            }, LinearLayout.LayoutParams(dp(180), dp(104)).apply { bottomMargin = dp(16) })
             addView(transcriptMeta)
             addView(latestTranscript)
             addView(translatedTranscript)
-            addView(deliveryLadderView())
-            addView(LinearLayout(this@MainActivity).apply {
-                orientation = LinearLayout.HORIZONTAL
-                addView(talkReplayButton, LinearLayout.LayoutParams(0, dp(48), 1f))
-                addView(talkCopyButton, LinearLayout.LayoutParams(0, dp(48), 1f).apply { marginStart = dp(7) })
-            }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
-                topMargin = dp(8)
-            })
         }
+        emptyConversation = talkTranscriptCard
 
         val messageTypeSelector = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             setPadding(dp(4), dp(4), dp(4), dp(4))
-            background = roundedBackground(Color.rgb(229, 232, 237), 14)
-            addView(normalButton, LinearLayout.LayoutParams(0, dp(48), 1f))
-            addView(alertButton, LinearLayout.LayoutParams(0, dp(48), 1f).apply { marginStart = dp(4) })
+            background = roundedBackground(canvas, 16)
+            addView(normalButton, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+            addView(alertButton, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { marginStart = dp(4) })
         }
 
         val talkCard = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER_HORIZONTAL
             setPadding(dp(4), dp(2), dp(4), dp(2))
-            addView(pushToTalkButton, LinearLayout.LayoutParams(dp(190), dp(190)).apply {
-                topMargin = dp(13)
-                bottomMargin = dp(8)
+            addView(pushToTalkButton, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(72)).apply {
+                topMargin = dp(10)
+                bottomMargin = dp(4)
             })
             addView(pushToTalkHint)
             addView(vadIndicator)
@@ -501,55 +537,133 @@ class MainActivity : Activity(), SutraTransmissionListener {
         val handsFreeRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(13), dp(10), dp(8), dp(10))
-            background = outlinedBackground(surface, divider, 16)
-            addView(LinearLayout(this@MainActivity).apply {
-                orientation = LinearLayout.VERTICAL
-                addView(TextView(this@MainActivity).apply {
-                    text = "Start hands-free listening"
-                    textSize = 14f
-                    setTypeface(null, Typeface.BOLD)
-                    setTextColor(ink)
-                })
-                addView(TextView(this@MainActivity).apply {
-                    text = "For when you cannot keep holding a button"
-                    textSize = 12f
-                    setTextColor(mutedInk)
-                })
+            addView(tapRecordButton, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+            addView(startStopButton, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+            addView(cancelRecordingButton, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        }
+        emergencyBanner = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            visibility = View.GONE
+            setPadding(dp(20), dp(4), dp(12), dp(4))
+            setBackgroundColor(accent)
+            addView(TextView(this@MainActivity).apply {
+                text = "Emergency mode\nYour next message will be an alert"
+                textSize = 14f
+                setTextColor(Color.WHITE)
+                setTypeface(null, Typeface.BOLD)
+                accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
             }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-            addView(startStopButton, LinearLayout.LayoutParams(dp(72), dp(48)))
+            addView(Button(this@MainActivity).apply {
+                text = "Cancel"
+                styleTextButton(Color.WHITE)
+                contentDescription = "Cancel emergency mode and discard any active recording"
+                setOnClickListener {
+                    if (pushToTalkRecording) endPushToTalk(cancel = true)
+                    setAlertMode(false)
+                }
+            })
         }
 
-        val connectionCard = card().apply {
-            addView(sectionTitle("Wi-Fi Direct"))
-            addView(TextView(this@MainActivity).apply {
-                text = "Recommended · fastest, longest range\nConnect directly to another SUTRA phone. Internet and a Wi-Fi router are not required."
-                textSize = 13f
-                setTextColor(mutedInk)
-                setPadding(0, dp(8), 0, dp(4))
-            })
-            addView(wifiPeerSpinner)
-            addView(wifiDirectButtons)
+        discoveryStatus = TextView(this).apply {
+            text = "Automatic discovery is starting"
+            textSize = 13f
+            setTextColor(mutedInk)
+            setPadding(0, dp(8), 0, dp(8))
         }
+        connectionTitle = TextView(this).apply {
+            text = "Finding your nearby team"
+            textSize = 21f
+            setTypeface(null, Typeface.BOLD)
+            setTextColor(ink)
+            setPadding(0, dp(10), 0, dp(10))
+            accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
+        }
+        linkCounts = TextView(this).apply {
+            text = "Wi-Fi  0 links     ·     Bluetooth  0 links"
+            textSize = 14f
+            setTextColor(success)
+            setTypeface(null, Typeface.BOLD)
+            setPadding(dp(12), dp(14), dp(12), dp(14))
+            background = roundedBackground(Color.rgb(231, 242, 240), 12)
+        }
+        searchButton = Button(this).apply {
+            text = "Search again"
+            stylePrimaryButton(success)
+            setOnClickListener {
+                nearbyPermissionRequested = false
+                transmission?.resumeAutomaticConnections()
+                prepareAutomaticConnections()
+                updateConnectionLine("")
+            }
+        }
+        disconnectButton = Button(this).apply {
+            text = "Pause & disconnect"
+            styleTextButton(mutedInk)
+            setOnClickListener {
+                transmission?.disconnectAll()
+                updateConnectionLine("")
+            }
+        }
+        val connectionCard = card().apply {
+            background = roundedBackground(SutraPalette.mint, 26)
+            addView(sectionTitle("Connect naturally"))
+            addView(connectionTitle)
+            connectionHint = TextView(this@MainActivity).apply {
+                text = "Open SUTRA on another phone. Connections happen automatically."
+                textSize = 15f
+                setTextColor(mutedInk)
+                setLineSpacing(0f, 1.15f)
+                setPadding(0, dp(14), 0, dp(12))
+            }
+            addView(connectionHint)
+            addView(searchButton, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(50)))
+            addView(Button(this@MainActivity).apply {
+                text = "Make this phone visible"
+                styleTextButton(success)
+                setOnClickListener { requestBluetoothVisibility() }
+            })
+        }
+
+        nearbyList = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        val nearbyCard = card().apply {
+            background = null
+            addView(sectionTitle("Nearby devices"))
+            addView(nearbyList)
+            addView(TextView(this@MainActivity).apply {
+                text = "Names are saved on this phone. A device may appear over both Wi-Fi and Bluetooth."
+                textSize = 12f
+                setTextColor(mutedInk)
+                setPadding(0, dp(12), 0, 0)
+            })
+        }
+        renderNearbyPeers()
 
         val proximityCard = card().apply {
-            addView(sectionTitle("Bluetooth proximity map"))
+            visibility = View.GONE
+            addView(sectionTitle("Bluetooth signal map"))
             addView(TextView(this@MainActivity).apply {
-                text = "Shows the paired phone receiving your speech and estimates distance from Bluetooth RSSI. Keep the other phone discoverable while scanning."
+                text = "Signal-based distance estimates, not actual device positions."
                 textSize = 13f
                 setTextColor(mutedInk)
                 setPadding(0, dp(8), 0, dp(4))
             })
-            addView(proximityMap, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(280)))
+            addView(proximityMap, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(220)))
             addView(proximityStatus)
-            addView(bluetoothPeerSpinner)
-            addView(bluetoothButtons)
             addView(TextView(this@MainActivity).apply {
                 text = "Approximation only: walls, pockets and antenna direction affect RSSI. The last scan is retained while audio is transferred."
                 textSize = 11f
                 setTextColor(mutedInk)
                 setPadding(0, dp(7), 0, 0)
             })
+        }
+        val proximityToggle = Button(this).apply {
+            text = "Show signal map"
+            styleSecondaryButton()
+            setOnClickListener {
+                proximityCard.visibility = if (proximityCard.visibility == View.GONE) View.VISIBLE else View.GONE
+                text = if (proximityCard.visibility == View.VISIBLE) "Hide signal map" else "Show signal map"
+            }
         }
 
         val transcriptActions = LinearLayout(this).apply {
@@ -566,7 +680,10 @@ class MainActivity : Activity(), SutraTransmissionListener {
                 setOnClickListener {
                     result.text = "Your sent and received messages will appear here."
                     resetLatestTranscript()
+                    transmission?.conversation?.clear()
+                    onConversationChanged()
                     lastText = ""
+                    emphasisWord.text.clear()
                     speakButton.isEnabled = false
                     talkReplayButton.isEnabled = false
                     talkCopyButton.isEnabled = false
@@ -582,7 +699,16 @@ class MainActivity : Activity(), SutraTransmissionListener {
 
         val advancedPanel = card().apply {
             visibility = View.GONE
-            addView(sectionTitle("Bluetooth and diagnostics"))
+            addView(sectionTitle("Connection diagnostics"))
+            addView(linkCounts)
+            addView(discoveryStatus)
+            addView(disconnectButton)
+            addView(sectionTitle("Manual Wi-Fi Direct"))
+            addView(wifiPeerSpinner)
+            addView(wifiDirectButtons)
+            addView(sectionTitle("Manual Bluetooth"))
+            addView(bluetoothPeerSpinner)
+            addView(bluetoothButtons)
             addView(TextView(this@MainActivity).apply {
                 text = "Speech routing"
                 setTextColor(mutedInk)
@@ -618,18 +744,49 @@ class MainActivity : Activity(), SutraTransmissionListener {
             }
         }
 
-        val talkPage = screenPage(
-            "",
-            "",
-            talkTranscriptCard,
-            messageTypeSelector,
-            talkCard,
-            handsFreeRow,
-        )
+        conversationView = ConversationView(this) { entry, word ->
+            if (transmission?.speakLocal(entry.text, entry.language, word) != true) {
+                Toast.makeText(this, "Offline voice is not ready. Your message text is still available.", Toast.LENGTH_LONG).show()
+            }
+        }
+        conversationScroll = ScrollView(this).apply {
+            isFillViewport = true
+            addView(LinearLayout(this@MainActivity).apply {
+                orientation = LinearLayout.VERTICAL
+                conversationHeading = TextView(this@MainActivity).apply {
+                    text = "Your conversation"
+                    textSize = 24f
+                    typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+                    setTextColor(ink)
+                    setPadding(dp(22), dp(20), dp(22), dp(4))
+                    visibility = View.GONE
+                }
+                addView(conversationHeading)
+                addView(talkTranscriptCard)
+                addView(conversationView)
+            })
+        }
+        val talkPage = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(conversationScroll, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
+            addView(LinearLayout(this@MainActivity).apply {
+                orientation = LinearLayout.VERTICAL
+                setPadding(dp(14), dp(12), dp(14), dp(4))
+                background = roundedBackground(surface, 28)
+                elevation = dp(3).toFloat()
+                addView(messageTypeSelector)
+                addView(talkCard)
+                addView(handsFreeRow)
+            }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+                marginStart = dp(12); marginEnd = dp(12); bottomMargin = dp(8)
+            })
+        }
         val devicesPage = screenPage(
-            "Devices",
-            "Connect directly over Wi-Fi Direct or Bluetooth.",
+            "Stay close.",
+            "Your nearby team, even without internet.",
             connectionCard,
+            nearbyCard,
+            proximityToggle,
             proximityCard,
             advancedToggle,
             advancedPanel,
@@ -647,47 +804,57 @@ class MainActivity : Activity(), SutraTransmissionListener {
         val navButtons = arrayOf(
             TextView(this).apply {
                 text = "Talk"
-                setCompoundDrawablesWithIntrinsicBounds(0, android.R.drawable.ic_btn_speak_now, 0, 0)
+                setCompoundDrawablesWithIntrinsicBounds(0, R.drawable.ic_sutra_mic, 0, 0)
             },
             TextView(this).apply {
                 text = "Devices"
-                setCompoundDrawablesWithIntrinsicBounds(0, android.R.drawable.ic_menu_share, 0, 0)
+                setCompoundDrawablesWithIntrinsicBounds(0, R.drawable.ic_sutra_team, 0, 0)
             },
             TextView(this).apply {
                 text = "History"
-                setCompoundDrawablesWithIntrinsicBounds(0, android.R.drawable.ic_menu_recent_history, 0, 0)
+                setCompoundDrawablesWithIntrinsicBounds(0, R.drawable.ic_sutra_history, 0, 0)
             },
             TextView(this).apply {
                 text = "Map"
-                setCompoundDrawablesWithIntrinsicBounds(0, android.R.drawable.ic_dialog_map, 0, 0)
+                setCompoundDrawablesWithIntrinsicBounds(0, R.drawable.ic_sutra_map, 0, 0)
             },
         )
         val showPage: (Int) -> Unit = { selected ->
+            if (selected != 0 && pushToTalkRecording) endPushToTalk(cancel = true)
             if (selected == 3 && checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
                 requestPermissions(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION), 2)
             }
-            pages.forEachIndexed { index, page -> page.visibility = if (index == selected) View.VISIBLE else View.GONE }
+            pages.forEachIndexed { index, page ->
+                val appearing = index == selected && page.visibility != View.VISIBLE
+                page.visibility = if (index == selected) View.VISIBLE else View.GONE
+                if (appearing && page.isLaidOut && ValueAnimator.areAnimatorsEnabled()) {
+                    page.alpha = 0f
+                    page.animate().alpha(1f).setDuration(160).start()
+                }
+            }
             navButtons.forEachIndexed { index, button ->
-                button.background = rippleBackground(if (index == selected) Color.rgb(231, 242, 240) else surface, 12)
+                button.background = rippleBackground(if (index == selected) SutraPalette.mint else canvas, 18)
                 button.setTextColor(if (index == selected) ink else Color.rgb(119, 128, 142))
                 button.compoundDrawableTintList = ColorStateList.valueOf(if (index == selected) ink else Color.rgb(119, 128, 142))
                 button.setTypeface(null, if (index == selected) Typeface.BOLD else Typeface.NORMAL)
                 button.contentDescription = "${button.text}${if (index == selected) ", selected" else ""}"
+                button.isSelected = index == selected
             }
         }
         val navigation = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
             setPadding(dp(8), dp(5), dp(8), dp(6))
-            setBackgroundColor(surface)
+            setBackgroundColor(canvas)
             navButtons.forEachIndexed { index, button ->
                 button.gravity = Gravity.CENTER
-                button.textSize = 11.5f
+                button.textSize = 13f
                 button.compoundDrawablePadding = dp(2)
                 button.isClickable = true
                 button.isFocusable = true
                 button.setOnClickListener { showPage(index) }
-                addView(button, LinearLayout.LayoutParams(0, dp(58), 1f).apply {
+                button.minHeight = dp(58)
+                addView(button, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
                     marginStart = dp(4)
                     marginEnd = dp(4)
                 })
@@ -702,13 +869,14 @@ class MainActivity : Activity(), SutraTransmissionListener {
                 gravity = Gravity.CENTER_VERTICAL
                 addView(TextView(this@MainActivity).apply {
                     text = "SUTRA"
-                    textSize = 15f
-                    letterSpacing = 0.20f
+                    textSize = 20f
+                    letterSpacing = 0.12f
                     setTextColor(Color.WHITE)
                     setTypeface(null, Typeface.BOLD)
                 }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
                 addView(TextView(this@MainActivity).apply {
-                    text = "  Offline"
+                    text = "Voice, together"
+                    visibility = if (resources.configuration.fontScale > 1.3f) View.GONE else View.VISIBLE
                     textSize = 11f
                     gravity = Gravity.CENTER
                     setTypeface(null, Typeface.BOLD)
@@ -722,17 +890,31 @@ class MainActivity : Activity(), SutraTransmissionListener {
                     contentDescription = "Open Settings"
                     styleTextButton(Color.WHITE)
                     setOnClickListener { showSettings() }
-                }, LinearLayout.LayoutParams(dp(86), dp(44)).apply { marginStart = dp(4) })
+                }, LinearLayout.LayoutParams(dp(86), ViewGroup.LayoutParams.WRAP_CONTENT).apply { marginStart = dp(4) })
             })
             addView(networkStatus)
         }
-        setContentView(LinearLayout(this).apply {
+        val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setBackgroundColor(canvas)
             addView(header)
+            addView(emergencyBanner)
             addView(content, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
             addView(navigation)
-        })
+        }
+        if (Build.VERSION.SDK_INT >= 30) {
+            root.setOnApplyWindowInsetsListener { view, insets ->
+                val bars = insets.getInsets(WindowInsets.Type.systemBars() or WindowInsets.Type.displayCutout())
+                val keyboard = insets.getInsets(WindowInsets.Type.ime()).bottom
+                view.setPadding(bars.left, 0, bars.right, keyboard)
+                header.setPadding(dp(16), dp(12) + bars.top, dp(12), dp(11))
+                navigation.setPadding(dp(8), dp(5), dp(8), dp(6) + bars.bottom)
+                navigation.visibility = if (keyboard > 0) View.GONE else View.VISIBLE
+                WindowInsets.CONSUMED
+            }
+        }
+        setContentView(root)
+        root.requestApplyInsets()
         showPage(0)
 
         val serviceIntent = Intent(this, SutraTransmissionService::class.java)
@@ -742,6 +924,7 @@ class MainActivity : Activity(), SutraTransmissionListener {
         val modelError = runCatching { validateModelBundle(modelDir) }.exceptionOrNull()
         if (modelError != null || vadInstallError != null || !vadModelFile.isFile) {
             startStopButton.isEnabled = false
+            tapRecordButton.isEnabled = false
             pushToTalkButton.isEnabled = false
             val reason = modelError?.message ?: vadInstallError?.message ?: "Silero VAD missing"
             status.text = "Models missing or incomplete: $reason\n" +
@@ -774,8 +957,8 @@ class MainActivity : Activity(), SutraTransmissionListener {
 
     private fun card() = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL
-        setPadding(dp(13), dp(13), dp(13), dp(13))
-        background = outlinedBackground(surface, divider, 16)
+        setPadding(dp(20), dp(20), dp(20), dp(16))
+        background = roundedBackground(surface, 24)
         layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
             bottomMargin = dp(11)
         }
@@ -789,13 +972,13 @@ class MainActivity : Activity(), SutraTransmissionListener {
             setPadding(dp(16), dp(13), dp(16), dp(18))
             if (title.isNotBlank()) addView(TextView(this@MainActivity).apply {
                 text = title
-                textSize = 18f
+                textSize = 28f
                 setTextColor(ink)
                 setTypeface(null, Typeface.BOLD)
             })
             if (subtitle.isNotBlank()) addView(TextView(this@MainActivity).apply {
                 text = subtitle
-                textSize = 13f
+                textSize = 15f
                 setTextColor(mutedInk)
                 setPadding(0, dp(3), 0, dp(13))
             })
@@ -804,9 +987,9 @@ class MainActivity : Activity(), SutraTransmissionListener {
     }
 
     private fun sectionTitle(textValue: String) = TextView(this).apply {
-        text = textValue.uppercase()
-        textSize = 11.5f
-        letterSpacing = 0.12f
+        text = textValue
+        textSize = 14f
+        letterSpacing = 0.01f
         setTextColor(ink)
         setTypeface(null, Typeface.BOLD)
         setPadding(0, 0, 0, dp(8))
@@ -824,7 +1007,10 @@ class MainActivity : Activity(), SutraTransmissionListener {
 
     private fun Button.styleSecondaryButton() {
         isAllCaps = false
-        setTextColor(ink)
+        setTextColor(ColorStateList(
+            arrayOf(intArrayOf(-android.R.attr.state_enabled), intArrayOf()),
+            intArrayOf(mutedInk, ink),
+        ))
         backgroundTintList = null
         background = outlinedBackground(surface, Color.rgb(201, 208, 218), 12)
         elevation = 0f
@@ -844,7 +1030,10 @@ class MainActivity : Activity(), SutraTransmissionListener {
     private fun Button.styleSegmentButton(selected: Boolean, alert: Boolean) {
         isAllCaps = false
         setTypeface(null, Typeface.BOLD)
-        setTextColor(if (selected) Color.WHITE else if (alert) Color.rgb(142, 33, 26) else mutedInk)
+        isSelected = selected
+        textSize = 13f
+        setPadding(dp(6), 0, dp(6), 0)
+        setTextColor(if (selected && alert) Color.WHITE else if (alert) accent else ink)
         backgroundTintList = null
         background = rippleBackground(
             if (selected) if (alert) accent else surface else Color.TRANSPARENT,
@@ -854,73 +1043,20 @@ class MainActivity : Activity(), SutraTransmissionListener {
     }
 
     private fun Button.styleTalkButton(color: Int) {
-        stylePrimaryButton(color, 120)
-        textSize = 16f
-    }
-
-    private enum class DeliveryStep { QUEUED, SENT, RECEIVED, SPEAKING, DELIVERED }
-
-    private fun deliveryLadderView(): View = LinearLayout(this).also { row ->
-        deliveryLadder = row
-        row.orientation = LinearLayout.HORIZONTAL
-        row.visibility = View.GONE
-        row.setPadding(0, dp(10), 0, 0)
-        DeliveryStep.entries.forEach { step ->
-            val bar = View(this).apply { background = roundedBackground(divider, 2) }
-            val label = TextView(this).apply {
-                text = step.name.lowercase().replaceFirstChar(Char::uppercase)
-                textSize = 10f
-                gravity = Gravity.CENTER
-                setTextColor(Color.rgb(179, 186, 197))
-                setPadding(0, dp(4), 0, 0)
-            }
-            deliverySteps += bar to label
-            row.addView(LinearLayout(this).apply {
-                orientation = LinearLayout.VERTICAL
-                addView(bar, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(4)))
-                addView(label)
-            }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
-                marginStart = dp(3)
-                marginEnd = dp(3)
-            })
-        }
-    }
-
-    private fun showDelivery(step: DeliveryStep) {
-        if (!::deliveryLadder.isInitialized) return
-        deliveryLadder.visibility = View.VISIBLE
-        deliverySteps.forEachIndexed { index, (bar, label) ->
-            val current = index == step.ordinal
-            val complete = index < step.ordinal
-            bar.background = roundedBackground(
-                when { current -> success; complete -> Color.rgb(156, 207, 198); else -> divider },
-                2,
-            )
-            label.setTextColor(if (current) ink else if (complete) mutedInk else Color.rgb(179, 186, 197))
-            label.setTypeface(null, if (current) Typeface.BOLD else Typeface.NORMAL)
-        }
-        val (buttonLabel, hint, color) = when (step) {
-            DeliveryStep.QUEUED -> Triple("Queued", "Saved in outbox — will send on reconnect", amber)
-            DeliveryStep.SENT -> Triple("Sent", "Waiting for receiver", ink)
-            DeliveryStep.RECEIVED -> Triple("Received", "Nearby phone validated the message", ink)
-            DeliveryStep.SPEAKING -> Triple("Speaking", "Playing aloud on the nearby phone", blue)
-            DeliveryStep.DELIVERED -> Triple("Delivered", "Playback completed · hold again to reply", success)
-        }
-        pushToTalkButton.text = buttonLabel
-        pushToTalkButton.styleTalkButton(color)
-        pushToTalkHint.text = hint
-        pushToTalkButton.contentDescription = "$buttonLabel. $hint"
+        stylePrimaryButton(color, 24)
+        setPadding(dp(24), dp(8), dp(20), dp(8))
+        textSize = 18f
     }
 
     private fun resetLatestTranscript() {
-        transcriptMeta.text = "DETECT LANGUAGE AUTOMATICALLY"
-        latestTranscript.text = "Speak in any of the 10 supported languages. The detected language is shown after transcription."
+        transcriptMeta.text = "Every voice. Closer."
+        latestTranscript.text = "Speak in your language.\nStart a conversation with your nearby team."
+        latestTranscript.textSize = 16f
         latestTranscript.setTextColor(mutedInk)
         if (::translatedTranscript.isInitialized) {
             translatedTranscript.text = ""
             translatedTranscript.visibility = View.GONE
         }
-        if (::deliveryLadder.isInitialized) deliveryLadder.visibility = View.GONE
         pushToTalkButton.text = "Hold to talk"
         pushToTalkButton.styleTalkButton(if (alertMode) accent else ink)
         pushToTalkHint.text = if (alertMode) "Alert armed · ${alertCategory.orEmpty()}" else "Recording starts the instant you touch"
@@ -928,6 +1064,7 @@ class MainActivity : Activity(), SutraTransmissionListener {
 
     private fun setAlertMode(enabled: Boolean, category: String? = null) {
         alertMode = enabled
+        emergencyBanner.visibility = if (enabled) View.VISIBLE else View.GONE
         alertCategory = category.takeIf { enabled }
         normalButton.styleSegmentButton(selected = !enabled, alert = false)
         alertButton.styleSegmentButton(selected = enabled, alert = true)
@@ -947,8 +1084,11 @@ class MainActivity : Activity(), SutraTransmissionListener {
             setAlertMode(false)
             return
         }
-        setAlertMode(true, "EMERGENCY")
-        Toast.makeText(this, "🚨 Emergency alert armed. Speak your emergency message.", Toast.LENGTH_SHORT).show()
+        AlertDialog.Builder(this)
+            .setTitle("Send an emergency message?")
+            .setMessage("Your next recording will be marked as an emergency. Choose Normal message to cancel before recording.")
+            .setPositiveButton("Use emergency mode") { _, _ -> setAlertMode(true, "EMERGENCY") }
+            .setNegativeButton("Cancel", null).show()
     }
 
     private fun showSettings() {
@@ -988,24 +1128,125 @@ class MainActivity : Activity(), SutraTransmissionListener {
             .show()
     }
 
-    private fun updateConnectionLine(state: String, transport: String = "") {
+    private fun updateConnectionLine(state: String) {
         if (!::networkStatus.isInitialized) return
-        networkStatus.text = if (transport.isBlank()) state else "$state  ·  $transport"
+        val service = transmission
+        val wifi = service?.wifiLinkCount ?: 0
+        val bluetooth = service?.bluetoothLinkCount ?: 0
+        val total = wifi + bluetooth
+        val automatic = service?.isAutoConnecting == true
+        val nearbyPermission = if (Build.VERSION.SDK_INT >= 33) Manifest.permission.NEARBY_WIFI_DEVICES else Manifest.permission.ACCESS_FINE_LOCATION
+        val needsPermission = checkSelfPermission(nearbyPermission) != PackageManager.PERMISSION_GRANTED ||
+            (Build.VERSION.SDK_INT >= 31 && listOf(Manifest.permission.BLUETOOTH_SCAN,
+                Manifest.permission.BLUETOOTH_CONNECT, Manifest.permission.BLUETOOTH_ADVERTISE).any {
+                checkSelfPermission(it) != PackageManager.PERMISSION_GRANTED
+            })
+        networkStatus.text = when {
+            service == null -> state.ifBlank { "Starting connections…" }
+            total > 0 -> "Ready · connected nearby"
+            automatic && needsPermission -> "Nearby access needed · open Devices"
+            automatic && latestWifiStatus.startsWith("Connecting") -> "Connecting to your nearby team…"
+            automatic -> "Searching nearby · connections are automatic"
+            else -> "Connections paused"
+        }
         networkStatus.contentDescription = networkStatus.text
+        if (!::connectionTitle.isInitialized) return
+        connectionTitle.text = when {
+            service == null -> "Connection service unavailable"
+            total > 0 -> "Ready to talk"
+            automatic && needsPermission -> "Allow nearby connections"
+            automatic && latestWifiStatus.startsWith("Connecting") -> "Connecting to your team"
+            automatic -> "Finding your nearby team"
+            else -> "Connections paused"
+        }
+        linkCounts.text = "Wi-Fi  $wifi ${if (wifi == 1) "link" else "links"}     ·     Bluetooth  $bluetooth ${if (bluetooth == 1) "link" else "links"}"
+        searchButton.text = if (needsPermission) "Allow nearby devices" else if (automatic) "Search again" else "Resume automatic connections"
+        searchButton.isEnabled = service != null
+        searchButton.styleSecondaryButton()
+        searchButton.visibility = if (needsPermission || !automatic || latestWifiStatus.contains("failed", true) ||
+            latestWifiStatus.contains("busy", true) || latestWifiStatus.contains("disabled", true)) View.VISIBLE else View.GONE
+        connectionHint.text = when {
+            service == null -> "Starting the connection service…"
+            needsPermission -> "Allow Nearby devices so SUTRA can find and connect to your team."
+            !automatic -> "Automatic connections are paused. Resume when you are ready to talk."
+            latestWifiStatus.contains("busy", true) -> "Wi-Fi is temporarily busy. Retrying automatically." +
+                if (bluetooth > 0) " Your Bluetooth connection is still available." else " Keep SUTRA open on the other phone."
+            latestWifiStatus.contains("disabled", true) -> "Turn on Wi-Fi to find nearby phones. If a hotspot is active, turn it off and retry."
+            latestWifiStatus.contains("permission", true) -> "Allow Nearby devices so SUTRA can find your team."
+            total > 0 -> "Your connection is ready. Each message shows when a nearby phone receives and plays it."
+            else -> "Open SUTRA on another phone. Allow Nearby devices and approve Android's connection prompts."
+        }
+        disconnectButton.visibility = if (automatic || total > 0) View.VISIBLE else View.GONE
+        renderNearbyPeers()
     }
 
-    private fun friendlyConnectionStatus(raw: String): Pair<String, String> = when {
-        raw.contains("queued", ignoreCase = true) -> "Link lost · reconnecting" to "Outbox active"
-        raw.contains("search", ignoreCase = true) || raw.contains("discover", ignoreCase = true) ->
-            "Searching for phones" to ""
-        raw.contains("connected", ignoreCase = true) && !raw.contains("disconnected", ignoreCase = true) ->
-            "Connected to nearby SUTRA phone" to when {
-                raw.contains("bluetooth", ignoreCase = true) -> "Bluetooth"
-                else -> "Wi-Fi Direct"
-            }
-        raw.contains("disconnect", ignoreCase = true) || raw.contains("lost", ignoreCase = true) ->
-            "No device connected" to "Not connected"
-        else -> raw to ""
+    private fun renderNearbyPeers() {
+        if (!::nearbyList.isInitialized) return
+        val preferences = getSharedPreferences("sutra_device_names", MODE_PRIVATE)
+        fun name(key: String, fallback: String) = preferences.getString(key, null)?.takeIf { it.isNotBlank() } ?: fallback
+        val snapshot = bluetoothPeers.map { "${it.address}|${name("bt:${it.address}", it.name)}|${it.connected}" } +
+            wifiPeers.map { "${it.address}|${name("wifi:${it.address}", it.name)}" }
+        if (snapshot == renderedPeerRows) return
+        renderedPeerRows = snapshot
+        nearbyList.removeAllViews()
+        fun addPeer(name: String, detail: String, connected: Boolean, key: String? = null) {
+            nearbyList.addView(LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(0, dp(14), 0, dp(14))
+                addView(TextView(this@MainActivity).apply {
+                    text = name.take(1).uppercase()
+                    textSize = 20f
+                    gravity = Gravity.CENTER
+                    setTextColor(if (connected) success else ink)
+                    setTypeface(null, Typeface.BOLD)
+                    background = roundedBackground(if (connected) SutraPalette.mint else Color.rgb(233, 232, 224), 16)
+                    importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+                }, LinearLayout.LayoutParams(dp(44), dp(48)).apply { marginEnd = dp(12) })
+                addView(LinearLayout(this@MainActivity).apply {
+                    orientation = LinearLayout.VERTICAL
+                    addView(TextView(this@MainActivity).apply {
+                        text = name; textSize = 17f; setTextColor(ink)
+                        typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+                    })
+                    addView(TextView(this@MainActivity).apply {
+                        text = detail; textSize = 13f; setTextColor(if (connected) success else mutedInk)
+                        setPadding(0, dp(4), 0, 0)
+                    })
+                }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+                if (key != null) addView(Button(this@MainActivity).apply {
+                    text = "Name"; textSize = 12f; styleTextButton(success)
+                    contentDescription = "Edit local name for $name"
+                    setOnClickListener {
+                        val input = EditText(this@MainActivity).apply {
+                            setText(preferences.getString(key, "")); hint = name
+                            isSingleLine = true
+                            filters = arrayOf(android.text.InputFilter.LengthFilter(40))
+                            contentDescription = "Local device name, up to 40 characters"
+                        }
+                        AlertDialog.Builder(this@MainActivity).setTitle("Name this device")
+                            .setMessage("Only saved on this phone. Leave blank to restore its device name.")
+                            .setView(input).setPositiveButton("Save") { _, _ ->
+                                preferences.edit().putString(key, input.text.toString().trim()).apply()
+                                renderNearbyPeers()
+                            }.setNegativeButton("Cancel", null).show()
+                    }
+                }, LinearLayout.LayoutParams(dp(64), ViewGroup.LayoutParams.WRAP_CONTENT))
+            })
+            nearbyList.addView(View(this).apply { setBackgroundColor(divider) },
+                LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(1)))
+        }
+        bluetoothPeers.sortedByDescending { it.connected }.forEach {
+            val key = "bt:${it.address}"
+            addPeer(name(key, it.name), "Bluetooth · ${if (it.connected) "Connected" else "Candidate"}", it.connected, key)
+        }
+        wifiPeers.forEach {
+            val key = "wifi:${it.address}"
+            addPeer(name(key, it.name), "Wi-Fi Direct · Discovered", false, key)
+        }
+        if (wifiPeers.isEmpty() && bluetoothPeers.isEmpty()) {
+            addPeer("No nearby devices listed yet", "Open SUTRA on another phone and make it visible.", false)
+        }
     }
 
     private fun styleButtonRow(row: LinearLayout) {
@@ -1033,6 +1274,55 @@ class MainActivity : Activity(), SutraTransmissionListener {
         return false
     }
 
+    private fun prepareAutomaticConnections() {
+        val permissions = mutableListOf<String>()
+        if (Build.VERSION.SDK_INT >= 33) permissions.add(Manifest.permission.NEARBY_WIFI_DEVICES)
+        else permissions.add(Manifest.permission.ACCESS_FINE_LOCATION)
+        if (Build.VERSION.SDK_INT >= 31) permissions.addAll(listOf(
+            Manifest.permission.BLUETOOTH_SCAN, Manifest.permission.BLUETOOTH_CONNECT,
+            Manifest.permission.BLUETOOTH_ADVERTISE))
+        val missing = permissions.distinct().filter { checkSelfPermission(it) != PackageManager.PERMISSION_GRANTED }
+        if (missing.isNotEmpty() && !nearbyPermissionRequested) {
+            nearbyPermissionRequested = true
+            requestPermissions(missing.toTypedArray(), 40)
+            return
+        }
+        if (!bluetoothSetupRequested && (Build.VERSION.SDK_INT < 31 ||
+            checkSelfPermission(Manifest.permission.BLUETOOTH_ADVERTISE) == PackageManager.PERMISSION_GRANTED &&
+            checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED)) {
+            bluetoothSetupRequested = true
+            val adapter = getSystemService(android.bluetooth.BluetoothManager::class.java)?.adapter ?: return
+            @Suppress("DEPRECATION")
+            if (!adapter.isEnabled) startActivityForResult(Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE), 41)
+            else requestBluetoothVisibility()
+        }
+    }
+
+    private fun requestBluetoothVisibility() {
+        if (!ensureBluetoothPermission()) return
+        if (Build.VERSION.SDK_INT >= 31 && checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) return
+        val adapter = getSystemService(android.bluetooth.BluetoothManager::class.java)?.adapter ?: return
+        if (adapter.scanMode != BluetoothAdapter.SCAN_MODE_CONNECTABLE_DISCOVERABLE) {
+            @Suppress("DEPRECATION")
+            startActivityForResult(Intent(BluetoothAdapter.ACTION_REQUEST_DISCOVERABLE)
+                .putExtra(BluetoothAdapter.EXTRA_DISCOVERABLE_DURATION, 300), 42)
+        }
+    }
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode in listOf(2, 3, 40)) {
+            transmission?.refreshAutomaticConnections()
+            prepareAutomaticConnections()
+        }
+    }
+
+    @Deprecated("Uses the platform discoverability consent activity")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == 41 && resultCode == RESULT_OK) requestBluetoothVisibility()
+    }
+
     private fun ensureBluetoothPermission(): Boolean {
         val permissions = if (Build.VERSION.SDK_INT >= 31) arrayOf(
             Manifest.permission.BLUETOOTH_SCAN, Manifest.permission.BLUETOOTH_CONNECT,
@@ -1057,7 +1347,7 @@ class MainActivity : Activity(), SutraTransmissionListener {
         bluetoothPeerAdapter.addAll(
             peers.map { peer ->
                 val range = peer.distanceMetres?.let { " · ~${"%.1f".format(it)} m · ${peer.rssi} dBm" }.orEmpty()
-                "${if (peer.connected) "Receiving: " else ""}${peer.name}$range"
+                "${if (peer.connected) "Connected: " else ""}${peer.name}$range"
             }.ifEmpty { listOf("No paired Bluetooth phones") },
         )
         bluetoothPeerAdapter.notifyDataSetChanged()
@@ -1068,10 +1358,11 @@ class MainActivity : Activity(), SutraTransmissionListener {
         val connected = peers.firstOrNull { it.connected }
         proximityStatus.text = when {
             scanning -> "Scanning nearby phones… RSSI updates as devices respond"
-            connected != null -> "Audio route: ${connected.name}${connected.distanceMetres?.let { " · last estimate ~${"%.1f".format(it)} m" }.orEmpty()}"
-            peers.any { it.distanceMetres != null } -> "Scan complete · select a phone and tap BT connect"
-            else -> "No range yet · make the paired phone discoverable, then scan"
+            connected != null -> "${peers.count { it.connected }} Bluetooth peers connected"
+            peers.any { it.distanceMetres != null } -> "Nearby devices found · SUTRA services connect automatically"
+            else -> "Use Make this phone visible on new phones"
         }
+        renderNearbyPeers()
     }
 
     private fun installVadIfMissing(target: File) {
@@ -1134,7 +1425,7 @@ class MainActivity : Activity(), SutraTransmissionListener {
                 audioPipeline = pipelineCapture
                 listening = true
 
-                startStopButton.text = "Stop"
+                startStopButton.text = "Stop hands-free"
                 startStopButton.contentDescription = "Stop hands-free listening"
                 startStopButton.styleTextButton(Color.rgb(142, 33, 26))
                 vadIndicator.text = "Listening for speech"
@@ -1156,7 +1447,7 @@ class MainActivity : Activity(), SutraTransmissionListener {
             vadEngine?.close()
             vadEngine = null
 
-            startStopButton.text = "Start"
+            startStopButton.text = "Hands-free"
             startStopButton.contentDescription = "Start hands-free listening"
             startStopButton.styleTextButton(success)
             vadIndicator.text = "Ready to talk"
@@ -1167,7 +1458,7 @@ class MainActivity : Activity(), SutraTransmissionListener {
     }
 
     private fun beginPushToTalk() {
-        if (pushToTalkRecording || !ensureMicrophonePermission()) return
+        if (pushToTalkRecording || pendingSegments.get() > 0 || !ensureMicrophonePermission()) return
         if (AudioDuplexGate.isPlaybackActive) {
             vadIndicator.text = "Wait for playback to finish"
             return
@@ -1190,11 +1481,26 @@ class MainActivity : Activity(), SutraTransmissionListener {
             pushToTalkButton.text = "Listening…"
             pushToTalkButton.contentDescription = "Recording. Release to send"
             pushToTalkButton.styleTalkButton(if (alertMode) Color.rgb(142, 33, 26) else inkPressed)
-            pushToTalkHint.text = "Release to send"
+            pushToTalkHint.text = if (recordWithTap) "Tap Send when you are finished" else "Release to send · move away to cancel"
+            pushToTalkButton.text = if (recordWithTap) "Tap to send" else "Recording…"
+            pushToTalkButton.contentDescription = if (recordWithTap) "Recording. Tap to send, or choose Cancel recording" else "Recording. Release to send"
+            tapRecordButton.text = "Send recording"
+            cancelRecordingButton.visibility = View.VISIBLE
+            startStopButton.visibility = View.GONE
+            pushToTalkButton.showRecording(true)
+            normalButton.isEnabled = false
+            alertButton.isEnabled = false
             vadIndicator.text = "Recording"
             vadIndicator.announceForAccessibility("Recording started")
         } catch (error: Exception) {
             pushToTalkRecording = false
+            pushToTalkButton.showRecording(false)
+            normalButton.isEnabled = true
+            alertButton.isEnabled = true
+            pushToTalkButton.alpha = 1f
+            tapRecordButton.text = "Tap to record"
+            cancelRecordingButton.visibility = View.GONE
+            startStopButton.visibility = View.VISIBLE
             audioPipeline = null
             window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
             startStopButton.isEnabled = true
@@ -1206,11 +1512,19 @@ class MainActivity : Activity(), SutraTransmissionListener {
         }
     }
 
-    private fun endPushToTalk() {
+    private fun endPushToTalk(cancel: Boolean = false) {
         if (!pushToTalkRecording) return
         pushToTalkRecording = false
         runCatching { audioPipeline?.stop() }
         audioPipeline = null
+        pushToTalkButton.showRecording(false)
+        normalButton.isEnabled = true
+        alertButton.isEnabled = true
+        pushToTalkButton.alpha = 1f
+        tapRecordButton.text = "Tap to record"
+        cancelRecordingButton.visibility = View.GONE
+        startStopButton.visibility = View.VISIBLE
+        recordWithTap = false
         window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         pushToTalkButton.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
         startStopButton.isEnabled = true
@@ -1218,6 +1532,11 @@ class MainActivity : Activity(), SutraTransmissionListener {
         pushToTalkButton.contentDescription = "Hold to record a message, then release to send"
         pushToTalkButton.styleTalkButton(if (alertMode) accent else ink)
         pushToTalkHint.text = if (alertMode) "Alert armed · ${alertCategory.orEmpty()}" else "Recording starts the instant you touch"
+        if (cancel) {
+            synchronized(pushToTalkLock) { pushToTalkChunks.clear() }
+            vadIndicator.text = "Recording cancelled · nothing sent"
+            return
+        }
         val audio = synchronized(pushToTalkLock) {
             mergeAudioChunks(pushToTalkChunks).also { pushToTalkChunks.clear() }
         }
@@ -1261,6 +1580,7 @@ class MainActivity : Activity(), SutraTransmissionListener {
         }
         runOnUiThread {
             pushToTalkButton.isEnabled = false
+            tapRecordButton.isEnabled = false
             pushToTalkButton.alpha = 0.72f
             pushToTalkButton.text = "Transcribing…"
             pushToTalkHint.text = "Detecting language on device"
@@ -1317,11 +1637,10 @@ class MainActivity : Activity(), SutraTransmissionListener {
                 runOnUiThread {
                     lastText = answer.text
                     lastLanguage = answer.language
-                    latestOutgoingId = transmissionId
                     speakButton.isEnabled = answer.text.isNotBlank()
                     talkReplayButton.isEnabled = answer.text.isNotBlank()
                     talkCopyButton.isEnabled = answer.text.isNotBlank()
-                    transcriptMeta.text = "${answer.language.uppercase()} · $wireBytes B · ${answer.milliseconds} MS ON-DEVICE"
+                    transcriptMeta.text = "You · ${answer.language}"
                     latestTranscript.text = answer.text
                     latestTranscript.textSize = 18f
                     latestTranscript.setTextColor(ink)
@@ -1337,8 +1656,9 @@ class MainActivity : Activity(), SutraTransmissionListener {
                     val subRow = if (translated.isNotBlank() && answer.language.lowercase() != preferredLanguage.lowercase()) {
                         "$targetLabel: $translated\n"
                     } else ""
-                    appendConversation("You · ${answer.language.uppercase()} · ${answer.milliseconds} ms\n${answer.text}\n$subRow$delivery · $wireBytes bytes\n\n")
-                    showDelivery(if (queued) DeliveryStep.QUEUED else DeliveryStep.SENT)
+                    appendConversation("You · ${answer.language}\n${answer.text}\n$subRow$delivery\n\n")
+                    onConversationChanged()
+                    if (isAlert) setAlertMode(false)
                     vadIndicator.text = if (listening) "Listening for speech" else "Ready to talk"
                 }
             } catch (error: Exception) {
@@ -1347,7 +1667,12 @@ class MainActivity : Activity(), SutraTransmissionListener {
                 pendingSegments.decrementAndGet()
                 runOnUiThread {
                     pushToTalkButton.isEnabled = true
+                    tapRecordButton.isEnabled = true
                     pushToTalkButton.alpha = 1f
+                    if (!pushToTalkRecording) {
+                        pushToTalkButton.text = if (listening) "Hands-free" else "Hold to talk"
+                        pushToTalkHint.text = if (listening) "Messages send after a pause" else "Hold to speak, release to send"
+                    }
                 }
             }
         }
@@ -1359,7 +1684,14 @@ class MainActivity : Activity(), SutraTransmissionListener {
     }
 
     private fun speakResult() {
-        if (transmission?.speakLocal(lastText, lastLanguage) != true) {
+        val emphasized = emphasisWord.text.toString().trim().takeIf(String::isNotEmpty)
+        if (emphasized != null && lastText.split(Regex("\\s+")).none {
+                it.trimEnd('.', '!', '?', ',', ';', ':', '।').equals(emphasized, ignoreCase = true)
+            }) {
+            Toast.makeText(this, "That word is not in the latest transcript", Toast.LENGTH_SHORT).show()
+            return
+        }
+        if (transmission?.speakLocal(lastText, lastLanguage, emphasized) != true) {
             status.text = "TTS service is not ready"
             Toast.makeText(this, "Offline voice is not ready", Toast.LENGTH_SHORT).show()
         }
@@ -1382,8 +1714,13 @@ class MainActivity : Activity(), SutraTransmissionListener {
     override fun onTransmissionStatus(status: String) {
         runOnUiThread {
             this.status.text = status
-            friendlyConnectionStatus(status).let { (state, transport) -> updateConnectionLine(state, transport) }
-            if (status.contains("connected", ignoreCase = true)) {
+            if (status.contains("Wi-Fi", true) || status.startsWith("Connecting")) latestWifiStatus = status
+            if (status.contains("Wi-Fi", true) || status.contains("Bluetooth", true) ||
+                status.contains("SUTRA phones", true) || status.contains("Nearby devices", true)) {
+                discoveryStatus.text = status
+            }
+            updateConnectionLine(transmission?.connectionSummary() ?: status)
+            if (transmission?.isConnected() == true) {
                 val transport = if (status.contains("bluetooth", ignoreCase = true)) "Bluetooth" else "Wi-Fi Direct"
                 mapController.updatePeer("peer-active", "Connected Peer", transport, true)
             } else if (status.contains("disconnected", ignoreCase = true) || status.contains("closed", ignoreCase = true) || status.contains("failed", ignoreCase = true)) {
@@ -1440,11 +1777,10 @@ class MainActivity : Activity(), SutraTransmissionListener {
                             translatedTranscript.visibility = View.GONE
                         }
 
-                        if (::deliveryLadder.isInitialized) deliveryLadder.visibility = View.GONE
                         val subRow = if (translated.isNotBlank() && srcLang.lowercase() != preferredLanguage.lowercase()) {
                             "$targetLabel: $translated\n"
                         } else ""
-                        appendConversation("Peer · ${srcLang.uppercase()}\n$text\n${subRow}Received · Playing automatically\n\n")
+                        appendConversation("Nearby teammate · $srcLang\n$text\n${subRow}Received\n\n")
 
                         if (message.flags and SutraFlags.ALERT != 0) {
                             mapController.addAlertPin("EMERGENCY", text, null, null, message.sourceId)
@@ -1457,7 +1793,6 @@ class MainActivity : Activity(), SutraTransmissionListener {
                 }
                 SutraMessageType.RECEIVED_ACK, SutraMessageType.PLAYBACK_STARTED,
                 SutraMessageType.PLAYBACK_FINISHED, SutraMessageType.REPAIR_REQUEST -> {
-                    val timing = elapsedMs?.let { " · ${it} ms" }.orEmpty()
                     val label = when (message.type) {
                         SutraMessageType.RECEIVED_ACK -> "Received by peer"
                         SutraMessageType.PLAYBACK_STARTED -> "Playing on peer"
@@ -1465,19 +1800,7 @@ class MainActivity : Activity(), SutraTransmissionListener {
                         SutraMessageType.REPAIR_REQUEST -> "Peer requested clarification"
                         else -> ""
                     }
-                    appendConversation("$label$timing\n")
-                    if (message.id == latestOutgoingId) {
-                        when (message.type) {
-                            SutraMessageType.RECEIVED_ACK -> showDelivery(DeliveryStep.RECEIVED)
-                            SutraMessageType.PLAYBACK_STARTED -> showDelivery(DeliveryStep.SPEAKING)
-                            SutraMessageType.PLAYBACK_FINISHED -> {
-                                showDelivery(DeliveryStep.DELIVERED)
-                                pushToTalkButton.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
-                                pushToTalkButton.announceForAccessibility("Message delivered and playback completed")
-                            }
-                            else -> Unit
-                        }
-                    }
+                    appendConversation("$label\n")
                     if (message.type == SutraMessageType.REPAIR_REQUEST) {
                         vadIndicator.text = "Peer requests repetition of uncertain critical fields"
                     }
@@ -1487,8 +1810,43 @@ class MainActivity : Activity(), SutraTransmissionListener {
         }
     }
 
+    override fun onConversationChanged() {
+        runOnUiThread {
+            if (!::conversationView.isInitialized) return@runOnUiThread
+            val entries = transmission?.conversation?.snapshot() ?: return@runOnUiThread
+            val atBottom = !conversationScroll.canScrollVertically(1)
+            val completed = entries.filter { it.outgoing && it.progress == MessageProgress.HEARD }.map { it.key }.toSet()
+            if (conversationLoaded && completed.any { it !in heardMessages }) {
+                conversationView.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+            }
+            heardMessages.addAll(completed)
+            conversationLoaded = true
+            emptyConversation.visibility = if (entries.isEmpty()) View.VISIBLE else View.GONE
+            conversationHeading.visibility = if (entries.isEmpty()) View.GONE else View.VISIBLE
+            conversationView.render(entries, preferredLanguage)
+            if (entries.lastOrNull()?.key != lastConversationKey && atBottom) {
+                conversationScroll.post { conversationScroll.fullScroll(View.FOCUS_DOWN) }
+            }
+            lastConversationKey = entries.lastOrNull()?.key
+        }
+    }
+
     override fun onBluetoothPeers(peers: List<BluetoothPeer>, scanning: Boolean) {
-        runOnUiThread { updateBluetoothPeers(peers, scanning) }
+        runOnUiThread {
+            updateBluetoothPeers(peers, scanning)
+            updateConnectionLine(transmission?.connectionSummary().orEmpty())
+        }
+    }
+
+    override fun onWifiPeers(peers: List<WifiDirectPeer>) {
+        runOnUiThread {
+            wifiPeers = peers
+            wifiPeerAdapter.clear()
+            wifiPeerAdapter.addAll(peers.map { "${it.name} (${it.address})" }
+                .ifEmpty { listOf("Searching for nearby SUTRA phones") })
+            wifiPeerAdapter.notifyDataSetChanged()
+            renderNearbyPeers()
+        }
     }
 
     override fun onStart() {
@@ -1499,10 +1857,12 @@ class MainActivity : Activity(), SutraTransmissionListener {
     override fun onResume() {
         super.onResume()
         preferredLanguage = getSharedPreferences("sutra", MODE_PRIVATE).getString("preferred_language", "english") ?: "english"
+        onConversationChanged()
         if (::mapController.isInitialized) mapController.onResume()
     }
 
     override fun onPause() {
+        if (pushToTalkRecording) endPushToTalk(cancel = true)
         if (::mapController.isInitialized) mapController.onPause()
         super.onPause()
     }
@@ -1516,6 +1876,7 @@ class MainActivity : Activity(), SutraTransmissionListener {
     }
 
     override fun onDestroy() {
+        pushToTalkButton.showRecording(false)
         listening = false
         pushToTalkRecording = false
         audioPipeline?.stop()
@@ -1523,7 +1884,6 @@ class MainActivity : Activity(), SutraTransmissionListener {
         window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         vadEngine?.close()
         vadEngine = null
-        wifiDirect?.close()
         if (::mapController.isInitialized) mapController.onDestroy()
         sttWorker.execute { pipeline?.close(); pipeline = null }
         sttWorker.shutdown()

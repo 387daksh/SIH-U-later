@@ -7,6 +7,7 @@ import java.net.Inet4Address
 import java.net.NetworkInterface
 import java.net.ServerSocket
 import java.net.Socket
+import java.net.InetSocketAddress
 import java.util.Collections
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
@@ -42,45 +43,70 @@ class TcpPeerTransport(private val listener: PeerTransportListener, private val 
     private val peers = ConcurrentHashMap<String, Socket>()
     private val writeLocks = ConcurrentHashMap<String, Any>()
     @Volatile private var server: ServerSocket? = null
+    private val outgoing = ConcurrentHashMap<String, Socket>()
+    private val pending = ConcurrentHashMap<String, Socket>()
+    private val generation = java.util.concurrent.atomic.AtomicInteger()
+    @Volatile private var closed = false
 
     val isConnected: Boolean get() = peers.values.any { it.isConnected && !it.isClosed }
     val peerCount: Int get() = peers.size
 
+    @Synchronized
     fun host() {
-        disconnect()
+        if (closed || server?.isClosed == false) return
+        val listening = try { ServerSocket(port).also { server = it } }
+        catch (error: Exception) {
+            listener.onTransportStatus("Wi-Fi host failed: ${error.message}")
+            return
+        }
+        val epoch = generation.get()
         workers.execute {
             try {
-                val listening = ServerSocket(port).also { server = it }
                 listener.onTransportStatus("Wi-Fi host ready; waiting for SUTRA receivers")
                 while (!listening.isClosed) {
                     val peer = listening.accept()
-                    workers.execute { attach(peer) }
+                    workers.execute { attach(peer, epoch) }
                 }
             } catch (error: Exception) {
                 if (server?.isClosed == false) listener.onTransportStatus("Wi-Fi host failed: ${error.message}")
             } finally {
-                runCatching { server?.close() }
-                server = null
+                runCatching { listening.close() }
+                if (server === listening) server = null
             }
         }
     }
 
     fun connect(host: String) {
         require(host.isNotBlank()) { "No group-owner address available" }
-        disconnect()
+        val target = host.trim()
+        if (closed || outgoing[target]?.isClosed == false) return
+        val first = Socket()
+        if (pending.putIfAbsent(target, first) != null) { first.close(); return }
+        val epoch = generation.get()
         workers.execute {
-            val target = host.trim()
             var failure: Exception? = null
-            repeat(8) { attempt ->
+            var peer = first
+            try { repeat(8) { attempt ->
+                if (closed || epoch != generation.get()) return@execute
                 try {
                     listener.onTransportStatus("Opening Wi-Fi link")
-                    val peer = Socket(target, port)
-                    attach(peer)
+                    peer.connect(InetSocketAddress(target, port), 3_000)
+                    outgoing[target] = peer
+                    attach(peer, epoch)
                     return@execute
                 } catch (error: Exception) {
+                    runCatching { peer.close() }
                     failure = error
-                    if (attempt < 7) Thread.sleep(350)
+                    if (attempt < 7) {
+                        Thread.sleep(350)
+                        peer = Socket()
+                        pending[target] = peer
+                    }
                 }
+            } } finally {
+                pending.remove(target, peer)
+                outgoing.remove(target, peer)
+                runCatching { peer.close() }
             }
             listener.onTransportStatus("Wi-Fi connection failed: ${failure?.message}")
         }
@@ -108,17 +134,23 @@ class TcpPeerTransport(private val listener: PeerTransportListener, private val 
         check(delivered > 0) { "All Wi-Fi peers disconnected" }
     }
 
+    @Synchronized
     fun disconnect() {
+        generation.incrementAndGet()
         runCatching { server?.close() }
         server = null
+        pending.values.forEach { runCatching { it.close() } }
         peers.entries.toList().forEach { (id, peer) -> remove(id, peer) }
     }
 
-    private fun attach(peer: Socket) {
+    private fun attach(peer: Socket, epoch: Int) {
         peer.tcpNoDelay = true
         peer.keepAlive = true
         val id = "${peer.inetAddress.hostAddress}:${peer.port}"
-        peers[id] = peer
+        synchronized(this) {
+            if (closed || epoch != generation.get()) { peer.close(); return }
+            peers[id] = peer
+        }
         listener.onTransportStatus("Wi-Fi connected: ${peers.size} receiver(s)")
         try {
             val input = DataInputStream(peer.getInputStream())
@@ -144,6 +176,7 @@ class TcpPeerTransport(private val listener: PeerTransportListener, private val 
     }
 
     override fun close() {
+        closed = true
         disconnect()
         workers.shutdownNow()
     }

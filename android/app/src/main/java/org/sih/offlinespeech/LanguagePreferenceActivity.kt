@@ -19,11 +19,11 @@ import android.widget.Toast
 
 class LanguagePreferenceActivity : Activity() {
 
-    private val ink = Color.rgb(15, 29, 51)
-    private val mutedInk = Color.rgb(91, 103, 121)
+    private val ink = SutraPalette.ink
+    private val mutedInk = SutraPalette.muted
     private val surface = Color.WHITE
-    private val canvas = Color.rgb(241, 242, 244)
-    private val divider = Color.rgb(226, 230, 235)
+    private val canvas = SutraPalette.paper
+    private val divider = SutraPalette.line
     private val accentTeal = Color.rgb(143, 230, 214)
     private val tealDark = Color.rgb(22, 55, 70)
     private val blue = Color.rgb(40, 81, 127)
@@ -31,7 +31,8 @@ class LanguagePreferenceActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         window.statusBarColor = ink
-        window.navigationBarColor = surface
+        window.navigationBarColor = ink
+        window.decorView.systemUiVisibility = 0
 
         val prefs = getSharedPreferences("sutra", Context.MODE_PRIVATE)
         val forceChange = intent.getBooleanExtra("force_change", false)
@@ -45,7 +46,8 @@ class LanguagePreferenceActivity : Activity() {
 
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setBackgroundColor(canvas)
+            setBackgroundColor(ink)
+            fitsSystemWindows = true
         }
 
         // Top branded header
@@ -67,7 +69,8 @@ class LanguagePreferenceActivity : Activity() {
                 }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
 
                 addView(TextView(this@LanguagePreferenceActivity).apply {
-                    text = "OFFLINE"
+                    text = "Voice, together"
+                    visibility = if (resources.configuration.fontScale > 1.3f) View.GONE else View.VISIBLE
                     textSize = 10.5f
                     gravity = Gravity.CENTER
                     setTypeface(null, Typeface.BOLD)
@@ -80,8 +83,8 @@ class LanguagePreferenceActivity : Activity() {
             addView(titleRow)
 
             addView(TextView(this@LanguagePreferenceActivity).apply {
-                text = "Multi-Lingual Offline Speech & Emergency Mesh"
-                textSize = 12f
+                text = "Every voice. Closer."
+                textSize = 20f
                 setTextColor(Color.rgb(160, 175, 195))
                 setPadding(0, dp(4), 0, 0)
             })
@@ -100,15 +103,15 @@ class LanguagePreferenceActivity : Activity() {
             setPadding(dp(18), dp(20), dp(18), dp(24))
 
             addView(TextView(this@LanguagePreferenceActivity).apply {
-                text = "Choose your preferred language"
-                textSize = 18f
+                text = "Make yourself understood."
+                textSize = 28f
                 setTextColor(ink)
                 setTypeface(null, Typeface.BOLD)
             })
 
             addView(TextView(this@LanguagePreferenceActivity).apply {
-                text = "Transcripts will show a translated subtitle row in this language. The app interface remains in English."
-                textSize = 13f
+                text = "Choose your language for translated messages. Navigation stays in English."
+                textSize = 15f
                 setTextColor(mutedInk)
                 setPadding(0, dp(4), 0, dp(18))
             })
@@ -120,7 +123,7 @@ class LanguagePreferenceActivity : Activity() {
                 val card = LinearLayout(this@LanguagePreferenceActivity).apply {
                     orientation = LinearLayout.HORIZONTAL
                     gravity = Gravity.CENTER_VERTICAL
-                    background = rippleBackground(if (isSelected) Color.rgb(231, 242, 240) else surface, 14)
+                    background = rippleBackground(if (isSelected) SutraPalette.mint else surface, 20)
                     setPadding(dp(16), dp(14), dp(16), dp(14))
                     isClickable = true
                     isFocusable = true
@@ -131,7 +134,7 @@ class LanguagePreferenceActivity : Activity() {
 
                         addView(TextView(this@LanguagePreferenceActivity).apply {
                             text = lang.nativeName
-                            textSize = 17f
+                            textSize = 20f
                             setTextColor(if (isSelected) blue else ink)
                             setTypeface(null, Typeface.BOLD)
                         })
@@ -147,8 +150,8 @@ class LanguagePreferenceActivity : Activity() {
 
                     if (isSelected) {
                         addView(TextView(this@LanguagePreferenceActivity).apply {
-                            text = "CURRENT"
-                            textSize = 10f
+                            text = "Selected"
+                            textSize = 12f
                             setTypeface(null, Typeface.BOLD)
                             setTextColor(blue)
                             background = roundedBackground(Color.rgb(210, 230, 245), 10)

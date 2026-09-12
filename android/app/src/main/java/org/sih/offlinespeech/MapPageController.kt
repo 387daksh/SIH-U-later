@@ -233,13 +233,15 @@ class MapPageController(
         setTextColor(ink)
         background = roundedBackground(surface, 19).apply { setStroke(dp(1), divider) }
         elevation = dp(4).toFloat()
-        layoutParams = LinearLayout.LayoutParams(dp(38), dp(38))
+        layoutParams = LinearLayout.LayoutParams(dp(48), dp(48))
         setOnClickListener { onClick() }
     }
 
     private var locationListener: LocationListener? = null
 
     fun startLocationUpdates() {
+        if (context.checkSelfPermission(android.Manifest.permission.ACCESS_FINE_LOCATION) != android.content.pm.PackageManager.PERMISSION_GRANTED &&
+            context.checkSelfPermission(android.Manifest.permission.ACCESS_COARSE_LOCATION) != android.content.pm.PackageManager.PERMISSION_GRANTED) return
         runCatching {
             locationManager = context.getSystemService(Context.LOCATION_SERVICE) as? LocationManager
             val mgr = locationManager ?: return

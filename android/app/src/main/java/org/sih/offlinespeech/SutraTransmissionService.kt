@@ -55,12 +55,15 @@ internal fun pcmFloatBufferBytes(minimumBytes: Int, sampleRate: Int): Int {
 }
 
 interface SutraTransmissionListener {
+    fun onConversationChanged() = Unit
     fun onTransmissionStatus(status: String)
     fun onTransmissionMessage(message: SutraMessage, elapsedMs: Long?, duplicate: Boolean)
     fun onBluetoothPeers(peers: List<BluetoothPeer>, scanning: Boolean) = Unit
+    fun onWifiPeers(peers: List<WifiDirectPeer>) = Unit
 }
 
 class SutraTransmissionService : Service(), PeerTransportListener {
+    internal val conversation = ConversationTimeline()
     companion object {
         private const val CHANNEL = "sutra_connection"
         const val NOTIFICATION_ID = 4102
@@ -78,6 +81,10 @@ class SutraTransmissionService : Service(), PeerTransportListener {
     private val speechQueue = ArrayDeque<SutraMessage>()
     private lateinit var wifi: TcpPeerTransport
     private lateinit var bluetooth: BluetoothPeerTransport
+    var wifiDirect: WifiDirectController? = null
+        private set
+    private var wifiPeers = emptyList<WifiDirectPeer>()
+    private var automaticConnections = true
 
     private lateinit var store: SutraStore
     private lateinit var audioManager: AudioManager
@@ -118,7 +125,20 @@ class SutraTransmissionService : Service(), PeerTransportListener {
         bluetooth = BluetoothPeerTransport(this, this) { peers, scanning ->
             listener?.onBluetoothPeers(peers, scanning)
         }
-        runCatching { bluetooth.listen() }
+        wifiDirect = runCatching {
+            WifiDirectController(this, object : WifiDirectListener {
+                override fun onWifiDirectStatus(status: String) = this@SutraTransmissionService.status(status)
+                override fun onWifiDirectPeers(peers: List<WifiDirectPeer>) {
+                    wifiPeers = peers
+                    listener?.onWifiPeers(peers)
+                }
+                override fun onWifiDirectGroup(isOwner: Boolean, ownerAddress: String?) {
+                    if (isOwner) wifi.host() else ownerAddress?.let(wifi::connect)
+                }
+                override fun onWifiDirectGroupLost() = wifi.disconnect()
+            }, java.lang.Long.toUnsignedString(sourceId, 16).padStart(16, '0')).also { it.startAutomatic() }
+        }.onFailure { status("Wi-Fi Direct unavailable; Bluetooth discovery remains active") }.getOrNull()
+        bluetooth.startAutomatic()
         initialiseTts()
         store.metric(null, "service_started")
     }
@@ -135,7 +155,27 @@ class SutraTransmissionService : Service(), PeerTransportListener {
 
     fun setListener(value: SutraTransmissionListener?) {
         listener = value
+        value?.onWifiPeers(wifiPeers)
+        value?.onConversationChanged()
     }
+
+    fun resumeAutomaticConnections() {
+        automaticConnections = true
+        wifiDirect?.startAutomatic()
+        bluetooth.startAutomatic()
+    }
+
+    fun refreshAutomaticConnections() {
+        if (automaticConnections) resumeAutomaticConnections()
+    }
+
+    fun connectionSummary(): String =
+        "Wi-Fi: ${wifi.peerCount} links · Bluetooth: ${bluetooth.peerCount} links" +
+            if (automaticConnections) " · Auto-connect on" else " · Auto-connect paused"
+
+    val wifiLinkCount get() = wifi.peerCount
+    val bluetoothLinkCount get() = bluetooth.peerCount
+    val isAutoConnecting get() = automaticConnections
 
     fun wifiHost() = wifi.host()
     fun wifiConnect(host: String) = wifi.connect(host)
@@ -145,7 +185,13 @@ class SutraTransmissionService : Service(), PeerTransportListener {
     fun bluetoothPeers(): List<BluetoothPeer> = bluetooth.bondedPeers()
     fun fetchSutraPeers(onResult: (List<BluetoothPeer>) -> Unit) = bluetooth.fetchSutraPeers(onResult)
     fun bluetoothScan() = bluetooth.scan()
-    fun disconnectAll() { wifi.disconnect(); bluetooth.disconnect() }
+    fun disconnectAll() {
+        automaticConnections = false
+        wifiDirect?.disconnect()
+        wifi.disconnect()
+        bluetooth.disconnect()
+        status(connectionSummary())
+    }
     fun isConnected(): Boolean = wifi.isConnected || bluetooth.isConnected
     fun isSecurityActive(): Boolean = security != null
 
@@ -166,6 +212,11 @@ class SutraTransmissionService : Service(), PeerTransportListener {
         messages.forEach { message ->
             val plain = SutraCodec.encode(message)
             store.enqueue(message, plain)
+            if (message.type == SutraMessageType.TEXT_FINAL) {
+                conversation.add(ConversationEntry(message.id.toString(), SutraCodec.utf8(message.payload),
+                    message.language.pipelineName, true, message.flags and SutraFlags.ALERT != 0, MessageProgress.QUEUED))
+                listener?.onConversationChanged()
+            }
             sentAt.putIfAbsent(message.id.toString(), System.nanoTime())
             store.metric(message.id.toString(), "tx_queued", "bytes=${plain.size},type=${message.type}")
         }
@@ -186,10 +237,10 @@ class SutraTransmissionService : Service(), PeerTransportListener {
     fun monthlyAlertCount(): Int =
         store.monthlyAlertCount()
 
-    fun speakLocal(text: String, language: String): Boolean {
+    fun speakLocal(text: String, language: String, emphasizedWord: String? = null): Boolean {
         if (text.isBlank()) return false
         if (hasOnnxTts(language)) {
-            playOnnx(text, language, alert = false, message = null)
+            playOnnx(text, language, alert = false, message = null, emphasizedWord = emphasizedWord)
             return true
         }
         return speakSystem(text, language, alert = false, utteranceId = "local-${System.nanoTime()}")
@@ -197,7 +248,7 @@ class SutraTransmissionService : Service(), PeerTransportListener {
 
     override fun onTransportStatus(status: String) {
         status(status)
-        if (status.contains("connected", ignoreCase = true)) {
+        if (isConnected()) {
             store.clearStalePendingFrames()
             flushOutbox()
         }
@@ -239,6 +290,11 @@ class SutraTransmissionService : Service(), PeerTransportListener {
                 SutraMessageType.TEXT_FINAL -> {
                     sendAck(message, SutraMessageType.RECEIVED_ACK)
                     val fresh = store.recordReceipt(id)
+                    if (fresh) {
+                        conversation.add(ConversationEntry(id, SutraCodec.utf8(message.payload),
+                            message.language.pipelineName, false, message.flags and SutraFlags.ALERT != 0, MessageProgress.RECEIVED))
+                        listener?.onConversationChanged()
+                    }
                     listener?.onTransmissionMessage(message, null, !fresh)
                     if (message.shouldRelayLive(fresh)) relayLive(message, plain)
                     if (fresh) {
@@ -262,6 +318,15 @@ class SutraTransmissionService : Service(), PeerTransportListener {
                     if (message.type == SutraMessageType.RECEIVED_ACK) store.acknowledge(id)
                     if (message.type == SutraMessageType.PLAYBACK_FINISHED) sentAt.remove(id)
                     store.metric(id, message.type.name.lowercase(), "sender_elapsed_ms=$elapsed")
+                    val progress = when (message.type) {
+                        SutraMessageType.RECEIVED_ACK -> MessageProgress.RECEIVED
+                        SutraMessageType.PLAYBACK_STARTED -> MessageProgress.PLAYING
+                        SutraMessageType.PLAYBACK_FINISHED -> MessageProgress.HEARD
+                        else -> null
+                    }
+                    if (progress != null && conversation.advance(id, true, progress, message.sourceId)) {
+                        listener?.onConversationChanged()
+                    }
                     listener?.onTransmissionMessage(message, elapsed, false)
                 }
                 SutraMessageType.HELLO -> listener?.onTransmissionMessage(message, null, false)
@@ -293,6 +358,7 @@ class SutraTransmissionService : Service(), PeerTransportListener {
                 if (sent) {
                     store.markAttempt(pending.key)
                     store.metric(pending.messageId, "tx_complete", "wire_bytes=${wire.size}")
+                    if (conversation.advance(pending.messageId, true, MessageProgress.SENDING)) listener?.onConversationChanged()
                 } else return@forEach
             }
         }
@@ -310,6 +376,12 @@ class SutraTransmissionService : Service(), PeerTransportListener {
     }
 
     private fun sendAck(original: SutraMessage, type: SutraMessageType) {
+        val progress = when (type) {
+            SutraMessageType.PLAYBACK_STARTED -> MessageProgress.PLAYING
+            SutraMessageType.PLAYBACK_FINISHED -> MessageProgress.HEARD
+            else -> null
+        }
+        if (progress != null && conversation.advance(original.id.toString(), false, progress)) listener?.onConversationChanged()
         val ack = SutraSemanticEncoder.acknowledgement(original, type, sourceId)
         runCatching { sendFrame(security?.seal(SutraCodec.encode(ack)) ?: SutraCodec.encode(ack)) }
             .onFailure { store.metric(original.id.toString(), "ack_failed", type.name) }
@@ -343,7 +415,10 @@ class SutraTransmissionService : Service(), PeerTransportListener {
 
                 @Deprecated("Deprecated in Java")
                 override fun onError(utteranceId: String) {
-                    pendingSpeech.remove(utteranceId)
+                    pendingSpeech.remove(utteranceId)?.let {
+                        conversation.playbackFailed(it.id.toString())
+                        listener?.onConversationChanged()
+                    }
                     AudioDuplexGate.endPlayback()
                     abandonAudioFocus()
                 }
@@ -368,6 +443,8 @@ class SutraTransmissionService : Service(), PeerTransportListener {
         pendingSpeech[utteranceId] = message
         if (!speakSystem(text, language, alert, utteranceId)) {
             pendingSpeech.remove(utteranceId)
+            conversation.playbackFailed(message.id.toString())
+            listener?.onConversationChanged()
         }
     }
 
@@ -413,8 +490,8 @@ class SutraTransmissionService : Service(), PeerTransportListener {
         return runCatching { IndicOnnxTts(root) }
             .onSuccess {
                 onnxTts = it
-                store.metric(null, "tts_model_loaded", "ai4bharat-indic-tts-en+hi-int8")
-                status("AI4Bharat Indic-TTS ready")
+                store.metric(null, "tts_model_loaded", "ai4bharat-indic-tts-en+hi-int8,prosody=${it.supportsPitchConditioning}")
+                status("AI4Bharat Indic-TTS ready${if (it.supportsPitchConditioning) " with pitch control" else ""}")
             }
             .onFailure {
                 store.metric(null, "tts_model_failed", it.message.orEmpty())
@@ -423,7 +500,13 @@ class SutraTransmissionService : Service(), PeerTransportListener {
             .getOrNull()
     }
 
-    private fun playOnnx(text: String, language: String, alert: Boolean, message: SutraMessage?) {
+    private fun playOnnx(
+        text: String,
+        language: String,
+        alert: Boolean,
+        message: SutraMessage?,
+        emphasizedWord: String? = null,
+    ) {
         ttsWorker.execute {
             AudioDuplexGate.beginPlayback()
             val runtime = loadOnnxTts()
@@ -434,12 +517,15 @@ class SutraTransmissionService : Service(), PeerTransportListener {
                 if (!speakSystem(text, language, alert, id)) pendingSpeech.remove(id)
                 return@execute
             }
+            if (emphasizedWord != null && !runtime.supportsPitchConditioning) {
+                status("Pitch-control model not installed; replaying neutral voice")
+            }
             val started = System.nanoTime()
             var track: AudioTrack? = null
             try {
                 val chunks = runtime.chunks(text)
                 require(chunks.isNotEmpty()) { "TTS text has no supported characters" }
-                val first = runtime.synthesize(chunks.first())
+                val first = runtime.synthesize(chunks.first(), emphasizedWord)
                 val format = AudioFormat.Builder()
                     .setSampleRate(runtime.sampleRate)
                     .setEncoding(AudioFormat.ENCODING_PCM_FLOAT)
@@ -472,18 +558,23 @@ class SutraTransmissionService : Service(), PeerTransportListener {
                 val gap = FloatArray(runtime.chunkGapFrames)
                 chunks.drop(1).forEach { chunk ->
                     writeAll(track, gap, 0, gap.size)
-                    val audio = runtime.synthesize(chunk)
+                    val audio = runtime.synthesize(chunk, emphasizedWord)
                     writeAll(track, audio, 0, audio.size)
                     frames += gap.size + audio.size
                 }
                 val deadline = System.nanoTime() + (frames * 1_000_000_000L / runtime.sampleRate) + 2_000_000_000L
                 while (track.playbackHeadPosition < frames && System.nanoTime() < deadline) Thread.sleep(10)
+                check(track.playbackHeadPosition >= frames) { "Playback did not finish before the audio deadline" }
                 message?.let {
                     store.markPlayed(it.id.toString())
                     store.metric(it.id.toString(), "playback_finished", "backend=indic-tts")
                     sendAck(it, SutraMessageType.PLAYBACK_FINISHED)
                 }
             } catch (error: Exception) {
+                message?.let {
+                    conversation.playbackFailed(it.id.toString())
+                    listener?.onConversationChanged()
+                }
                 store.metric(message?.id?.toString(), "tts_failed", error.message.orEmpty())
                 status("Indic-TTS playback failed: ${error.message}")
             } finally {
@@ -599,6 +690,7 @@ class SutraTransmissionService : Service(), PeerTransportListener {
 
     override fun onDestroy() {
         listener = null
+        wifiDirect?.close()
         wifi.close()
         bluetooth.close()
         tts?.shutdown()
