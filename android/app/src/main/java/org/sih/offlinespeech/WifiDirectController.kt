@@ -42,6 +42,9 @@ class WifiDirectController(private val context: Context, private val listener: W
     private var owner = false
     private var permissionReported = false
     private var lastAttempt = 0L
+    private var retries = 0
+    private var idleSince = 0L
+    private val retryDiscover = Runnable { if (automatic && !closed) discover() }
     private val tick = object : Runnable {
         override fun run() {
             if (!automatic || closed) return
@@ -72,6 +75,25 @@ class WifiDirectController(private val context: Context, private val listener: W
             }
         }
     }
+    private fun localService() = WifiP2pDnsSdServiceInfo.newInstance(INSTANCE, SERVICE, mapOf(
+        "app" to "sutra", "protocol" to "1", "node" to nodeId,
+        "role" to if (!grouped) "idle" else if (owner) "owner" else "client",
+        "name" to "${Build.MANUFACTURER} ${Build.MODEL}"))
+
+    /** A chain that dies between clearLocalServices and addLocalService leaves this
+     *  phone invisible to everyone else, so always put the advert back on failure. */
+    private fun readvertise() {
+        val ch = channel ?: return
+        manager.addLocalService(ch, localService(), action({}, {}))
+    }
+
+    private fun scheduleRetry() {
+        if (!automatic || closed) return
+        retries = (retries + 1).coerceAtMost(4)
+        handler.removeCallbacks(retryDiscover)
+        handler.postDelayed(retryDiscover, 2_000L shl (retries - 1))
+    }
+
     private fun openChannel(): WifiP2pManager.Channel {
         channel?.let { return it }
         return manager.initialize(context, Looper.getMainLooper()) {
@@ -96,11 +118,14 @@ class WifiDirectController(private val context: Context, private val listener: W
         if (closed) return
         start()
         automatic = true
+        retries = 0
+        idleSince = SystemClock.elapsedRealtime()
         handler.removeCallbacks(tick)
         handler.post(tick)
     }
     fun stopAutomatic() {
         automatic = false
+        retries = 0
         operationEpoch++; operation = false; connectingUntil = 0
         handler.removeCallbacksAndMessages(null)
         channel?.let { runCatching { manager.stopPeerDiscovery(it, action({}, {})) } }
@@ -120,9 +145,11 @@ class WifiDirectController(private val context: Context, private val listener: W
         val fail: (Int) -> Unit = { reason ->
             if (epoch == operationEpoch && !closed) {
                 operation = false
+                readvertise()
                 listener.onWifiDirectStatus(if (reason == WifiP2pManager.BUSY)
                     "Wi-Fi Direct busy; will retry automatically. Check hotspot if this persists."
                     else "Wi-Fi Direct search failed ($reason); retrying automatically")
+                scheduleRetry()
             }
         }
         fun step(next: () -> Unit) = action({
@@ -131,7 +158,9 @@ class WifiDirectController(private val context: Context, private val listener: W
         handler.postDelayed({
             if (epoch == operationEpoch && operation) {
                 operationEpoch++; operation = false
+                readvertise()
                 listener.onWifiDirectStatus("Wi-Fi Direct search timed out; retrying")
+                scheduleRetry()
             }
         }, 12_000)
         manager.setDnsSdResponseListeners(ch, { instance, registration, device ->
@@ -153,20 +182,18 @@ class WifiDirectController(private val context: Context, private val listener: W
         // Stop the old search first. Never run discoverPeers and discoverServices in parallel.
         manager.stopPeerDiscovery(ch, step {
             manager.clearLocalServices(ch, step {
-                val info = WifiP2pDnsSdServiceInfo.newInstance(INSTANCE, SERVICE, mapOf(
-                    "app" to "sutra", "protocol" to "1", "node" to nodeId,
-                    "role" to if (!grouped) "idle" else if (owner) "owner" else "client",
-                    "name" to "${Build.MANUFACTURER} ${Build.MODEL}"))
-                manager.addLocalService(ch, info, step {
+                manager.addLocalService(ch, localService(), step {
                     manager.clearServiceRequests(ch, step {
                         manager.addServiceRequest(ch, WifiP2pDnsSdServiceRequest.newInstance(INSTANCE, SERVICE), step {
                             manager.discoverServices(ch, step {
                                 operation = false
+                                retries = 0
                                 listener.onWifiDirectStatus("Automatically searching for SUTRA phones")
                                 handler.postDelayed({
                                     if (automatic && !closed && epoch == operationEpoch && !grouped &&
                                         SystemClock.elapsedRealtime() - lastAttempt > 30_000) {
-                                        chooseAutoPeer(nodeId, candidates.values, SystemClock.elapsedRealtime())
+                                        val now = SystemClock.elapsedRealtime()
+                                        chooseAutoPeer(nodeId, candidates.values, now, idleSince)
                                             ?.let { connect(it.address) }
                                     }
                                 }, 5_000)
@@ -182,8 +209,9 @@ class WifiDirectController(private val context: Context, private val listener: W
         require(devices.containsKey(address)) { "Select a discovered SUTRA phone" }
         if (closed || grouped || SystemClock.elapsedRealtime() < connectingUntil) return
         operationEpoch++; operation = false
-        lastAttempt = SystemClock.elapsedRealtime()
-        connectingUntil = lastAttempt + 30_000
+        val attempt = SystemClock.elapsedRealtime()
+        lastAttempt = attempt
+        connectingUntil = attempt + 30_000
         val config = WifiP2pConfig().apply {
             deviceAddress = address
             wps.setup = WpsInfo.PBC
@@ -198,10 +226,14 @@ class WifiDirectController(private val context: Context, private val listener: W
             }, {
                 connectingUntil = 0
                 listener.onWifiDirectStatus("Wi-Fi connection failed ($it); automatic retry pending")
+                scheduleRetry()
             }))
         }, {
+            // manager.connect never ran, so do not hold off the next attempt for 30s.
             connectingUntil = 0
+            lastAttempt = 0
             listener.onWifiDirectStatus("Wi-Fi Direct busy; automatic retry pending")
+            scheduleRetry()
         }))
     }
     private fun requestConnectionInfo() {
@@ -213,8 +245,10 @@ class WifiDirectController(private val context: Context, private val listener: W
             if (grouped && !info.groupFormed) listener.onWifiDirectGroupLost()
             grouped = info.groupFormed
             owner = info.isGroupOwner
+            if (!grouped && changed) idleSince = SystemClock.elapsedRealtime()
             if (grouped) {
                 connectingUntil = 0
+                idleSince = SystemClock.elapsedRealtime()
                 listener.onWifiDirectGroup(owner, info.groupOwnerAddress?.hostAddress)
                 if (changed) {
                     operationEpoch++; operation = false
