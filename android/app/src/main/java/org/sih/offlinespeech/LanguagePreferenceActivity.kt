@@ -19,19 +19,21 @@ import android.widget.Toast
 
 class LanguagePreferenceActivity : Activity() {
 
-    private val ink = SutraPalette.ink
-    private val mutedInk = SutraPalette.muted
-    private val surface = Color.WHITE
-    private val canvas = SutraPalette.paper
-    private val divider = SutraPalette.line
+    // Body content (cards, text, backgrounds) adapts to the system theme; the header stays a fixed dark navy.
+    private val theme by lazy { SutraPalette.of(this) }
+    private val ink by lazy { theme.ink }
+    private val mutedInk by lazy { theme.muted }
+    private val surface by lazy { theme.surface }
+    private val canvas by lazy { theme.paper }
+    private val divider by lazy { theme.line }
+    private val blue by lazy { theme.blue }
     private val accentTeal = Color.rgb(143, 230, 214)
     private val tealDark = Color.rgb(22, 55, 70)
-    private val blue = Color.rgb(40, 81, 127)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        window.statusBarColor = ink
-        window.navigationBarColor = ink
+        window.statusBarColor = SutraPalette.chromeBackground
+        window.navigationBarColor = SutraPalette.chromeBackground
         window.decorView.systemUiVisibility = 0
 
         val prefs = getSharedPreferences("sutra", Context.MODE_PRIVATE)
@@ -46,14 +48,14 @@ class LanguagePreferenceActivity : Activity() {
 
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setBackgroundColor(ink)
+            setBackgroundColor(SutraPalette.chromeBackground)
             fitsSystemWindows = true
         }
 
         // Top branded header
         val header = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setBackgroundColor(ink)
+            setBackgroundColor(SutraPalette.chromeBackground)
             setPadding(dp(20), dp(24), dp(20), dp(20))
 
             val titleRow = LinearLayout(this@LanguagePreferenceActivity).apply {
@@ -123,7 +125,7 @@ class LanguagePreferenceActivity : Activity() {
                 val card = LinearLayout(this@LanguagePreferenceActivity).apply {
                     orientation = LinearLayout.HORIZONTAL
                     gravity = Gravity.CENTER_VERTICAL
-                    background = rippleBackground(if (isSelected) SutraPalette.mint else surface, 20)
+                    background = rippleBackground(if (isSelected) theme.mint else surface, 20)
                     setPadding(dp(16), dp(14), dp(16), dp(14))
                     isClickable = true
                     isFocusable = true
@@ -154,7 +156,7 @@ class LanguagePreferenceActivity : Activity() {
                             textSize = 12f
                             setTypeface(null, Typeface.BOLD)
                             setTextColor(blue)
-                            background = roundedBackground(Color.rgb(210, 230, 245), 10)
+                            background = roundedBackground(theme.mint, 10)
                             setPadding(dp(8), dp(4), dp(8), dp(4))
                         })
                     }

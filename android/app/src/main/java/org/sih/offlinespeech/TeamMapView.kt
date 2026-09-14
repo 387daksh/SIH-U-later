@@ -37,7 +37,7 @@ class TeamMapView(context: Context, private val select: (String) -> Unit) : View
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
-        canvas.drawColor(SutraPalette.ink)
+        canvas.drawColor(SutraPalette.chromeBackground)
         val cx = width / 2f; val cy = height / 2f + dp(10f)
         val radius = minOf(width - dp(96f), height - dp(144f)).coerceAtLeast(dp(60f)) * .47f
         val scale = radius / (radiusMeters / zoom)

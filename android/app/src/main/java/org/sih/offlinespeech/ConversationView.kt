@@ -25,9 +25,10 @@ import android.widget.Toast
 
 /** Real messages only. Existing rows retain focus and word selection when receipts arrive. */
 internal class ConversationView(context: Context, private val replay: (ConversationEntry, String?) -> Unit) : LinearLayout(context) {
-    private val ink = SutraPalette.ink
-    private val muted = SutraPalette.muted
-    private val teal = SutraPalette.teal
+    private val theme = SutraPalette.of(context)
+    private val ink = theme.ink
+    private val muted = theme.muted
+    private val teal = theme.teal
     private val rows = LinkedHashMap<String, Pair<View, TextView>>()
     private var language = ""
     init { orientation = VERTICAL; setPadding(dp(16), dp(16), dp(16), dp(12)) }
@@ -43,7 +44,7 @@ internal class ConversationView(context: Context, private val replay: (Conversat
         typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
         setPadding(dp(8), 0, dp(8), 0)
         background = RippleDrawable(ColorStateList.valueOf(Color.argb(28, 12, 103, 91)), null,
-            GradientDrawable().apply { setColor(Color.WHITE); cornerRadius = dp(12).toFloat() })
+            GradientDrawable().apply { setColor(theme.surface); cornerRadius = dp(12).toFloat() })
         setOnClickListener { action() }
     }
 
@@ -55,7 +56,7 @@ internal class ConversationView(context: Context, private val replay: (Conversat
             if (entry.key !in rows) addMessage(entry)
             rows.getValue(entry.key).second.apply {
                 if (text.toString() != entry.status) text = entry.status
-                setTextColor(if (entry.playbackFailed) Color.rgb(138, 100, 18) else teal)
+                setTextColor(if (entry.playbackFailed) theme.amber else teal)
             }
         }
     }
@@ -65,23 +66,23 @@ internal class ConversationView(context: Context, private val replay: (Conversat
             orientation = VERTICAL
             setPadding(dp(20), dp(18), dp(20), dp(10))
             background = GradientDrawable().apply {
-                setColor(if (entry.outgoing) SutraPalette.mint else Color.WHITE)
+                setColor(if (entry.outgoing) theme.mint else theme.surface)
                 cornerRadii = floatArrayOf(24f,24f,24f,24f,if (entry.outgoing) 6f else 24f,
                     if (entry.outgoing) 6f else 24f,if (entry.outgoing) 24f else 6f,if (entry.outgoing) 24f else 6f)
                     .map { dp(it.toInt()).toFloat() }.toFloatArray()
-                if (entry.alert) setStroke(dp(2), Color.rgb(179, 38, 30))
+                if (entry.alert) setStroke(dp(2), theme.accent)
             }
         }
         val lang = IndicTranslator.supportedLanguages.find { it.key == entry.language }
         card.addView(label("${if (entry.outgoing) "You" else "Nearby teammate"} · ${lang?.nativeName ?: entry.language}" +
-            if (entry.alert) " · EMERGENCY" else "", 13f, if (entry.alert) Color.rgb(179, 38, 30) else muted, true))
+            if (entry.alert) " · EMERGENCY" else "", 13f, if (entry.alert) theme.accent else muted, true))
         val original = label(entry.text, 20f).apply { setPadding(0, dp(12), 0, dp(14)); setTextIsSelectable(true) }
         card.addView(original)
         if (entry.language != language) {
             val translated = IndicTranslator.translate(entry.text, entry.language, language)
             if (translated.isNotBlank() && translated != entry.text) {
                 val name = IndicTranslator.supportedLanguages.find { it.key == language }?.nativeName ?: language
-                card.addView(View(context).apply { setBackgroundColor(SutraPalette.line) }, LayoutParams(LayoutParams.MATCH_PARENT, dp(1)))
+                card.addView(View(context).apply { setBackgroundColor(theme.line) }, LayoutParams(LayoutParams.MATCH_PARENT, dp(1)))
                 card.addView(label(name, 12f, muted, true).apply { setPadding(0, dp(12), 0, dp(4)) })
                 card.addView(label(translated, 16f, muted).apply { setPadding(0, 0, 0, dp(12)) })
             }
@@ -104,7 +105,7 @@ internal class ConversationView(context: Context, private val replay: (Conversat
             }
             // The calibrated TTS emphasizes the first occurrence of the chosen word per chunk.
             if (word != null) Regex("[\\p{L}\\p{M}]+").findAll(entry.text).firstOrNull { it.value == word }?.let {
-                highlighted.setSpan(BackgroundColorSpan(Color.rgb(165, 221, 208)), it.range.first, it.range.last + 1, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                highlighted.setSpan(BackgroundColorSpan(theme.mint), it.range.first, it.range.last + 1, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
             }
             original.setTextIsSelectable(false)
             original.text = highlighted

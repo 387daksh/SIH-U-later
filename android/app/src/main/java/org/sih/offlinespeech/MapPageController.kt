@@ -33,6 +33,7 @@ import java.io.File
 private data class TeamAlert(val key: String, val category: String, val text: String, val fix: TeamFix?)
 
 class MapPageController(private val context: Activity, private val onSharedFix: (TeamFix?) -> Unit) {
+    private val theme = SutraPalette.of(context)
     private val handler = Handler(Looper.getMainLooper())
     private val manager = context.getSystemService(LocationManager::class.java)
     private val preferences = context.getSharedPreferences("sutra", Activity.MODE_PRIVATE)
@@ -70,7 +71,7 @@ class MapPageController(private val context: Activity, private val onSharedFix: 
     fun createPageView(): View {
         val root = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
-            setBackgroundColor(SutraPalette.ink)
+            setBackgroundColor(SutraPalette.chromeBackground)
         }
         mapFrame = FrameLayout(context)
         field = TeamMapView(context) { key -> target = key; anchor = null; refresh() }
@@ -111,25 +112,25 @@ class MapPageController(private val context: Activity, private val onSharedFix: 
         val sheet = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL; setPadding(dp(20), dp(16), dp(20), dp(10))
             background = GradientDrawable().apply {
-                setColor(SutraPalette.paper)
+                setColor(theme.paper)
                 cornerRadii = floatArrayOf(dp(26).toFloat(), dp(26).toFloat(), dp(26).toFloat(), dp(26).toFloat(), 0f, 0f, 0f, 0f)
             }
         }
         val heading = LinearLayout(context).apply { gravity = android.view.Gravity.CENTER_VERTICAL }
-        heading.addView(label("Your team", 20f, SutraPalette.ink, true), LinearLayout.LayoutParams(0, -2, 1f))
+        heading.addView(label("Your team", 20f, theme.ink, true), LinearLayout.LayoutParams(0, -2, 1f))
         heading.addView(button("Compare ↗") { chooseMeasurement() }.apply {
-            setTextColor(SutraPalette.teal); background = background(SutraPalette.mint)
+            setTextColor(theme.teal); background = background(theme.mint)
         }, LinearLayout.LayoutParams(dp(110), dp(48)))
         sheet.addView(heading)
         summary = label("No teammates nearby yet", 12f)
         sheet.addView(summary)
-        measurement = label("", 15f, SutraPalette.ink, true)
+        measurement = label("", 15f, theme.ink, true)
         sheet.addView(measurement)
         list = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
         val rows = ScrollView(context).apply { addView(list); isFillViewport = false }
         sheet.addView(rows, LinearLayout.LayoutParams(-1, 0, 1f))
         shareButton = button("Share my location") { showMapOptions() }.apply {
-            setTextColor(Color.WHITE); background = background(SutraPalette.teal)
+            setTextColor(Color.WHITE); background = background(theme.teal)
         }
         sheet.addView(shareButton, LinearLayout.LayoutParams(-1, dp(48)).apply { topMargin = dp(8) })
         root.addView(sheet, LinearLayout.LayoutParams(-1, dp(240)))
@@ -143,7 +144,7 @@ class MapPageController(private val context: Activity, private val onSharedFix: 
         }
         val toggle = Switch(context).apply {
             text = "Share while app is open"; textSize = 14f; minHeight = dp(56)
-            isChecked = sharing; setTextColor(SutraPalette.ink)
+            isChecked = sharing; setTextColor(theme.ink)
             setOnCheckedChangeListener { _, checked ->
                 sharing = checked
                 preferences.edit().putBoolean("share_team_location", checked).apply()
@@ -222,7 +223,7 @@ class MapPageController(private val context: Activity, private val onSharedFix: 
     }
 
     private fun points(now: Long): List<TeamMapPoint> = buildList {
-        local?.let { add(TeamMapPoint("self", "You", it, SutraPalette.teal, !it.fresh(now))) }
+        local?.let { add(TeamMapPoint("self", "You", it, theme.teal, !it.fresh(now))) }
         peers.forEachIndexed { index, peer -> peer.beacon.fix?.let {
             add(TeamMapPoint(peer.sourceId.toString(), "${index + 1} · ${peer.beacon.name}", it,
                 Color.rgb(64, 129, 199), !it.fresh(now) || !peer.recent(now)))
@@ -241,10 +242,10 @@ class MapPageController(private val context: Activity, private val onSharedFix: 
             "$count nearby · ${peers.count { it.beacon.fix?.fresh(now) == true }} fresh locations"
         shareButton.text = if (sharing) "●  Location sharing on  ·  Manage" else "Share my location"
         fieldButton.isSelected = !online; streetButton.isSelected = online
-        fieldButton.setTextColor(if (!online) SutraPalette.ink else Color.WHITE)
-        streetButton.setTextColor(if (online) SutraPalette.ink else Color.WHITE)
-        fieldButton.background = background(if (!online) SutraPalette.mint else Color.rgb(34, 61, 73))
-        streetButton.background = background(if (online) SutraPalette.mint else Color.rgb(34, 61, 73))
+        fieldButton.setTextColor(if (!online) theme.ink else Color.WHITE)
+        streetButton.setTextColor(if (online) theme.ink else Color.WHITE)
+        fieldButton.background = background(if (!online) theme.mint else Color.rgb(34, 61, 73))
+        streetButton.background = background(if (online) theme.mint else Color.rgb(34, 61, 73))
         val enabled = if (android.os.Build.VERSION.SDK_INT >= 28) manager.isLocationEnabled else
             runCatching { manager.isProviderEnabled(LocationManager.GPS_PROVIDER) || manager.isProviderEnabled(LocationManager.NETWORK_PROVIDER) }.getOrDefault(false)
         status.text = when {
@@ -263,7 +264,7 @@ class MapPageController(private val context: Activity, private val onSharedFix: 
         measurement.textSize = 13f
         list.removeAllViews()
         if (peers.isEmpty()) {
-            list.addView(label("A shared sense of direction.", 16f, SutraPalette.ink, true))
+            list.addView(label("A shared sense of direction.", 16f, theme.ink, true))
             list.addView(label("Open SUTRA on another phone and share location to see each other here.", 13f))
         }
         peers.forEachIndexed { index, peer ->
@@ -275,23 +276,23 @@ class MapPageController(private val context: Activity, private val onSharedFix: 
             val row = LinearLayout(context).apply {
                 gravity = android.view.Gravity.CENTER_VERTICAL
                 setPadding(dp(10), dp(8), dp(10), dp(8))
-                background = background(if (target == peer.sourceId.toString()) SutraPalette.mint else Color.WHITE)
+                background = background(if (target == peer.sourceId.toString()) theme.mint else theme.surface)
             }
-            row.addView(label("${index + 1}", 14f, SutraPalette.teal, true).apply {
-                gravity = android.view.Gravity.CENTER; background = background(SutraPalette.mint)
+            row.addView(label("${index + 1}", 14f, theme.teal, true).apply {
+                gravity = android.view.Gravity.CENTER; background = background(theme.mint)
             }, LinearLayout.LayoutParams(dp(36), dp(36)).apply { marginEnd = dp(10) })
             val names = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
-            names.addView(label(peer.beacon.name, 14f, SutraPalette.ink, true))
+            names.addView(label(peer.beacon.name, 14f, theme.ink, true))
             names.addView(label("$reach · ${age}s${if (!peer.recent(now)) " · stale" else ""}", 11f))
             row.addView(names, LinearLayout.LayoutParams(0, -2, 1f))
-            row.addView(label(distance?.label ?: if (fix == null) "No location" else "No local fix", 14f, SutraPalette.teal, true))
+            row.addView(label(distance?.label ?: if (fix == null) "No location" else "No local fix", 14f, theme.teal, true))
             row.contentDescription = "${peer.beacon.name}, ${java.lang.Long.toUnsignedString(peer.sourceId, 16).takeLast(4)}. $reach, heard ${age}s ago. " +
                 (distance?.let { "${it.label}, ${it.detail}" } ?: "Distance unavailable")
             row.setOnClickListener { target = peer.sourceId.toString(); anchor = null; refresh() }
             list.addView(row, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
         }
         alerts.forEach { alert -> list.addView(label("SOS · ${alert.category}\n${alert.text}\n" +
-            if (alert.fix == null) "Location unverified — ask sender for a landmark" else "Sender location available at receipt", 13f, Color.rgb(179, 38, 30))) }
+            if (alert.fix == null) "Location unverified — ask sender for a landmark" else "Sender location available at receipt", 13f, theme.accent)) }
         if (online) renderStreet(items)
     }
 
@@ -340,7 +341,7 @@ class MapPageController(private val context: Activity, private val onSharedFix: 
         map.invalidate()
     }
 
-    private fun label(value: String, size: Float, color: Int = SutraPalette.muted, bold: Boolean = false) = TextView(context).apply {
+    private fun label(value: String, size: Float, color: Int = theme.muted, bold: Boolean = false) = TextView(context).apply {
         text = value; textSize = size; setTextColor(color); setPadding(0, dp(5), 0, dp(5))
         if (bold) setTypeface(null, Typeface.BOLD)
     }

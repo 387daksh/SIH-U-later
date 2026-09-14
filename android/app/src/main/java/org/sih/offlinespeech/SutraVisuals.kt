@@ -8,13 +8,40 @@ import android.graphics.Paint
 import android.graphics.RectF
 import android.widget.Button
 
+/** Colors for scrollable content: cards, body text, dividers. */
+internal data class SutraTheme(
+    val ink: Int,
+    val inkPressed: Int,
+    val muted: Int,
+    val teal: Int,
+    val paper: Int,
+    val mint: Int,
+    val line: Int,
+    val surface: Int,
+    val accent: Int,
+    val blue: Int,
+    val amber: Int,
+)
+
 internal object SutraPalette {
-    val ink = Color.rgb(20, 43, 59)
-    val muted = Color.rgb(88, 105, 109)
-    val teal = Color.rgb(12, 103, 91)
-    val paper = Color.rgb(247, 246, 242)
-    val mint = Color.rgb(225, 241, 235)
-    val line = Color.rgb(225, 231, 225)
+    /** Fixed navy used for the header, bottom nav rail chrome, and map canvases. */
+    val chromeBackground = Color.rgb(20, 43, 59)
+
+    private val light = SutraTheme(
+        ink = Color.rgb(20, 43, 59),
+        inkPressed = Color.rgb(22, 48, 79),
+        muted = Color.rgb(88, 105, 109),
+        teal = Color.rgb(12, 103, 91),
+        paper = Color.rgb(247, 246, 242),
+        mint = Color.rgb(225, 241, 235),
+        line = Color.rgb(225, 231, 225),
+        surface = Color.WHITE,
+        accent = Color.rgb(179, 38, 30),
+        blue = Color.rgb(40, 81, 127),
+        amber = Color.rgb(138, 100, 18),
+    )
+
+    fun of(context: Context): SutraTheme = light
 }
 
 /** Native button semantics and touch handling; the ring only reflects active recording. */
