@@ -218,21 +218,14 @@ class WifiDirectController(private val context: Context, private val listener: W
             groupOwnerIntent = if (candidates[address]?.role == "owner") 0 else 15
         }
         val ch = openChannel()
-        val epoch = operationEpoch
-        manager.stopPeerDiscovery(ch, action({
-            if (closed || epoch != operationEpoch) return@action
-            manager.connect(ch, config, action({
-                listener.onWifiDirectStatus("Connecting to ${devices[address]?.name}; accept Android's prompt if shown")
-            }, {
-                connectingUntil = 0
-                listener.onWifiDirectStatus("Wi-Fi connection failed ($it); automatic retry pending")
-                scheduleRetry()
-            }))
+        // Stopping discovery first ages the peer out of wpa_supplicant's cache within milliseconds
+        // (P2P-FIND-STOPPED -> P2P-DEVICE-LOST), so the immediately-following connect gets dropped
+        // by the framework as an unknown peer. Connect directly while the peer is still fresh.
+        manager.connect(ch, config, action({
+            listener.onWifiDirectStatus("Connecting to ${devices[address]?.name}; accept Android's prompt if shown")
         }, {
-            // manager.connect never ran, so do not hold off the next attempt for 30s.
             connectingUntil = 0
-            lastAttempt = 0
-            listener.onWifiDirectStatus("Wi-Fi Direct busy; automatic retry pending")
+            listener.onWifiDirectStatus("Wi-Fi connection failed ($it); automatic retry pending")
             scheduleRetry()
         }))
     }
