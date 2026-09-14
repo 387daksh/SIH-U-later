@@ -114,5 +114,6 @@ decoder.model = SimpleNamespace(
 logits = torch.tensor([[8.0, 0.0, 0.0, 9.0], [0.0, 8.0, 0.0, 1.0], [0.0, 0.0, 8.0, 1.0]])
 decoded = decoder._decode_language(logits, logits.log_softmax(-1), "hindi")
 assert decoded["text"] == "ab" and decoded["token_count"] == 2
+assert decoded["words"] == [{"text": "ab", "start_sec": 0.0, "end_sec": 0.16}]
 
 print("PASS: coarse English routing and reusable nine-way Indic result are correct.")
