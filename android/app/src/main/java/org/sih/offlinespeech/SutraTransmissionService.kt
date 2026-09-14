@@ -139,8 +139,13 @@ class SutraTransmissionService : Service(), PeerTransportListener {
                 }
                 override fun onWifiDirectGroup(isOwner: Boolean, ownerAddress: String?) {
                     if (isOwner) wifi.host() else ownerAddress?.let(wifi::connect)
+                    // Wi-Fi Direct is the primary transport; stop Bluetooth from chasing new links while it's up.
+                    bluetooth.wifiDirectGrouped = true
                 }
-                override fun onWifiDirectGroupLost() = wifi.disconnect()
+                override fun onWifiDirectGroupLost() {
+                    bluetooth.wifiDirectGrouped = false
+                    wifi.disconnect()
+                }
             }, java.lang.Long.toUnsignedString(sourceId, 16).padStart(16, '0')).also { it.startAutomatic() }
         }.onFailure { status("Wi-Fi Direct unavailable; Bluetooth discovery remains active") }.getOrNull()
         bluetooth.startAutomatic()
