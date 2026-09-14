@@ -29,6 +29,7 @@ ALIASES = {**{name: name for name in LANGUAGES}, **dict(zip(INDIC_CODES.values()
 LID_ID = "speechbrain/lang-id-voxlingua107-ecapa"
 INDIC_ID = "ai4bharat/indic-conformer-600m-multilingual"
 WHISPER_ID = "openai/whisper-tiny"
+INDIC_FRAME_SECONDS = 0.08
 
 
 def restrict_log_probabilities(log_probabilities, indices):
@@ -294,21 +295,44 @@ class IndicASR:
         path = local_log_probs.argmax(-1)
         starts = torch.cat((torch.tensor([0]), torch.where(path[1:] != path[:-1])[0] + 1))
         ends = torch.cat((starts[1:], torch.tensor([len(path)])))
-        tokens, confidences = [], []
+        tokens, confidences, runs = [], [], []
         for start, end in zip(starts.tolist(), ends.tolist()):
             local_id = path[start].item()
             if local_id == self.model.config.BLANK_ID:
                 continue
-            tokens.append(self.model.vocab[code][local_id])
+            token = self.model.vocab[code][local_id]
+            tokens.append(token)
+            runs.append((token, start, end))
             global_id = global_indices[local_id]
             confidences.append(global_log_probs[start:end, global_id].exp().max().item())
         text = "".join(tokens).replace("▁", " ").strip()
+        words, word = [], None
+        for token, start, end in runs:
+            starts_word = token.startswith("▁")
+            piece = token.removeprefix("▁")
+            if starts_word and word:
+                words.append(word)
+                word = None
+            if not piece:
+                continue
+            if word is None:
+                word = {
+                    "text": piece,
+                    "start_sec": start * INDIC_FRAME_SECONDS,
+                    "end_sec": end * INDIC_FRAME_SECONDS,
+                }
+            else:
+                word["text"] += piece
+                word["end_sec"] = end * INDIC_FRAME_SECONDS
+        if word:
+            words.append(word)
         return {
             "language": language,
             "language_code": code,
             "text": text,
             "confidence": float(np.mean(confidences)) if confidences else 0.0,
             "token_count": len(tokens),
+            "words": words,
         }
 
     def transcribe_all(self, audio_path):

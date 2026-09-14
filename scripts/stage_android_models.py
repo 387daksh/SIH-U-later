@@ -92,7 +92,7 @@ def check_english(bundle, audio_path):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--output", type=Path, default=ROOT / "artifacts/android_models")
-    indic_default = ROOT / "deployment_models/indic/hybrid_int8"
+    indic_default = ROOT / "deployment_models/indic/aggressive_int8"
     if not (indic_default / "assets" / "preprocessor.ts").exists():
         indic_default = ROOT / "models/indic"
     parser.add_argument("--indic-dir", type=Path, default=indic_default)
@@ -125,9 +125,13 @@ def main():
         args.whisper_dir / "tiny-tokens.txt": args.output / "whisper/tokens.txt",
         args.vad_path: args.output / "vad/silero_vad.onnx",
     }
+    for name in ("encoder.onnx.data", "ctc_decoder.onnx.data"):
+        source = args.indic_dir / "assets" / name
+        if source.is_file():
+            files[source] = args.output / "indic" / name
     if args.tts_dir.is_dir():
         selected_tts = {
-            args.tts_dir / "fastpitch_en+hi.qdq-safe.onnx": args.output / "tts/en-hi/fastpitch.onnx",
+            args.tts_dir / "fastpitch_en+hi.prosody.onnx": args.output / "tts/en-hi/fastpitch.onnx",
             args.tts_dir / "hifigan_en+hi.minmax.onnx": args.output / "tts/en-hi/hifigan.onnx",
             args.tts_dir / "meta.json": args.output / "tts/en-hi/meta.json",
         }
@@ -161,7 +165,7 @@ def main():
     staged = sorted(path for path in args.output.rglob("*")
                     if path.is_file() and path.name != "manifest.json")
     manifest = {
-        "profile": "android-hybrid-int8",
+        "profile": "android-aggressive-int8",
         "bytes": sum(path.stat().st_size for path in staged),
         "files": {str(path.relative_to(args.output)).replace("\\", "/"): {
             "bytes": path.stat().st_size,
