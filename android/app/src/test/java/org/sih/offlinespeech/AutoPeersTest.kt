@@ -17,6 +17,20 @@ class AutoPeersTest {
         assertNull(chooseAutoPeer("01", listOf(AutoPeer("x", "02", "client", 100)), 200))
     }
 
+    @Test fun higherNodeTakesOverWhenTheLowestOneNeverFormsAGroup() {
+        // Seen just now, but this phone has been groupless since 100_000.
+        val peers = listOf(AutoPeer("a", "01", "idle", 160_000), AutoPeer("c", "03", "idle", 160_000))
+        // Node 02 defers to node 01 while the wait is still young.
+        assertNull(chooseAutoPeer("02", listOf(AutoPeer("a", "01", "idle", 100_000)), 100_200, 100_000))
+        // After a minute with no group, it stops waiting on the stuck low node.
+        assertEquals("a", chooseAutoPeer("02", peers, 161_000, 100_000)?.address)
+        // An owner still wins over the fallback.
+        val withOwner = peers + AutoPeer("owner", "99", "owner", 160_000)
+        assertEquals("owner", chooseAutoPeer("02", withOwner, 161_000, 100_000)?.address)
+        // A stale peer stays ineligible no matter how long the wait has been.
+        assertNull(chooseAutoPeer("02", listOf(AutoPeer("a", "01", "idle", 100_000)), 161_000, 100_000))
+    }
+
     @Test fun broadcastSurvivesOneFailedPeerAndRejectsDuplicateLinks() {
         val links = FramedPeerLinks(1024)
         val first = ByteArrayOutputStream()
