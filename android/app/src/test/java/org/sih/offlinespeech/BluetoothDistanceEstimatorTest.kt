@@ -13,7 +13,16 @@ class BluetoothDistanceEstimatorTest {
         assertTrue(BluetoothDistanceEstimator.metres(-80) > BluetoothDistanceEstimator.metres(-65))
     }
 
-    @Test fun smoothingReducesOneSampleJumps() {
-        assertEquals(-63, BluetoothDistanceEstimator.smooth(-60, -70))
+    @Test fun filterReducesOneSampleJumps() {
+        val filter = BluetoothDistanceEstimator.RssiFilter()
+        filter.update(-60)
+        val afterJump = filter.update(-70)
+        assertTrue("expected $afterJump to land between the two raw samples", afterJump in -70..-60)
+    }
+
+    @Test fun filterConvergesOnAStableSignal() {
+        val filter = BluetoothDistanceEstimator.RssiFilter()
+        repeat(20) { filter.update(-65) }
+        assertEquals(-65, filter.update(-65))
     }
 }
