@@ -31,6 +31,7 @@ class BluetoothPeerTransport(context: Context, private val listener: PeerTranspo
     private val connector = Executors.newSingleThreadExecutor()
     private val links = FramedPeerLinks(SutraCodec.MAX_PAYLOAD_BYTES + 1024)
     private val peers = ConcurrentHashMap<String, BluetoothPeer>()
+    private val rssiFilters = ConcurrentHashMap<String, BluetoothDistanceEstimator.RssiFilter>()
     private val candidates = LinkedHashMap<String, BluetoothDevice>()
     private val confirmed = mutableSetOf<String>()
     private val connecting = ConcurrentHashMap<String, BluetoothSocket>()
@@ -119,7 +120,7 @@ class BluetoothPeerTransport(context: Context, private val listener: PeerTranspo
                     val measured = intent.getShortExtra(BluetoothDevice.EXTRA_RSSI, Short.MIN_VALUE).toInt()
                     val old = peers[device.address]
                     val rssi = if (measured == Short.MIN_VALUE.toInt()) old?.rssi
-                        else BluetoothDistanceEstimator.smooth(old?.rssi, measured)
+                        else rssiFilters.getOrPut(device.address) { BluetoothDistanceEstimator.RssiFilter() }.update(measured)
                     peers[device.address] = BluetoothPeer(device.name ?: "Nearby phone", device.address,
                         rssi, rssi?.let(BluetoothDistanceEstimator::metres), links.contains(device.address))
                     publish()
