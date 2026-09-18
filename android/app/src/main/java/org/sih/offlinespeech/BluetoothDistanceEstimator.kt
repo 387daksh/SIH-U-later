@@ -18,6 +18,30 @@ object BluetoothDistanceEstimator {
             .coerceIn(0.1, 99.0)
     }
 
-    fun smooth(previous: Int?, measurement: Int): Int =
-        previous?.let { (it * 0.65 + measurement * 0.35).toInt() } ?: measurement
+    /**
+     * A 1D Kalman filter over a single peer's RSSI stream. Tracks its own uncertainty instead of
+     * blending with a fixed weight, so it settles faster on a stable signal and reacts less to
+     * single-sample multipath/body-attenuation spikes than a plain exponential moving average.
+     */
+    class RssiFilter(
+        private val processVariance: Double = 0.008,
+        private val measurementVariance: Double = 4.0,
+    ) {
+        private var estimate: Double? = null
+        private var errorCovariance = 1.0
+
+        fun update(measurement: Int): Int {
+            val prior = estimate
+            if (prior == null) {
+                estimate = measurement.toDouble()
+                return measurement
+            }
+            val predictedCovariance = errorCovariance + processVariance
+            val kalmanGain = predictedCovariance / (predictedCovariance + measurementVariance)
+            val updated = prior + kalmanGain * (measurement - prior)
+            errorCovariance = (1 - kalmanGain) * predictedCovariance
+            estimate = updated
+            return updated.toInt()
+        }
+    }
 }
