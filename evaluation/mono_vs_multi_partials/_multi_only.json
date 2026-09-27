@@ -1,0 +1,66 @@
+{
+  "task": "iTantra PS-26173 device-tier model decision: monolingual 120M vs multilingual 628M",
+  "generated": "2026-09-27T02:28:15",
+  "dataset": {
+    "name": "google/fleurs test split (local pinned copy)",
+    "path": "evaluation\\fleurs_test_100",
+    "revision": "70bb2e84b976b7e960aa89f1c648e09c59f894dd",
+    "samples_per_language": 30,
+    "selection": "manifest.csv rows for the language, sorted by audio_path, first N (deterministic)",
+    "note": "Read speech. Kathbath/IndicVoices audio is not present in this project, so FLEURS was used."
+  },
+  "normalization": "Unicode NFC, casefold (lowercase), every Unicode punctuation (P*) and symbol (S*) character replaced with a space, then whitespace collapsed and stripped. Indic combining marks are preserved. WER computed with jiwer.wer() on whitespace-separated tokens of the normalized strings.",
+  "metrics": {
+    "WER": "percent, jiwer.wer() over normalized whitespace tokens, corpus-level",
+    "RTF": "sum(per-sample inference seconds) / sum(audio seconds); excludes model load and audio decode",
+    "peak_RAM_MB": "peak process RSS sampled at 50 ms across model load + inference, one model per process",
+    "disk_MB": "on-disk size of the weights actually loaded"
+  },
+  "caveats": [
+    "RTF is not a pure architecture comparison: the multilingual model runs as ONNX Runtime graphs (operator-fused, release-optimized) while the monolingual model runs as eager PyTorch/NeMo. WER is unaffected by this; RTF favours the multilingual runtime.",
+    "Decoders differ: multilingual is CTC with a per-language vocabulary mask (the only path this project ships); the monolingual hybrid is decoded with its own head.",
+    "CPU-only, 4 threads, to approximate phone-class compute rather than the dev GPU."
+  ],
+  "results": {
+    "hi": {
+      "multilingual_628M": {
+        "WER": 11.04,
+        "WER_fraction": 0.11042,
+        "RTF": 0.096,
+        "peak_RAM_MB": 3123.6,
+        "baseline_RAM_MB": 31.8,
+        "incremental_RAM_MB": 3091.9,
+        "disk_MB": 2381.2,
+        "samples": 30,
+        "scored_samples": 30,
+        "empty_hypotheses": 0,
+        "audio_seconds": 372.48,
+        "infer_seconds": 35.77,
+        "model_load_seconds": 16.2,
+        "decoder": "ctc",
+        "source": "E:\\SIH\\deployment_models\\indic\\fp32",
+        "device": "cpu (4 threads)"
+      }
+    },
+    "or": {
+      "multilingual_628M": {
+        "WER": 17.6,
+        "WER_fraction": 0.17602,
+        "RTF": 0.0913,
+        "peak_RAM_MB": 3099.7,
+        "baseline_RAM_MB": 31.8,
+        "incremental_RAM_MB": 3067.9,
+        "disk_MB": 2381.2,
+        "samples": 30,
+        "scored_samples": 30,
+        "empty_hypotheses": 0,
+        "audio_seconds": 330.54,
+        "infer_seconds": 30.16,
+        "model_load_seconds": 26.23,
+        "decoder": "ctc",
+        "source": "E:\\SIH\\deployment_models\\indic\\fp32",
+        "device": "cpu (4 threads)"
+      }
+    }
+  }
+}

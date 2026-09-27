@@ -1,0 +1,36 @@
+{
+  "task": "iTantra PS-26173 device-tier model decision: monolingual 120M vs multilingual 628M",
+  "generated": "2026-09-27T02:53:46",
+  "dataset": {
+    "name": "google/fleurs test split (local pinned copy)",
+    "path": "evaluation\\fleurs_test_100",
+    "revision": "70bb2e84b976b7e960aa89f1c648e09c59f894dd",
+    "samples_per_language": 30,
+    "selection": "manifest.csv rows for the language, sorted by audio_path, first N (deterministic)",
+    "note": "Read speech. Kathbath/IndicVoices audio is not present in this project, so FLEURS was used."
+  },
+  "normalization": "Unicode NFC, casefold (lowercase), every Unicode punctuation (P*) and symbol (S*) character replaced with a space, then whitespace collapsed and stripped. Indic combining marks are preserved. WER computed with jiwer.wer() on whitespace-separated tokens of the normalized strings.",
+  "metrics": {
+    "WER": "percent, jiwer.wer() over normalized whitespace tokens, corpus-level",
+    "RTF": "sum(per-sample inference seconds) / sum(audio seconds); excludes model load and audio decode",
+    "peak_RAM_MB": "peak process RSS sampled at 50 ms across model load + inference, one model per process",
+    "disk_MB": "on-disk size of the weights actually loaded"
+  },
+  "caveats": [
+    "RTF is not a pure architecture comparison: the multilingual model runs as ONNX Runtime graphs (operator-fused, release-optimized) while the monolingual model runs as eager PyTorch/NeMo. WER is unaffected by this; RTF favours the multilingual runtime.",
+    "Decoders differ: multilingual is CTC with a per-language vocabulary mask (the only path this project ships); the monolingual hybrid is decoded with its own head.",
+    "CPU-only, 4 threads, to approximate phone-class compute rather than the dev GPU."
+  ],
+  "results": {
+    "hi": {
+      "monolingual_120M": {
+        "error": "worker exited 1"
+      }
+    },
+    "or": {
+      "monolingual_120M": {
+        "error": "worker exited 1"
+      }
+    }
+  }
+}
