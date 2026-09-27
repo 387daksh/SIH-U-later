@@ -14,14 +14,38 @@ data class VadConfig(
     val silenceThreshold: Float = threshold - 0.15f,
     val minSpeechDurationMs: Int = 250,
     val minSilenceDurationMs: Int = 500,
+    /**
+     * Pause accepted as end-of-utterance once [confidentSpeechMs] of voiced audio has accumulated.
+     * Shorter than [minSilenceDurationMs] because by then the utterance is certainly real, and the
+     * full window is only needed to protect a hesitant speaker who has barely started.
+     */
+    val minSilenceDurationConfidentMs: Int = 320,
+    /** Pause accepted while push-to-talk is physically held, where intent is not in doubt. */
+    val minSilenceDurationHeldMs: Int = 256,
+    /** Voiced audio after which the shorter window applies. */
+    val confidentSpeechMs: Int = 800,
     val speechPadMs: Int = 96,
+    /**
+     * Audio retained from *before* the speech trigger and prepended to the segment.
+     *
+     * Separate from [speechPadMs] (which also trims the tail) so leading context can be generous
+     * without keeping more trailing silence. The VAD only fires once a phrase is already under way,
+     * so unvoiced onsets -- /k/ /t/ /p/ bursts, initial fricatives -- sit in the chunks just before
+     * the trigger and were being cut off the front of every utterance.
+     */
+    val preRollMs: Int = 192,
     val maxSegmentDurationMs: Int = 15000,
     val sampleRate: Int = 16000
 ) {
     val chunkSamples: Int = 512
-    val minSpeechChunks: Int = maxOf(1, (minSpeechDurationMs * sampleRate / 1000) / chunkSamples)
-    val minSilenceChunks: Int = maxOf(1, (minSilenceDurationMs * sampleRate / 1000) / chunkSamples)
-    val speechPadChunks: Int = maxOf(1, (speechPadMs * sampleRate / 1000) / chunkSamples)
+    private val chunksPerMs: (Int) -> Int = { ms -> maxOf(1, (ms * sampleRate / 1000) / chunkSamples) }
+    val minSpeechChunks: Int = chunksPerMs(minSpeechDurationMs)
+    val minSilenceChunks: Int = chunksPerMs(minSilenceDurationMs)
+    val minSilenceChunksConfident: Int = minOf(minSilenceChunks, chunksPerMs(minSilenceDurationConfidentMs))
+    val minSilenceChunksHeld: Int = minOf(minSilenceChunks, chunksPerMs(minSilenceDurationHeldMs))
+    val confidentSpeechChunks: Int = chunksPerMs(confidentSpeechMs)
+    val speechPadChunks: Int = chunksPerMs(speechPadMs)
+    val preRollChunks: Int = maxOf(speechPadChunks, chunksPerMs(preRollMs))
     val maxSegmentChunks: Int = (maxSegmentDurationMs * sampleRate / 1000) / chunkSamples
 }
 

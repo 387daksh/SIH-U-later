@@ -172,9 +172,17 @@ def build_monolingual_onnx(lang, quantization=None):
     repo = MONOLINGUAL_ONNX_REPO.format(lang=lang)
     options = ort.SessionOptions()
     options.intra_op_num_threads = THREADS
-    model = onnx_asr.load_model(
-        repo, quantization=quantization, providers=["CPUExecutionProvider"], sess_options=options
-    )
+    if quantization == "matmul_int8":
+        # Locally re-quantized: dynamic INT8 restricted to MatMul, leaving the conv subsampling
+        # front-end in FP32. The upstream all-ops int8 export emits ConvInteger, which this
+        # onnxruntime CPU build has no kernel for, so it cannot be loaded at all.
+        local = ROOT / ".hfcache" / "matmul_int8" / lang
+        model = onnx_asr.load_model("nemo-conformer-ctc", str(local),
+                                    providers=["CPUExecutionProvider"], sess_options=options)
+    else:
+        model = onnx_asr.load_model(
+            repo, quantization=quantization, providers=["CPUExecutionProvider"], sess_options=options
+        )
 
     def transcribe(path, _lang):
         # onnx_asr's own file reader uses stdlib `wave`, which cannot decode the
@@ -187,6 +195,9 @@ def build_monolingual_onnx(lang, quantization=None):
     # which holds both fp32 and int8 copies, so summing every file would overstate
     # the fp32 footprint by the size of the int8 model and vice versa.
     stem = repo.split("/")[-1]
+    if quantization == "matmul_int8":
+        local = ROOT / ".hfcache" / "matmul_int8" / lang / "model.onnx"
+        return transcribe, local.stat().st_size / 2**20, f"{local} (MatMul-only int8, conv fp32, CTC head)"
     wanted = ("model.int8.onnx",) if quantization == "int8" else ("model.onnx", "model.onnx_data")
     disk = 0.0
     for match in HF_CACHE.rglob("*"):
@@ -288,7 +299,8 @@ def run_worker(args):
         elif args.model == "monolingual_120M_nemo":
             transcribe, disk_mib, source = build_monolingual(args.language, args.decoder)
         else:
-            quantization = "int8" if args.model.endswith("int8") else None
+            quantization = ("matmul_int8" if args.model.endswith("matmul_int8")
+                            else "int8" if args.model.endswith("int8") else None)
             transcribe, disk_mib, source = build_monolingual_onnx(args.language, quantization)
         load_seconds = time.perf_counter() - load_start
         tracker.mark()

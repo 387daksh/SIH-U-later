@@ -740,6 +740,42 @@ our own 30-clip WER numbers need their caveats stated as plainly.
 - [ ] **Consider pulling SraVaani INT8 straight from `Chgauravpc/itantra`** (§9.2) rather than
       exporting it ourselves — verify provenance against `ARTPARK-IISc/SraVaani-1.0` first.
 
+## 10. Resolved: MatMul-only INT8 beats both alternatives (measured 2026-09-27)
+
+§8.2 left this as the top open question — whether restricting dynamic INT8 to MatMul, and leaving the
+conv subsampling front-end in FP32, would escape both traps at once. It does. Measured on all 9 Indic
+languages, 30 FLEURS clips each, CPU at 4 threads, same harness as §2:
+
+| | mean WER | mean RTF | mean peak RAM | disk / language |
+| --- | --- | --- | --- | --- |
+| multilingual 628M FP32 (shipping today) | **18.96%** | 0.0997 | 3100 MB | 2381 MB (shared) |
+| monolingual 120M FP32 | 19.24% | 0.0510 | 1407 MB | 459.7 MB |
+| **monolingual 120M MatMul-only INT8** | **19.63%** | **0.0198** | **1102 MB** | **178.0 MB** |
+
+Against the shared model the small INT8 model is **13.4× smaller on disk, 5.0× faster, 2.8× lighter in
+RAM, for +0.67 WER points on average.** No language is significantly worse at 95% in a paired
+bootstrap. Recipe: `quantize_dynamic(weight_type=QInt8, per_channel=True,
+op_types_to_quantize=["MatMul"], extra_options={"MatMulConstBOnly": True})` — producing 0 ConvInteger
+and 154 MatMulInteger nodes, 178.0 MB self-contained per language.
+
+**The "INT8 is ~3× slower" finding does not generalise, and this is the important correction.** Their
+measurement is sound but was taken on **VITS TTS**, which is Conv/ConvTranspose-heavy, where
+`quantize_dynamic` rewrites convolutions to `ConvInteger` and ORT's CPU path for that is slow. A
+**Conformer encoder is MatMul-dominated** — 205 MatMul against 54 Conv in this graph — so quantising
+MatMul moves the bulk of the compute onto integer kernels and it comes out **2.6× faster than FP32**,
+not slower. Their own ASR script still applies blanket `quantize_dynamic`, so they have not measured
+this variant on their ASR path.
+
+It also beats the weight-only scheme they settled on for the RAM-constrained case: weight-only
+dequantises before compute, so the file shrinks while resident memory stays FP32-sized. MatMul-only
+dynamic INT8 reduces file, RAM and time together.
+
+Two honest caveats. Gujarati (+2.02) and Odia (+1.93) are the largest gaps and their CI lower bounds
+sit just below zero (−0.46 and −0.86), so at 100 clips they could become significant — those two are
+the ones to re-check before the tier is finalised. And peak RAM includes ~500 MB of desktop PyTorch
+that an Android build never loads (`import torch` alone is +498 MB), so these are upper bounds and
+still not on-device numbers.
+
 ## Source index
 
 | Artifact | Why it matters |
