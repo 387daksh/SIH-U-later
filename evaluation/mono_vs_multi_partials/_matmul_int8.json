@@ -1,0 +1,206 @@
+{
+  "task": "iTantra PS-26173 device-tier model decision: monolingual 120M vs multilingual 628M",
+  "generated": "2026-09-27T23:36:56",
+  "dataset": {
+    "name": "google/fleurs test split (local pinned copy)",
+    "path": "evaluation\\fleurs_test_100",
+    "revision": "70bb2e84b976b7e960aa89f1c648e09c59f894dd",
+    "samples_per_language": 30,
+    "selection": "manifest.csv rows for the language, sorted by audio_path, first N (deterministic)",
+    "note": "Read speech. Kathbath/IndicVoices audio is not present in this project, so FLEURS was used."
+  },
+  "normalization": "Unicode NFC, casefold (lowercase), every Unicode punctuation (P*) and symbol (S*) character replaced with a space, then whitespace collapsed and stripped. Indic combining marks are preserved. WER computed with jiwer.wer() on whitespace-separated tokens of the normalized strings.",
+  "metrics": {
+    "WER": "percent, jiwer.wer() over normalized whitespace tokens, corpus-level",
+    "RTF": "sum(per-sample inference seconds) / sum(audio seconds); excludes model load and audio decode",
+    "peak_RAM_MB": "peak process RSS sampled at 50 ms across model load + inference, one model per process",
+    "disk_MB": "on-disk size of the weights actually loaded"
+  },
+  "caveats": [
+    "RTF is not a pure architecture comparison: the multilingual model runs as ONNX Runtime graphs (operator-fused, release-optimized) while the monolingual model runs as eager PyTorch/NeMo. WER is unaffected by this; RTF favours the multilingual runtime.",
+    "Decoders differ: multilingual is CTC with a per-language vocabulary mask (the only path this project ships); the monolingual hybrid is decoded with its own head.",
+    "CPU-only, 4 threads, to approximate phone-class compute rather than the dev GPU."
+  ],
+  "results": {
+    "hi": {
+      "monolingual_120M_matmul_int8": {
+        "WER": 11.54,
+        "WER_fraction": 0.11538,
+        "RTF": 0.02,
+        "peak_RAM_MB": 1067.9,
+        "baseline_RAM_MB": 32.0,
+        "incremental_RAM_MB": 1035.9,
+        "disk_MB": 178.0,
+        "samples": 30,
+        "scored_samples": 30,
+        "empty_hypotheses": 0,
+        "audio_seconds": 372.48,
+        "infer_seconds": 7.44,
+        "model_load_seconds": 4.26,
+        "decoder": "ctc",
+        "source": "E:\\SIH\\.hfcache\\matmul_int8\\hi\\model.onnx (MatMul-only int8, conv fp32, CTC head)",
+        "device": "cpu (4 threads)"
+      }
+    },
+    "gu": {
+      "monolingual_120M_matmul_int8": {
+        "WER": 16.77,
+        "WER_fraction": 0.1677,
+        "RTF": 0.0174,
+        "peak_RAM_MB": 1003.8,
+        "baseline_RAM_MB": 32.0,
+        "incremental_RAM_MB": 971.8,
+        "disk_MB": 178.0,
+        "samples": 30,
+        "scored_samples": 30,
+        "empty_hypotheses": 0,
+        "audio_seconds": 312.84,
+        "infer_seconds": 5.44,
+        "model_load_seconds": 3.71,
+        "decoder": "ctc",
+        "source": "E:\\SIH\\.hfcache\\matmul_int8\\gu\\model.onnx (MatMul-only int8, conv fp32, CTC head)",
+        "device": "cpu (4 threads)"
+      }
+    },
+    "mr": {
+      "monolingual_120M_matmul_int8": {
+        "WER": 19.77,
+        "WER_fraction": 0.19767,
+        "RTF": 0.0199,
+        "peak_RAM_MB": 1062.6,
+        "baseline_RAM_MB": 32.0,
+        "incremental_RAM_MB": 1030.6,
+        "disk_MB": 178.0,
+        "samples": 30,
+        "scored_samples": 30,
+        "empty_hypotheses": 0,
+        "audio_seconds": 426.36,
+        "infer_seconds": 8.49,
+        "model_load_seconds": 3.73,
+        "decoder": "ctc",
+        "source": "E:\\SIH\\.hfcache\\matmul_int8\\mr\\model.onnx (MatMul-only int8, conv fp32, CTC head)",
+        "device": "cpu (4 threads)"
+      }
+    },
+    "kn": {
+      "monolingual_120M_matmul_int8": {
+        "WER": 17.29,
+        "WER_fraction": 0.17289,
+        "RTF": 0.0201,
+        "peak_RAM_MB": 1054.3,
+        "baseline_RAM_MB": 32.2,
+        "incremental_RAM_MB": 1022.1,
+        "disk_MB": 178.0,
+        "samples": 30,
+        "scored_samples": 30,
+        "empty_hypotheses": 0,
+        "audio_seconds": 405.66,
+        "infer_seconds": 8.15,
+        "model_load_seconds": 3.78,
+        "decoder": "ctc",
+        "source": "E:\\SIH\\.hfcache\\matmul_int8\\kn\\model.onnx (MatMul-only int8, conv fp32, CTC head)",
+        "device": "cpu (4 threads)"
+      }
+    },
+    "ml": {
+      "monolingual_120M_matmul_int8": {
+        "WER": 17.92,
+        "WER_fraction": 0.17917,
+        "RTF": 0.022,
+        "peak_RAM_MB": 1224.8,
+        "baseline_RAM_MB": 32.2,
+        "incremental_RAM_MB": 1192.7,
+        "disk_MB": 178.0,
+        "samples": 30,
+        "scored_samples": 30,
+        "empty_hypotheses": 0,
+        "audio_seconds": 500.58,
+        "infer_seconds": 11.02,
+        "model_load_seconds": 3.71,
+        "decoder": "ctc",
+        "source": "E:\\SIH\\.hfcache\\matmul_int8\\ml\\model.onnx (MatMul-only int8, conv fp32, CTC head)",
+        "device": "cpu (4 threads)"
+      }
+    },
+    "ta": {
+      "monolingual_120M_matmul_int8": {
+        "WER": 34.24,
+        "WER_fraction": 0.34244,
+        "RTF": 0.023,
+        "peak_RAM_MB": 1439.0,
+        "baseline_RAM_MB": 32.0,
+        "incremental_RAM_MB": 1407.0,
+        "disk_MB": 178.0,
+        "samples": 30,
+        "scored_samples": 30,
+        "empty_hypotheses": 0,
+        "audio_seconds": 437.64,
+        "infer_seconds": 10.05,
+        "model_load_seconds": 3.65,
+        "decoder": "ctc",
+        "source": "E:\\SIH\\.hfcache\\matmul_int8\\ta\\model.onnx (MatMul-only int8, conv fp32, CTC head)",
+        "device": "cpu (4 threads)"
+      }
+    },
+    "te": {
+      "monolingual_120M_matmul_int8": {
+        "WER": 21.72,
+        "WER_fraction": 0.21715,
+        "RTF": 0.0185,
+        "peak_RAM_MB": 1005.0,
+        "baseline_RAM_MB": 32.1,
+        "incremental_RAM_MB": 973.0,
+        "disk_MB": 178.0,
+        "samples": 30,
+        "scored_samples": 30,
+        "empty_hypotheses": 0,
+        "audio_seconds": 330.0,
+        "infer_seconds": 6.1,
+        "model_load_seconds": 3.71,
+        "decoder": "ctc",
+        "source": "E:\\SIH\\.hfcache\\matmul_int8\\te\\model.onnx (MatMul-only int8, conv fp32, CTC head)",
+        "device": "cpu (4 threads)"
+      }
+    },
+    "or": {
+      "monolingual_120M_matmul_int8": {
+        "WER": 19.54,
+        "WER_fraction": 0.19536,
+        "RTF": 0.0184,
+        "peak_RAM_MB": 1001.0,
+        "baseline_RAM_MB": 32.0,
+        "incremental_RAM_MB": 969.0,
+        "disk_MB": 178.0,
+        "samples": 30,
+        "scored_samples": 30,
+        "empty_hypotheses": 0,
+        "audio_seconds": 330.54,
+        "infer_seconds": 6.08,
+        "model_load_seconds": 3.64,
+        "decoder": "ctc",
+        "source": "E:\\SIH\\.hfcache\\matmul_int8\\or\\model.onnx (MatMul-only int8, conv fp32, CTC head)",
+        "device": "cpu (4 threads)"
+      }
+    },
+    "bn": {
+      "monolingual_120M_matmul_int8": {
+        "WER": 17.84,
+        "WER_fraction": 0.17842,
+        "RTF": 0.0185,
+        "peak_RAM_MB": 1056.2,
+        "baseline_RAM_MB": 32.1,
+        "incremental_RAM_MB": 1024.2,
+        "disk_MB": 178.0,
+        "samples": 30,
+        "scored_samples": 30,
+        "empty_hypotheses": 0,
+        "audio_seconds": 356.22,
+        "infer_seconds": 6.58,
+        "model_load_seconds": 3.7,
+        "decoder": "ctc",
+        "source": "E:\\SIH\\.hfcache\\matmul_int8\\bn\\model.onnx (MatMul-only int8, conv fp32, CTC head)",
+        "device": "cpu (4 threads)"
+      }
+    }
+  }
+}

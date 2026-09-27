@@ -21,28 +21,12 @@
     "Decoders differ: multilingual is CTC with a per-language vocabulary mask (the only path this project ships); the monolingual hybrid is decoded with its own head.",
     "CPU-only, 4 threads, to approximate phone-class compute rather than the dev GPU.",
     "INT8 (131 MB) variants were NOT benchmarked: onnxruntime 1.23.2 CPU has no ConvInteger kernel for the int8 weights this export uses (MatMulInteger u8s8 is fine, ConvInteger is not), so the session fails to initialize. All monolingual numbers here are FP32 (459.7 MB).",
-    "Monolingual is decoded with the CTC head only (the ONNX export is nemo-conformer-ctc). The hybrid checkpoint RNNT head is unmeasured, so monolingual WER here is a conservative floor."
+    "Monolingual is decoded with the CTC head only (the ONNX export is nemo-conformer-ctc). The hybrid checkpoint RNNT head is unmeasured, so monolingual WER here is a conservative floor.",
+    "MatMul-only INT8 is FASTER than FP32 here (RTF ~0.020 vs ~0.050), not slower. Reports of dynamic INT8 being ~3x slower come from Conv/ConvTranspose-heavy graphs such as VITS vocoders; a Conformer encoder is MatMul-dominated, so quantising MatMul moves the bulk of the compute onto integer kernels.",
+    "Peak RAM figures include ~500 MB of desktop PyTorch that an Android build does not load (measured separately: `import torch` alone is +498 MB). On-device footprint will be lower; these are upper bounds, and no on-device measurement has been taken yet."
   ],
   "results": {
     "hi": {
-      "monolingual_120M": {
-        "WER": 11.17,
-        "WER_fraction": 0.11166,
-        "RTF": 0.0539,
-        "peak_RAM_MB": 1373.4,
-        "baseline_RAM_MB": 32.0,
-        "incremental_RAM_MB": 1341.4,
-        "disk_MB": 459.7,
-        "samples": 30,
-        "scored_samples": 30,
-        "empty_hypotheses": 0,
-        "audio_seconds": 372.48,
-        "infer_seconds": 20.06,
-        "model_load_seconds": 28.5,
-        "decoder": "ctc",
-        "source": "OpenVoiceOS/ai4bharat-indicconformer-hi-onnx (fp32, CTC head)",
-        "device": "cpu (4 threads)"
-      },
       "multilingual_628M": {
         "WER": 11.04,
         "WER_fraction": 0.11042,
@@ -61,35 +45,70 @@
         "source": "E:\\SIH\\deployment_models\\indic\\fp32",
         "device": "cpu (4 threads)"
       },
-      "delta_mono_minus_multi": {
-        "delta_WER_points": 0.12,
-        "ci95_low": -1.8,
-        "ci95_high": 2.05,
-        "p_mono_worse": 0.532,
-        "reference_words": 806,
-        "utterances": 30,
-        "significant_at_95": false
-      }
-    },
-    "gu": {
-      "monolingual_120M": {
-        "WER": 15.99,
-        "WER_fraction": 0.15994,
-        "RTF": 0.0409,
-        "peak_RAM_MB": 1320.0,
-        "baseline_RAM_MB": 32.1,
-        "incremental_RAM_MB": 1287.8,
+      "monolingual_120M_fp32": {
+        "WER": 11.17,
+        "WER_fraction": 0.11166,
+        "RTF": 0.0539,
+        "peak_RAM_MB": 1373.4,
+        "baseline_RAM_MB": 32.0,
+        "incremental_RAM_MB": 1341.4,
         "disk_MB": 459.7,
         "samples": 30,
         "scored_samples": 30,
         "empty_hypotheses": 0,
-        "audio_seconds": 312.84,
-        "infer_seconds": 12.81,
-        "model_load_seconds": 32.77,
+        "audio_seconds": 372.48,
+        "infer_seconds": 20.06,
+        "model_load_seconds": 28.5,
         "decoder": "ctc",
-        "source": "OpenVoiceOS/ai4bharat-indicconformer-gu-onnx (fp32, CTC head)",
+        "source": "OpenVoiceOS/ai4bharat-indicconformer-hi-onnx (fp32, CTC head)",
         "device": "cpu (4 threads)"
       },
+      "monolingual_120M_matmul_int8": {
+        "WER": 11.54,
+        "WER_fraction": 0.11538,
+        "RTF": 0.02,
+        "peak_RAM_MB": 1067.9,
+        "baseline_RAM_MB": 32.0,
+        "incremental_RAM_MB": 1035.9,
+        "disk_MB": 178.0,
+        "samples": 30,
+        "scored_samples": 30,
+        "empty_hypotheses": 0,
+        "audio_seconds": 372.48,
+        "infer_seconds": 7.44,
+        "model_load_seconds": 4.26,
+        "decoder": "ctc",
+        "source": "E:\\SIH\\.hfcache\\matmul_int8\\hi\\model.onnx (MatMul-only int8, conv fp32, CTC head)",
+        "device": "cpu (4 threads)"
+      },
+      "deltas": {
+        "matmul_int8_minus_multilingual": {
+          "delta_WER_points": 0.5,
+          "ci95_low": -1.58,
+          "ci95_high": 2.64,
+          "significant_at_95": false,
+          "utterances": 30,
+          "reference_words": 806
+        },
+        "mono_fp32_minus_multilingual": {
+          "delta_WER_points": 0.12,
+          "ci95_low": -1.89,
+          "ci95_high": 2.05,
+          "significant_at_95": false,
+          "utterances": 30,
+          "reference_words": 806
+        },
+        "quantisation_cost_int8_minus_fp32": {
+          "delta_WER_points": 0.37,
+          "ci95_low": 0.0,
+          "ci95_high": 0.93,
+          "significant_at_95": false,
+          "utterances": 30,
+          "reference_words": 806
+        }
+      }
+    },
+    "gu": {
       "multilingual_628M": {
         "WER": 14.91,
         "WER_fraction": 0.14907,
@@ -108,35 +127,70 @@
         "source": "E:\\SIH\\deployment_models\\indic\\fp32",
         "device": "cpu (4 threads)"
       },
-      "delta_mono_minus_multi": {
-        "delta_WER_points": 1.24,
-        "ci95_low": -1.33,
-        "ci95_high": 4.17,
-        "p_mono_worse": 0.802,
-        "reference_words": 644,
-        "utterances": 30,
-        "significant_at_95": false
-      }
-    },
-    "mr": {
-      "monolingual_120M": {
-        "WER": 18.77,
-        "WER_fraction": 0.18771,
-        "RTF": 0.0515,
-        "peak_RAM_MB": 1373.6,
-        "baseline_RAM_MB": 32.2,
-        "incremental_RAM_MB": 1341.4,
+      "monolingual_120M_fp32": {
+        "WER": 15.99,
+        "WER_fraction": 0.15994,
+        "RTF": 0.0409,
+        "peak_RAM_MB": 1320.0,
+        "baseline_RAM_MB": 32.1,
+        "incremental_RAM_MB": 1287.8,
         "disk_MB": 459.7,
         "samples": 30,
         "scored_samples": 30,
         "empty_hypotheses": 0,
-        "audio_seconds": 426.36,
-        "infer_seconds": 21.94,
-        "model_load_seconds": 30.22,
+        "audio_seconds": 312.84,
+        "infer_seconds": 12.81,
+        "model_load_seconds": 32.77,
         "decoder": "ctc",
-        "source": "OpenVoiceOS/ai4bharat-indicconformer-mr-onnx (fp32, CTC head)",
+        "source": "OpenVoiceOS/ai4bharat-indicconformer-gu-onnx (fp32, CTC head)",
         "device": "cpu (4 threads)"
       },
+      "monolingual_120M_matmul_int8": {
+        "WER": 16.77,
+        "WER_fraction": 0.1677,
+        "RTF": 0.0174,
+        "peak_RAM_MB": 1003.8,
+        "baseline_RAM_MB": 32.0,
+        "incremental_RAM_MB": 971.8,
+        "disk_MB": 178.0,
+        "samples": 30,
+        "scored_samples": 30,
+        "empty_hypotheses": 0,
+        "audio_seconds": 312.84,
+        "infer_seconds": 5.44,
+        "model_load_seconds": 3.71,
+        "decoder": "ctc",
+        "source": "E:\\SIH\\.hfcache\\matmul_int8\\gu\\model.onnx (MatMul-only int8, conv fp32, CTC head)",
+        "device": "cpu (4 threads)"
+      },
+      "deltas": {
+        "matmul_int8_minus_multilingual": {
+          "delta_WER_points": 2.02,
+          "ci95_low": -0.46,
+          "ci95_high": 4.85,
+          "significant_at_95": false,
+          "utterances": 30,
+          "reference_words": 644
+        },
+        "mono_fp32_minus_multilingual": {
+          "delta_WER_points": 1.24,
+          "ci95_low": -1.33,
+          "ci95_high": 4.05,
+          "significant_at_95": false,
+          "utterances": 30,
+          "reference_words": 644
+        },
+        "quantisation_cost_int8_minus_fp32": {
+          "delta_WER_points": 1.09,
+          "ci95_low": 0.18,
+          "ci95_high": 2.13,
+          "significant_at_95": true,
+          "utterances": 30,
+          "reference_words": 644
+        }
+      }
+    },
+    "mr": {
       "multilingual_628M": {
         "WER": 18.44,
         "WER_fraction": 0.18439,
@@ -155,35 +209,70 @@
         "source": "E:\\SIH\\deployment_models\\indic\\fp32",
         "device": "cpu (4 threads)"
       },
-      "delta_mono_minus_multi": {
-        "delta_WER_points": 0.33,
-        "ci95_low": -2.11,
-        "ci95_high": 2.64,
-        "p_mono_worse": 0.596,
-        "reference_words": 602,
-        "utterances": 30,
-        "significant_at_95": false
-      }
-    },
-    "kn": {
-      "monolingual_120M": {
-        "WER": 17.49,
-        "WER_fraction": 0.17485,
-        "RTF": 0.052,
-        "peak_RAM_MB": 1374.3,
-        "baseline_RAM_MB": 32.1,
-        "incremental_RAM_MB": 1342.2,
+      "monolingual_120M_fp32": {
+        "WER": 18.77,
+        "WER_fraction": 0.18771,
+        "RTF": 0.0515,
+        "peak_RAM_MB": 1373.6,
+        "baseline_RAM_MB": 32.2,
+        "incremental_RAM_MB": 1341.4,
         "disk_MB": 459.7,
         "samples": 30,
         "scored_samples": 30,
         "empty_hypotheses": 0,
-        "audio_seconds": 405.66,
-        "infer_seconds": 21.11,
-        "model_load_seconds": 31.55,
+        "audio_seconds": 426.36,
+        "infer_seconds": 21.94,
+        "model_load_seconds": 30.22,
         "decoder": "ctc",
-        "source": "OpenVoiceOS/ai4bharat-indicconformer-kn-onnx (fp32, CTC head)",
+        "source": "OpenVoiceOS/ai4bharat-indicconformer-mr-onnx (fp32, CTC head)",
         "device": "cpu (4 threads)"
       },
+      "monolingual_120M_matmul_int8": {
+        "WER": 19.77,
+        "WER_fraction": 0.19767,
+        "RTF": 0.0199,
+        "peak_RAM_MB": 1062.6,
+        "baseline_RAM_MB": 32.0,
+        "incremental_RAM_MB": 1030.6,
+        "disk_MB": 178.0,
+        "samples": 30,
+        "scored_samples": 30,
+        "empty_hypotheses": 0,
+        "audio_seconds": 426.36,
+        "infer_seconds": 8.49,
+        "model_load_seconds": 3.73,
+        "decoder": "ctc",
+        "source": "E:\\SIH\\.hfcache\\matmul_int8\\mr\\model.onnx (MatMul-only int8, conv fp32, CTC head)",
+        "device": "cpu (4 threads)"
+      },
+      "deltas": {
+        "matmul_int8_minus_multilingual": {
+          "delta_WER_points": 1.33,
+          "ci95_low": -1.53,
+          "ci95_high": 4.13,
+          "significant_at_95": false,
+          "utterances": 30,
+          "reference_words": 602
+        },
+        "mono_fp32_minus_multilingual": {
+          "delta_WER_points": 0.33,
+          "ci95_low": -2.25,
+          "ci95_high": 2.71,
+          "significant_at_95": false,
+          "utterances": 30,
+          "reference_words": 602
+        },
+        "quantisation_cost_int8_minus_fp32": {
+          "delta_WER_points": 1.16,
+          "ci95_low": 0.34,
+          "ci95_high": 2.07,
+          "significant_at_95": true,
+          "utterances": 30,
+          "reference_words": 602
+        }
+      }
+    },
+    "kn": {
       "multilingual_628M": {
         "WER": 17.09,
         "WER_fraction": 0.17092,
@@ -202,35 +291,70 @@
         "source": "E:\\SIH\\deployment_models\\indic\\fp32",
         "device": "cpu (4 threads)"
       },
-      "delta_mono_minus_multi": {
-        "delta_WER_points": 0.39,
-        "ci95_low": -2.0,
-        "ci95_high": 2.83,
-        "p_mono_worse": 0.616,
-        "reference_words": 509,
-        "utterances": 30,
-        "significant_at_95": false
-      }
-    },
-    "ml": {
-      "monolingual_120M": {
-        "WER": 17.92,
-        "WER_fraction": 0.17917,
-        "RTF": 0.0545,
-        "peak_RAM_MB": 1522.3,
-        "baseline_RAM_MB": 32.0,
-        "incremental_RAM_MB": 1490.3,
+      "monolingual_120M_fp32": {
+        "WER": 17.49,
+        "WER_fraction": 0.17485,
+        "RTF": 0.052,
+        "peak_RAM_MB": 1374.3,
+        "baseline_RAM_MB": 32.1,
+        "incremental_RAM_MB": 1342.2,
         "disk_MB": 459.7,
         "samples": 30,
         "scored_samples": 30,
         "empty_hypotheses": 0,
-        "audio_seconds": 500.58,
-        "infer_seconds": 27.29,
-        "model_load_seconds": 27.94,
+        "audio_seconds": 405.66,
+        "infer_seconds": 21.11,
+        "model_load_seconds": 31.55,
         "decoder": "ctc",
-        "source": "OpenVoiceOS/ai4bharat-indicconformer-ml-onnx (fp32, CTC head)",
+        "source": "OpenVoiceOS/ai4bharat-indicconformer-kn-onnx (fp32, CTC head)",
         "device": "cpu (4 threads)"
       },
+      "monolingual_120M_matmul_int8": {
+        "WER": 17.29,
+        "WER_fraction": 0.17289,
+        "RTF": 0.0201,
+        "peak_RAM_MB": 1054.3,
+        "baseline_RAM_MB": 32.2,
+        "incremental_RAM_MB": 1022.1,
+        "disk_MB": 178.0,
+        "samples": 30,
+        "scored_samples": 30,
+        "empty_hypotheses": 0,
+        "audio_seconds": 405.66,
+        "infer_seconds": 8.15,
+        "model_load_seconds": 3.78,
+        "decoder": "ctc",
+        "source": "E:\\SIH\\.hfcache\\matmul_int8\\kn\\model.onnx (MatMul-only int8, conv fp32, CTC head)",
+        "device": "cpu (4 threads)"
+      },
+      "deltas": {
+        "matmul_int8_minus_multilingual": {
+          "delta_WER_points": 0.2,
+          "ci95_low": -2.13,
+          "ci95_high": 2.78,
+          "significant_at_95": false,
+          "utterances": 30,
+          "reference_words": 509
+        },
+        "mono_fp32_minus_multilingual": {
+          "delta_WER_points": 0.39,
+          "ci95_low": -2.05,
+          "ci95_high": 2.79,
+          "significant_at_95": false,
+          "utterances": 30,
+          "reference_words": 509
+        },
+        "quantisation_cost_int8_minus_fp32": {
+          "delta_WER_points": -0.2,
+          "ci95_low": -0.62,
+          "ci95_high": 0.0,
+          "significant_at_95": false,
+          "utterances": 30,
+          "reference_words": 509
+        }
+      }
+    },
+    "ml": {
       "multilingual_628M": {
         "WER": 17.71,
         "WER_fraction": 0.17708,
@@ -249,35 +373,70 @@
         "source": "E:\\SIH\\deployment_models\\indic\\fp32",
         "device": "cpu (4 threads)"
       },
-      "delta_mono_minus_multi": {
-        "delta_WER_points": -0.21,
-        "ci95_low": -3.02,
-        "ci95_high": 2.71,
-        "p_mono_worse": 0.41,
-        "reference_words": 480,
-        "utterances": 30,
-        "significant_at_95": false
-      }
-    },
-    "ta": {
-      "monolingual_120M": {
-        "WER": 33.88,
-        "WER_fraction": 0.3388,
-        "RTF": 0.0561,
-        "peak_RAM_MB": 1744.0,
-        "baseline_RAM_MB": 32.1,
-        "incremental_RAM_MB": 1711.9,
+      "monolingual_120M_fp32": {
+        "WER": 17.92,
+        "WER_fraction": 0.17917,
+        "RTF": 0.0545,
+        "peak_RAM_MB": 1522.3,
+        "baseline_RAM_MB": 32.0,
+        "incremental_RAM_MB": 1490.3,
         "disk_MB": 459.7,
         "samples": 30,
         "scored_samples": 30,
         "empty_hypotheses": 0,
-        "audio_seconds": 437.64,
-        "infer_seconds": 24.55,
-        "model_load_seconds": 31.25,
+        "audio_seconds": 500.58,
+        "infer_seconds": 27.29,
+        "model_load_seconds": 27.94,
         "decoder": "ctc",
-        "source": "OpenVoiceOS/ai4bharat-indicconformer-ta-onnx (fp32, CTC head)",
+        "source": "OpenVoiceOS/ai4bharat-indicconformer-ml-onnx (fp32, CTC head)",
         "device": "cpu (4 threads)"
       },
+      "monolingual_120M_matmul_int8": {
+        "WER": 17.92,
+        "WER_fraction": 0.17917,
+        "RTF": 0.022,
+        "peak_RAM_MB": 1224.8,
+        "baseline_RAM_MB": 32.2,
+        "incremental_RAM_MB": 1192.7,
+        "disk_MB": 178.0,
+        "samples": 30,
+        "scored_samples": 30,
+        "empty_hypotheses": 0,
+        "audio_seconds": 500.58,
+        "infer_seconds": 11.02,
+        "model_load_seconds": 3.71,
+        "decoder": "ctc",
+        "source": "E:\\SIH\\.hfcache\\matmul_int8\\ml\\model.onnx (MatMul-only int8, conv fp32, CTC head)",
+        "device": "cpu (4 threads)"
+      },
+      "deltas": {
+        "matmul_int8_minus_multilingual": {
+          "delta_WER_points": -0.21,
+          "ci95_low": -3.01,
+          "ci95_high": 2.66,
+          "significant_at_95": false,
+          "utterances": 30,
+          "reference_words": 480
+        },
+        "mono_fp32_minus_multilingual": {
+          "delta_WER_points": -0.21,
+          "ci95_low": -2.87,
+          "ci95_high": 2.73,
+          "significant_at_95": false,
+          "utterances": 30,
+          "reference_words": 480
+        },
+        "quantisation_cost_int8_minus_fp32": {
+          "delta_WER_points": -0.21,
+          "ci95_low": -0.7,
+          "ci95_high": 0.0,
+          "significant_at_95": false,
+          "utterances": 30,
+          "reference_words": 480
+        }
+      }
+    },
+    "ta": {
       "multilingual_628M": {
         "WER": 34.97,
         "WER_fraction": 0.34973,
@@ -296,35 +455,70 @@
         "source": "E:\\SIH\\deployment_models\\indic\\fp32",
         "device": "cpu (4 threads)"
       },
-      "delta_mono_minus_multi": {
-        "delta_WER_points": -1.09,
-        "ci95_low": -3.36,
-        "ci95_high": 0.94,
-        "p_mono_worse": 0.135,
-        "reference_words": 549,
-        "utterances": 30,
-        "significant_at_95": false
-      }
-    },
-    "te": {
-      "monolingual_120M": {
-        "WER": 21.17,
-        "WER_fraction": 0.21168,
-        "RTF": 0.0502,
-        "peak_RAM_MB": 1311.8,
-        "baseline_RAM_MB": 32.0,
-        "incremental_RAM_MB": 1279.8,
+      "monolingual_120M_fp32": {
+        "WER": 33.88,
+        "WER_fraction": 0.3388,
+        "RTF": 0.0561,
+        "peak_RAM_MB": 1744.0,
+        "baseline_RAM_MB": 32.1,
+        "incremental_RAM_MB": 1711.9,
         "disk_MB": 459.7,
         "samples": 30,
         "scored_samples": 30,
         "empty_hypotheses": 0,
-        "audio_seconds": 330.0,
-        "infer_seconds": 16.57,
-        "model_load_seconds": 31.84,
+        "audio_seconds": 437.64,
+        "infer_seconds": 24.55,
+        "model_load_seconds": 31.25,
         "decoder": "ctc",
-        "source": "OpenVoiceOS/ai4bharat-indicconformer-te-onnx (fp32, CTC head)",
+        "source": "OpenVoiceOS/ai4bharat-indicconformer-ta-onnx (fp32, CTC head)",
         "device": "cpu (4 threads)"
       },
+      "monolingual_120M_matmul_int8": {
+        "WER": 34.24,
+        "WER_fraction": 0.34244,
+        "RTF": 0.023,
+        "peak_RAM_MB": 1439.0,
+        "baseline_RAM_MB": 32.0,
+        "incremental_RAM_MB": 1407.0,
+        "disk_MB": 178.0,
+        "samples": 30,
+        "scored_samples": 30,
+        "empty_hypotheses": 0,
+        "audio_seconds": 437.64,
+        "infer_seconds": 10.05,
+        "model_load_seconds": 3.65,
+        "decoder": "ctc",
+        "source": "E:\\SIH\\.hfcache\\matmul_int8\\ta\\model.onnx (MatMul-only int8, conv fp32, CTC head)",
+        "device": "cpu (4 threads)"
+      },
+      "deltas": {
+        "matmul_int8_minus_multilingual": {
+          "delta_WER_points": -0.73,
+          "ci95_low": -3.15,
+          "ci95_high": 1.42,
+          "significant_at_95": false,
+          "utterances": 30,
+          "reference_words": 549
+        },
+        "mono_fp32_minus_multilingual": {
+          "delta_WER_points": -1.09,
+          "ci95_low": -3.35,
+          "ci95_high": 0.99,
+          "significant_at_95": false,
+          "utterances": 30,
+          "reference_words": 549
+        },
+        "quantisation_cost_int8_minus_fp32": {
+          "delta_WER_points": 0.36,
+          "ci95_low": -0.39,
+          "ci95_high": 1.38,
+          "significant_at_95": false,
+          "utterances": 30,
+          "reference_words": 549
+        }
+      }
+    },
+    "te": {
       "multilingual_628M": {
         "WER": 22.08,
         "WER_fraction": 0.2208,
@@ -343,35 +537,70 @@
         "source": "E:\\SIH\\deployment_models\\indic\\fp32",
         "device": "cpu (4 threads)"
       },
-      "delta_mono_minus_multi": {
-        "delta_WER_points": -1.09,
-        "ci95_low": -3.15,
-        "ci95_high": 1.21,
-        "p_mono_worse": 0.154,
-        "reference_words": 548,
-        "utterances": 30,
-        "significant_at_95": false
-      }
-    },
-    "or": {
-      "monolingual_120M": {
-        "WER": 18.76,
-        "WER_fraction": 0.18762,
-        "RTF": 0.0504,
-        "peak_RAM_MB": 1276.4,
-        "baseline_RAM_MB": 32.1,
-        "incremental_RAM_MB": 1244.4,
+      "monolingual_120M_fp32": {
+        "WER": 21.17,
+        "WER_fraction": 0.21168,
+        "RTF": 0.0502,
+        "peak_RAM_MB": 1311.8,
+        "baseline_RAM_MB": 32.0,
+        "incremental_RAM_MB": 1279.8,
         "disk_MB": 459.7,
         "samples": 30,
         "scored_samples": 30,
         "empty_hypotheses": 0,
-        "audio_seconds": 330.54,
-        "infer_seconds": 16.66,
-        "model_load_seconds": 8.05,
+        "audio_seconds": 330.0,
+        "infer_seconds": 16.57,
+        "model_load_seconds": 31.84,
         "decoder": "ctc",
-        "source": "OpenVoiceOS/ai4bharat-indicconformer-or-onnx (fp32, CTC head)",
+        "source": "OpenVoiceOS/ai4bharat-indicconformer-te-onnx (fp32, CTC head)",
         "device": "cpu (4 threads)"
       },
+      "monolingual_120M_matmul_int8": {
+        "WER": 21.72,
+        "WER_fraction": 0.21715,
+        "RTF": 0.0185,
+        "peak_RAM_MB": 1005.0,
+        "baseline_RAM_MB": 32.1,
+        "incremental_RAM_MB": 973.0,
+        "disk_MB": 178.0,
+        "samples": 30,
+        "scored_samples": 30,
+        "empty_hypotheses": 0,
+        "audio_seconds": 330.0,
+        "infer_seconds": 6.1,
+        "model_load_seconds": 3.71,
+        "decoder": "ctc",
+        "source": "E:\\SIH\\.hfcache\\matmul_int8\\te\\model.onnx (MatMul-only int8, conv fp32, CTC head)",
+        "device": "cpu (4 threads)"
+      },
+      "deltas": {
+        "matmul_int8_minus_multilingual": {
+          "delta_WER_points": -0.55,
+          "ci95_low": -2.59,
+          "ci95_high": 1.72,
+          "significant_at_95": false,
+          "utterances": 30,
+          "reference_words": 548
+        },
+        "mono_fp32_minus_multilingual": {
+          "delta_WER_points": -1.09,
+          "ci95_low": -3.21,
+          "ci95_high": 1.22,
+          "significant_at_95": false,
+          "utterances": 30,
+          "reference_words": 548
+        },
+        "quantisation_cost_int8_minus_fp32": {
+          "delta_WER_points": 0.73,
+          "ci95_low": 0.18,
+          "ci95_high": 1.42,
+          "significant_at_95": true,
+          "utterances": 30,
+          "reference_words": 548
+        }
+      }
+    },
+    "or": {
       "multilingual_628M": {
         "WER": 17.6,
         "WER_fraction": 0.17602,
@@ -390,35 +619,70 @@
         "source": "E:\\SIH\\deployment_models\\indic\\fp32",
         "device": "cpu (4 threads)"
       },
-      "delta_mono_minus_multi": {
-        "delta_WER_points": 1.16,
-        "ci95_low": -1.3,
-        "ci95_high": 3.35,
-        "p_mono_worse": 0.814,
-        "reference_words": 517,
-        "utterances": 30,
-        "significant_at_95": false
-      }
-    },
-    "bn": {
-      "monolingual_120M": {
-        "WER": 18.05,
-        "WER_fraction": 0.1805,
-        "RTF": 0.0499,
-        "peak_RAM_MB": 1364.9,
-        "baseline_RAM_MB": 31.9,
-        "incremental_RAM_MB": 1333.0,
+      "monolingual_120M_fp32": {
+        "WER": 18.76,
+        "WER_fraction": 0.18762,
+        "RTF": 0.0504,
+        "peak_RAM_MB": 1276.4,
+        "baseline_RAM_MB": 32.1,
+        "incremental_RAM_MB": 1244.4,
         "disk_MB": 459.7,
         "samples": 30,
         "scored_samples": 30,
         "empty_hypotheses": 0,
-        "audio_seconds": 356.22,
-        "infer_seconds": 17.79,
-        "model_load_seconds": 25.38,
+        "audio_seconds": 330.54,
+        "infer_seconds": 16.66,
+        "model_load_seconds": 8.05,
         "decoder": "ctc",
-        "source": "OpenVoiceOS/ai4bharat-indicconformer-bn-onnx (fp32, CTC head)",
+        "source": "OpenVoiceOS/ai4bharat-indicconformer-or-onnx (fp32, CTC head)",
         "device": "cpu (4 threads)"
       },
+      "monolingual_120M_matmul_int8": {
+        "WER": 19.54,
+        "WER_fraction": 0.19536,
+        "RTF": 0.0184,
+        "peak_RAM_MB": 1001.0,
+        "baseline_RAM_MB": 32.0,
+        "incremental_RAM_MB": 969.0,
+        "disk_MB": 178.0,
+        "samples": 30,
+        "scored_samples": 30,
+        "empty_hypotheses": 0,
+        "audio_seconds": 330.54,
+        "infer_seconds": 6.08,
+        "model_load_seconds": 3.64,
+        "decoder": "ctc",
+        "source": "E:\\SIH\\.hfcache\\matmul_int8\\or\\model.onnx (MatMul-only int8, conv fp32, CTC head)",
+        "device": "cpu (4 threads)"
+      },
+      "deltas": {
+        "matmul_int8_minus_multilingual": {
+          "delta_WER_points": 1.93,
+          "ci95_low": -0.86,
+          "ci95_high": 4.54,
+          "significant_at_95": false,
+          "utterances": 30,
+          "reference_words": 517
+        },
+        "mono_fp32_minus_multilingual": {
+          "delta_WER_points": 1.16,
+          "ci95_low": -1.3,
+          "ci95_high": 3.39,
+          "significant_at_95": false,
+          "utterances": 30,
+          "reference_words": 517
+        },
+        "quantisation_cost_int8_minus_fp32": {
+          "delta_WER_points": 0.77,
+          "ci95_low": -0.22,
+          "ci95_high": 1.99,
+          "significant_at_95": false,
+          "utterances": 30,
+          "reference_words": 517
+        }
+      }
+    },
+    "bn": {
       "multilingual_628M": {
         "WER": 16.8,
         "WER_fraction": 0.16805,
@@ -437,102 +701,314 @@
         "source": "E:\\SIH\\deployment_models\\indic\\fp32",
         "device": "cpu (4 threads)"
       },
-      "delta_mono_minus_multi": {
-        "delta_WER_points": 1.24,
-        "ci95_low": -1.5,
-        "ci95_high": 4.02,
-        "p_mono_worse": 0.801,
-        "reference_words": 482,
-        "utterances": 30,
-        "significant_at_95": false
+      "monolingual_120M_fp32": {
+        "WER": 18.05,
+        "WER_fraction": 0.1805,
+        "RTF": 0.0499,
+        "peak_RAM_MB": 1364.9,
+        "baseline_RAM_MB": 31.9,
+        "incremental_RAM_MB": 1333.0,
+        "disk_MB": 459.7,
+        "samples": 30,
+        "scored_samples": 30,
+        "empty_hypotheses": 0,
+        "audio_seconds": 356.22,
+        "infer_seconds": 17.79,
+        "model_load_seconds": 25.38,
+        "decoder": "ctc",
+        "source": "OpenVoiceOS/ai4bharat-indicconformer-bn-onnx (fp32, CTC head)",
+        "device": "cpu (4 threads)"
+      },
+      "monolingual_120M_matmul_int8": {
+        "WER": 17.84,
+        "WER_fraction": 0.17842,
+        "RTF": 0.0185,
+        "peak_RAM_MB": 1056.2,
+        "baseline_RAM_MB": 32.1,
+        "incremental_RAM_MB": 1024.2,
+        "disk_MB": 178.0,
+        "samples": 30,
+        "scored_samples": 30,
+        "empty_hypotheses": 0,
+        "audio_seconds": 356.22,
+        "infer_seconds": 6.58,
+        "model_load_seconds": 3.7,
+        "decoder": "ctc",
+        "source": "E:\\SIH\\.hfcache\\matmul_int8\\bn\\model.onnx (MatMul-only int8, conv fp32, CTC head)",
+        "device": "cpu (4 threads)"
+      },
+      "deltas": {
+        "matmul_int8_minus_multilingual": {
+          "delta_WER_points": 1.04,
+          "ci95_low": -1.58,
+          "ci95_high": 3.65,
+          "significant_at_95": false,
+          "utterances": 30,
+          "reference_words": 482
+        },
+        "mono_fp32_minus_multilingual": {
+          "delta_WER_points": 1.24,
+          "ci95_low": -1.5,
+          "ci95_high": 4.02,
+          "significant_at_95": false,
+          "utterances": 30,
+          "reference_words": 482
+        },
+        "quantisation_cost_int8_minus_fp32": {
+          "delta_WER_points": 0.21,
+          "ci95_low": -0.44,
+          "ci95_high": 1.3,
+          "significant_at_95": false,
+          "utterances": 30,
+          "reference_words": 482
+        }
       }
     }
   },
   "significance": {
-    "method": "paired bootstrap over utterances, 4000 rounds, seed 20260927",
+    "method": "paired bootstrap over shared utterances, 4000 rounds, seed 20260927",
     "per_language": {
       "hi": {
-        "delta_WER_points": 0.12,
-        "ci95_low": -1.8,
-        "ci95_high": 2.05,
-        "p_mono_worse": 0.532,
-        "reference_words": 806,
-        "utterances": 30,
-        "significant_at_95": false
+        "matmul_int8_minus_multilingual": {
+          "delta_WER_points": 0.5,
+          "ci95_low": -1.58,
+          "ci95_high": 2.64,
+          "significant_at_95": false,
+          "utterances": 30,
+          "reference_words": 806
+        },
+        "mono_fp32_minus_multilingual": {
+          "delta_WER_points": 0.12,
+          "ci95_low": -1.89,
+          "ci95_high": 2.05,
+          "significant_at_95": false,
+          "utterances": 30,
+          "reference_words": 806
+        },
+        "quantisation_cost_int8_minus_fp32": {
+          "delta_WER_points": 0.37,
+          "ci95_low": 0.0,
+          "ci95_high": 0.93,
+          "significant_at_95": false,
+          "utterances": 30,
+          "reference_words": 806
+        }
       },
       "gu": {
-        "delta_WER_points": 1.24,
-        "ci95_low": -1.33,
-        "ci95_high": 4.17,
-        "p_mono_worse": 0.802,
-        "reference_words": 644,
-        "utterances": 30,
-        "significant_at_95": false
+        "matmul_int8_minus_multilingual": {
+          "delta_WER_points": 2.02,
+          "ci95_low": -0.46,
+          "ci95_high": 4.85,
+          "significant_at_95": false,
+          "utterances": 30,
+          "reference_words": 644
+        },
+        "mono_fp32_minus_multilingual": {
+          "delta_WER_points": 1.24,
+          "ci95_low": -1.33,
+          "ci95_high": 4.05,
+          "significant_at_95": false,
+          "utterances": 30,
+          "reference_words": 644
+        },
+        "quantisation_cost_int8_minus_fp32": {
+          "delta_WER_points": 1.09,
+          "ci95_low": 0.18,
+          "ci95_high": 2.13,
+          "significant_at_95": true,
+          "utterances": 30,
+          "reference_words": 644
+        }
       },
       "mr": {
-        "delta_WER_points": 0.33,
-        "ci95_low": -2.11,
-        "ci95_high": 2.64,
-        "p_mono_worse": 0.596,
-        "reference_words": 602,
-        "utterances": 30,
-        "significant_at_95": false
+        "matmul_int8_minus_multilingual": {
+          "delta_WER_points": 1.33,
+          "ci95_low": -1.53,
+          "ci95_high": 4.13,
+          "significant_at_95": false,
+          "utterances": 30,
+          "reference_words": 602
+        },
+        "mono_fp32_minus_multilingual": {
+          "delta_WER_points": 0.33,
+          "ci95_low": -2.25,
+          "ci95_high": 2.71,
+          "significant_at_95": false,
+          "utterances": 30,
+          "reference_words": 602
+        },
+        "quantisation_cost_int8_minus_fp32": {
+          "delta_WER_points": 1.16,
+          "ci95_low": 0.34,
+          "ci95_high": 2.07,
+          "significant_at_95": true,
+          "utterances": 30,
+          "reference_words": 602
+        }
       },
       "kn": {
-        "delta_WER_points": 0.39,
-        "ci95_low": -2.0,
-        "ci95_high": 2.83,
-        "p_mono_worse": 0.616,
-        "reference_words": 509,
-        "utterances": 30,
-        "significant_at_95": false
+        "matmul_int8_minus_multilingual": {
+          "delta_WER_points": 0.2,
+          "ci95_low": -2.13,
+          "ci95_high": 2.78,
+          "significant_at_95": false,
+          "utterances": 30,
+          "reference_words": 509
+        },
+        "mono_fp32_minus_multilingual": {
+          "delta_WER_points": 0.39,
+          "ci95_low": -2.05,
+          "ci95_high": 2.79,
+          "significant_at_95": false,
+          "utterances": 30,
+          "reference_words": 509
+        },
+        "quantisation_cost_int8_minus_fp32": {
+          "delta_WER_points": -0.2,
+          "ci95_low": -0.62,
+          "ci95_high": 0.0,
+          "significant_at_95": false,
+          "utterances": 30,
+          "reference_words": 509
+        }
       },
       "ml": {
-        "delta_WER_points": -0.21,
-        "ci95_low": -3.02,
-        "ci95_high": 2.71,
-        "p_mono_worse": 0.41,
-        "reference_words": 480,
-        "utterances": 30,
-        "significant_at_95": false
+        "matmul_int8_minus_multilingual": {
+          "delta_WER_points": -0.21,
+          "ci95_low": -3.01,
+          "ci95_high": 2.66,
+          "significant_at_95": false,
+          "utterances": 30,
+          "reference_words": 480
+        },
+        "mono_fp32_minus_multilingual": {
+          "delta_WER_points": -0.21,
+          "ci95_low": -2.87,
+          "ci95_high": 2.73,
+          "significant_at_95": false,
+          "utterances": 30,
+          "reference_words": 480
+        },
+        "quantisation_cost_int8_minus_fp32": {
+          "delta_WER_points": -0.21,
+          "ci95_low": -0.7,
+          "ci95_high": 0.0,
+          "significant_at_95": false,
+          "utterances": 30,
+          "reference_words": 480
+        }
       },
       "ta": {
-        "delta_WER_points": -1.09,
-        "ci95_low": -3.36,
-        "ci95_high": 0.94,
-        "p_mono_worse": 0.135,
-        "reference_words": 549,
-        "utterances": 30,
-        "significant_at_95": false
+        "matmul_int8_minus_multilingual": {
+          "delta_WER_points": -0.73,
+          "ci95_low": -3.15,
+          "ci95_high": 1.42,
+          "significant_at_95": false,
+          "utterances": 30,
+          "reference_words": 549
+        },
+        "mono_fp32_minus_multilingual": {
+          "delta_WER_points": -1.09,
+          "ci95_low": -3.35,
+          "ci95_high": 0.99,
+          "significant_at_95": false,
+          "utterances": 30,
+          "reference_words": 549
+        },
+        "quantisation_cost_int8_minus_fp32": {
+          "delta_WER_points": 0.36,
+          "ci95_low": -0.39,
+          "ci95_high": 1.38,
+          "significant_at_95": false,
+          "utterances": 30,
+          "reference_words": 549
+        }
       },
       "te": {
-        "delta_WER_points": -1.09,
-        "ci95_low": -3.15,
-        "ci95_high": 1.21,
-        "p_mono_worse": 0.154,
-        "reference_words": 548,
-        "utterances": 30,
-        "significant_at_95": false
+        "matmul_int8_minus_multilingual": {
+          "delta_WER_points": -0.55,
+          "ci95_low": -2.59,
+          "ci95_high": 1.72,
+          "significant_at_95": false,
+          "utterances": 30,
+          "reference_words": 548
+        },
+        "mono_fp32_minus_multilingual": {
+          "delta_WER_points": -1.09,
+          "ci95_low": -3.21,
+          "ci95_high": 1.22,
+          "significant_at_95": false,
+          "utterances": 30,
+          "reference_words": 548
+        },
+        "quantisation_cost_int8_minus_fp32": {
+          "delta_WER_points": 0.73,
+          "ci95_low": 0.18,
+          "ci95_high": 1.42,
+          "significant_at_95": true,
+          "utterances": 30,
+          "reference_words": 548
+        }
       },
       "or": {
-        "delta_WER_points": 1.16,
-        "ci95_low": -1.3,
-        "ci95_high": 3.35,
-        "p_mono_worse": 0.814,
-        "reference_words": 517,
-        "utterances": 30,
-        "significant_at_95": false
+        "matmul_int8_minus_multilingual": {
+          "delta_WER_points": 1.93,
+          "ci95_low": -0.86,
+          "ci95_high": 4.54,
+          "significant_at_95": false,
+          "utterances": 30,
+          "reference_words": 517
+        },
+        "mono_fp32_minus_multilingual": {
+          "delta_WER_points": 1.16,
+          "ci95_low": -1.3,
+          "ci95_high": 3.39,
+          "significant_at_95": false,
+          "utterances": 30,
+          "reference_words": 517
+        },
+        "quantisation_cost_int8_minus_fp32": {
+          "delta_WER_points": 0.77,
+          "ci95_low": -0.22,
+          "ci95_high": 1.99,
+          "significant_at_95": false,
+          "utterances": 30,
+          "reference_words": 517
+        }
       },
       "bn": {
-        "delta_WER_points": 1.24,
-        "ci95_low": -1.5,
-        "ci95_high": 4.02,
-        "p_mono_worse": 0.801,
-        "reference_words": 482,
-        "utterances": 30,
-        "significant_at_95": false
+        "matmul_int8_minus_multilingual": {
+          "delta_WER_points": 1.04,
+          "ci95_low": -1.58,
+          "ci95_high": 3.65,
+          "significant_at_95": false,
+          "utterances": 30,
+          "reference_words": 482
+        },
+        "mono_fp32_minus_multilingual": {
+          "delta_WER_points": 1.24,
+          "ci95_low": -1.5,
+          "ci95_high": 4.02,
+          "significant_at_95": false,
+          "utterances": 30,
+          "reference_words": 482
+        },
+        "quantisation_cost_int8_minus_fp32": {
+          "delta_WER_points": 0.21,
+          "ci95_low": -0.44,
+          "ci95_high": 1.3,
+          "significant_at_95": false,
+          "utterances": 30,
+          "reference_words": 482
+        }
       }
     }
   },
-  "status": "COMPLETE - both models measured on all 9 Indic languages"
+  "status": "COMPLETE - multilingual 628M FP32, monolingual 120M FP32, and monolingual 120M MatMul-only INT8, on all 9 Indic languages",
+  "quantisation": {
+    "scheme": "onnxruntime quantize_dynamic, weight_type=QInt8, per_channel=True, op_types_to_quantize=['MatMul'] only",
+    "why_matmul_only": "The upstream all-ops int8 export emits 54 ConvInteger nodes, and this onnxruntime CPU build has no kernel for them, so that 131 MB file cannot be loaded at all. Restricting quantisation to MatMul leaves the conv subsampling front-end in FP32, producing 0 ConvInteger and 154 MatMulInteger nodes - a graph that loads.",
+    "why_not_weight_only": "Weight-only INT8 (dequantise-before-compute) shrinks the file but leaves weights FP32-sized in memory once loaded, so it does not help a RAM-constrained device tier. MatMul-only dynamic INT8 reduces file, RAM and time together.",
+    "result": "178.0 MB self-contained per language, versus 459.8 MB FP32 and 2381 MB for the shared multilingual model."
+  }
 }

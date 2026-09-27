@@ -1569,6 +1569,7 @@ class MainActivity : Activity(), SutraTransmissionListener {
         if (listening) toggleListening()
         synchronized(pushToTalkLock) { pushToTalkChunks.clear() }
         pushToTalkRecording = true
+        vadEngine?.pushToTalkHeld = true
         pushToTalkStartedAt = SystemClock.elapsedRealtime()
         try {
             val capture = AudioPipeline(this) { chunk ->
@@ -1597,6 +1598,7 @@ class MainActivity : Activity(), SutraTransmissionListener {
             vadIndicator.announceForAccessibility("Recording started")
         } catch (error: Exception) {
             pushToTalkRecording = false
+            vadEngine?.pushToTalkHeld = false
             pushToTalkButton.showRecording(false)
             normalButton.isEnabled = true
             alertButton.isEnabled = true
@@ -1618,6 +1620,7 @@ class MainActivity : Activity(), SutraTransmissionListener {
     private fun endPushToTalk(cancel: Boolean = false) {
         if (!pushToTalkRecording) return
         pushToTalkRecording = false
+        vadEngine?.pushToTalkHeld = false
         runCatching { audioPipeline?.stop() }
         audioPipeline = null
         pushToTalkButton.showRecording(false)
@@ -1980,6 +1983,7 @@ class MainActivity : Activity(), SutraTransmissionListener {
         pushToTalkButton.showRecording(false)
         listening = false
         pushToTalkRecording = false
+        vadEngine?.pushToTalkHeld = false
         audioPipeline?.stop()
         audioPipeline = null
         window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)

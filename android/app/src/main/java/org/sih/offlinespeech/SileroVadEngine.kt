@@ -37,8 +37,22 @@ class SileroVadEngine(
     // State machine
     private var isSpeaking = false
     private var silenceChunkCount = 0
-    private val ringBuffer = ArrayDeque<FloatArray>(maxOf(1, config.speechPadChunks))
+    /**
+     * Chunks in this utterance whose probability cleared the speech threshold. Counted separately
+     * from [speechAccumulator] because that also holds pre-roll and trailing silence, which must not
+     * let a short fragment qualify for the shorter endpointing window.
+     */
+    private var voicedChunkCount = 0
+    private val ringBuffer = ArrayDeque<FloatArray>(maxOf(1, config.preRollChunks))
     private val speechAccumulator = ArrayList<FloatArray>()
+
+    /** Set while push-to-talk is held, so endpointing can use its shortest window. See [VadEndpointPolicy]. */
+    @Volatile
+    var pushToTalkHeld: Boolean = false
+
+    /** Milliseconds of pause the engine is currently waiting for, for status text and telemetry. */
+    val silenceWindowMs: Int
+        get() = VadEndpointPolicy.silenceWindowMs(config, voicedChunkCount, pushToTalkHeld)
 
     init {
         require(modelFile.isFile) { "Silero VAD model file missing at ${modelFile.absolutePath}" }
@@ -110,17 +124,19 @@ class SileroVadEngine(
                 // Speech onset detected
                 isSpeaking = true
                 silenceChunkCount = 0
+                voicedChunkCount = 1
                 speechAccumulator.clear()
 
-                // Prepend pre-padding from ring buffer
+                // Prepend the pre-roll lookback: the trigger chunk is already mid-phrase, so the
+                // unvoiced onset that started the word is in the chunks before it.
                 while (!ringBuffer.isEmpty()) {
                     speechAccumulator.add(ringBuffer.removeFirst())
                 }
                 speechAccumulator.add(chunk.copyOf())
                 listener.onSpeechStart()
             } else {
-                // Maintain pre-padding ring buffer during silence
-                if (ringBuffer.size >= config.speechPadChunks) {
+                // Maintain the pre-roll ring buffer during silence
+                if (ringBuffer.size >= config.preRollChunks) {
                     ringBuffer.removeFirst()
                 }
                 ringBuffer.addLast(chunk.copyOf())
@@ -131,12 +147,14 @@ class SileroVadEngine(
 
             if (prob < config.silenceThreshold) {
                 silenceChunkCount++
-                if (silenceChunkCount >= config.minSilenceChunks) {
-                    // Confirmed speech end after pause
+                // Adaptive window: full pause for a still-short utterance, shorter once this is
+                // certainly a real one, shortest while the talk button is held.
+                if (VadEndpointPolicy.shouldEndUtterance(config, voicedChunkCount, silenceChunkCount, pushToTalkHeld)) {
                     emitCurrentSegment()
                 }
             } else {
                 silenceChunkCount = 0
+                if (prob >= config.threshold) voicedChunkCount++
             }
 
             // Safety limit: if speech duration exceeds maxSegmentDurationMs, force segment split
@@ -167,6 +185,7 @@ class SileroVadEngine(
 
         speechAccumulator.clear()
         silenceChunkCount = 0
+        voicedChunkCount = 0
         isSpeaking = false
     }
 
@@ -177,6 +196,7 @@ class SileroVadEngine(
         } else {
             speechAccumulator.clear()
             silenceChunkCount = 0
+            voicedChunkCount = 0
             isSpeaking = false
         }
     }
@@ -189,6 +209,7 @@ class SileroVadEngine(
         ringBuffer.clear()
         speechAccumulator.clear()
         silenceChunkCount = 0
+        voicedChunkCount = 0
         isSpeaking = false
     }
 
