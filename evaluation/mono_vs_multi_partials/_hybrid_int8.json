@@ -1,0 +1,206 @@
+{
+  "task": "iTantra PS-26173 device-tier model decision: monolingual 120M vs multilingual 628M",
+  "generated": "2026-09-28T03:00:27",
+  "dataset": {
+    "name": "google/fleurs test split (local pinned copy)",
+    "path": "evaluation\\fleurs_test_100",
+    "revision": "70bb2e84b976b7e960aa89f1c648e09c59f894dd",
+    "samples_per_language": 30,
+    "selection": "manifest.csv rows for the language, sorted by audio_path, first N (deterministic)",
+    "note": "Read speech. Kathbath/IndicVoices audio is not present in this project, so FLEURS was used."
+  },
+  "normalization": "Unicode NFC, casefold (lowercase), every Unicode punctuation (P*) and symbol (S*) character replaced with a space, then whitespace collapsed and stripped. Indic combining marks are preserved. WER computed with jiwer.wer() on whitespace-separated tokens of the normalized strings.",
+  "metrics": {
+    "WER": "percent, jiwer.wer() over normalized whitespace tokens, corpus-level",
+    "RTF": "sum(per-sample inference seconds) / sum(audio seconds); excludes model load and audio decode",
+    "peak_RAM_MB": "peak process RSS sampled at 50 ms across model load + inference, one model per process",
+    "disk_MB": "on-disk size of the weights actually loaded"
+  },
+  "caveats": [
+    "RTF is not a pure architecture comparison: the multilingual model runs as ONNX Runtime graphs (operator-fused, release-optimized) while the monolingual model runs as eager PyTorch/NeMo. WER is unaffected by this; RTF favours the multilingual runtime.",
+    "Decoders differ: multilingual is CTC with a per-language vocabulary mask (the only path this project ships); the monolingual hybrid is decoded with its own head.",
+    "CPU-only, 4 threads, to approximate phone-class compute rather than the dev GPU."
+  ],
+  "results": {
+    "hi": {
+      "multilingual_628M_hybrid_int8": {
+        "WER": 11.66,
+        "WER_fraction": 0.11663,
+        "RTF": 0.0602,
+        "peak_RAM_MB": 2116.2,
+        "baseline_RAM_MB": 32.0,
+        "incremental_RAM_MB": 2084.1,
+        "disk_MB": 646.5,
+        "samples": 30,
+        "scored_samples": 30,
+        "empty_hypotheses": 0,
+        "audio_seconds": 372.48,
+        "infer_seconds": 22.41,
+        "model_load_seconds": 12.49,
+        "decoder": "ctc",
+        "source": "E:\\SIH\\deployment_models\\indic\\hybrid_int8",
+        "device": "cpu (4 threads)"
+      }
+    },
+    "gu": {
+      "multilingual_628M_hybrid_int8": {
+        "WER": 15.53,
+        "WER_fraction": 0.15528,
+        "RTF": 0.0554,
+        "peak_RAM_MB": 2037.7,
+        "baseline_RAM_MB": 32.2,
+        "incremental_RAM_MB": 2005.6,
+        "disk_MB": 646.5,
+        "samples": 30,
+        "scored_samples": 30,
+        "empty_hypotheses": 0,
+        "audio_seconds": 312.84,
+        "infer_seconds": 17.33,
+        "model_load_seconds": 8.56,
+        "decoder": "ctc",
+        "source": "E:\\SIH\\deployment_models\\indic\\hybrid_int8",
+        "device": "cpu (4 threads)"
+      }
+    },
+    "mr": {
+      "multilingual_628M_hybrid_int8": {
+        "WER": 19.27,
+        "WER_fraction": 0.19269,
+        "RTF": 0.0577,
+        "peak_RAM_MB": 2116.5,
+        "baseline_RAM_MB": 32.0,
+        "incremental_RAM_MB": 2084.5,
+        "disk_MB": 646.5,
+        "samples": 30,
+        "scored_samples": 30,
+        "empty_hypotheses": 0,
+        "audio_seconds": 426.36,
+        "infer_seconds": 24.6,
+        "model_load_seconds": 8.16,
+        "decoder": "ctc",
+        "source": "E:\\SIH\\deployment_models\\indic\\hybrid_int8",
+        "device": "cpu (4 threads)"
+      }
+    },
+    "kn": {
+      "multilingual_628M_hybrid_int8": {
+        "WER": 18.27,
+        "WER_fraction": 0.18271,
+        "RTF": 0.0588,
+        "peak_RAM_MB": 2104.9,
+        "baseline_RAM_MB": 32.2,
+        "incremental_RAM_MB": 2072.7,
+        "disk_MB": 646.5,
+        "samples": 30,
+        "scored_samples": 30,
+        "empty_hypotheses": 0,
+        "audio_seconds": 405.66,
+        "infer_seconds": 23.86,
+        "model_load_seconds": 8.36,
+        "decoder": "ctc",
+        "source": "E:\\SIH\\deployment_models\\indic\\hybrid_int8",
+        "device": "cpu (4 threads)"
+      }
+    },
+    "ml": {
+      "multilingual_628M_hybrid_int8": {
+        "WER": 19.58,
+        "WER_fraction": 0.19583,
+        "RTF": 0.0539,
+        "peak_RAM_MB": 2197.2,
+        "baseline_RAM_MB": 32.2,
+        "incremental_RAM_MB": 2164.9,
+        "disk_MB": 646.5,
+        "samples": 30,
+        "scored_samples": 30,
+        "empty_hypotheses": 0,
+        "audio_seconds": 500.58,
+        "infer_seconds": 26.96,
+        "model_load_seconds": 8.28,
+        "decoder": "ctc",
+        "source": "E:\\SIH\\deployment_models\\indic\\hybrid_int8",
+        "device": "cpu (4 threads)"
+      }
+    },
+    "ta": {
+      "multilingual_628M_hybrid_int8": {
+        "WER": 33.88,
+        "WER_fraction": 0.3388,
+        "RTF": 0.0559,
+        "peak_RAM_MB": 2235.4,
+        "baseline_RAM_MB": 32.1,
+        "incremental_RAM_MB": 2203.2,
+        "disk_MB": 646.5,
+        "samples": 30,
+        "scored_samples": 30,
+        "empty_hypotheses": 0,
+        "audio_seconds": 437.64,
+        "infer_seconds": 24.46,
+        "model_load_seconds": 8.05,
+        "decoder": "ctc",
+        "source": "E:\\SIH\\deployment_models\\indic\\hybrid_int8",
+        "device": "cpu (4 threads)"
+      }
+    },
+    "te": {
+      "multilingual_628M_hybrid_int8": {
+        "WER": 24.27,
+        "WER_fraction": 0.2427,
+        "RTF": 0.0554,
+        "peak_RAM_MB": 2064.6,
+        "baseline_RAM_MB": 32.0,
+        "incremental_RAM_MB": 2032.5,
+        "disk_MB": 646.5,
+        "samples": 30,
+        "scored_samples": 30,
+        "empty_hypotheses": 0,
+        "audio_seconds": 330.0,
+        "infer_seconds": 18.28,
+        "model_load_seconds": 8.34,
+        "decoder": "ctc",
+        "source": "E:\\SIH\\deployment_models\\indic\\hybrid_int8",
+        "device": "cpu (4 threads)"
+      }
+    },
+    "or": {
+      "multilingual_628M_hybrid_int8": {
+        "WER": 25.34,
+        "WER_fraction": 0.25338,
+        "RTF": 0.0553,
+        "peak_RAM_MB": 2056.0,
+        "baseline_RAM_MB": 32.1,
+        "incremental_RAM_MB": 2023.9,
+        "disk_MB": 646.5,
+        "samples": 30,
+        "scored_samples": 30,
+        "empty_hypotheses": 0,
+        "audio_seconds": 330.54,
+        "infer_seconds": 18.27,
+        "model_load_seconds": 8.25,
+        "decoder": "ctc",
+        "source": "E:\\SIH\\deployment_models\\indic\\hybrid_int8",
+        "device": "cpu (4 threads)"
+      }
+    },
+    "bn": {
+      "multilingual_628M_hybrid_int8": {
+        "WER": 17.01,
+        "WER_fraction": 0.17012,
+        "RTF": 0.0555,
+        "peak_RAM_MB": 2115.8,
+        "baseline_RAM_MB": 32.1,
+        "incremental_RAM_MB": 2083.6,
+        "disk_MB": 646.5,
+        "samples": 30,
+        "scored_samples": 30,
+        "empty_hypotheses": 0,
+        "audio_seconds": 356.22,
+        "infer_seconds": 19.77,
+        "model_load_seconds": 8.52,
+        "decoder": "ctc",
+        "source": "E:\\SIH\\deployment_models\\indic\\hybrid_int8",
+        "device": "cpu (4 threads)"
+      }
+    }
+  }
+}
