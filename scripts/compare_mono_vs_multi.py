@@ -27,6 +27,8 @@ sys.path.insert(0, str(ROOT))
 # Local FLEURS test set, pinned in evaluation/fleurs_test_100/DATASET.md.
 DATASET = ROOT / "evaluation" / "fleurs_test_100"
 MULTILINGUAL_DIR = ROOT / "deployment_models" / "indic" / "fp32"
+# Same shared model, MatMul-only dynamic INT8 (see docs/competitor-itantra-teardown.md §10).
+MULTILINGUAL_INT8_DIR = ROOT / "deployment_models" / "indic" / "matmul_int8"
 MONOLINGUAL_REPO = "ai4bharat/indicconformer_stt_{lang}_hybrid_rnnt_large"
 MONOLINGUAL_ONNX_REPO = "OpenVoiceOS/ai4bharat-indicconformer-{lang}-onnx"
 HF_CACHE = ROOT / ".hfcache" / "hub"
@@ -115,7 +117,7 @@ class PeakRSS:
 
 
 # --- model backends -----------------------------------------------------------
-def build_multilingual():
+def build_multilingual(model_dir=None):
     """Project's own CTC path, forced onto CPU so RTF reflects phone compute."""
     import onnxruntime as ort
     import torch
@@ -136,7 +138,7 @@ def build_multilingual():
         cuda_available = torch.cuda.is_available
         torch.cuda.is_available = lambda: False
         try:
-            model = IndicCTCModel(MULTILINGUAL_DIR)
+            model = IndicCTCModel(model_dir or MULTILINGUAL_DIR)
         finally:
             torch.cuda.is_available = cuda_available
     finally:
@@ -148,7 +150,8 @@ def build_multilingual():
         with torch.inference_mode():
             return model(load_audio(path).unsqueeze(0), lang, "ctc")
 
-    return transcribe, directory_mib(MULTILINGUAL_DIR), str(MULTILINGUAL_DIR)
+    resolved = model_dir or MULTILINGUAL_DIR
+    return transcribe, directory_mib(resolved), str(resolved)
 
 
 def build_monolingual_onnx(lang, quantization=None):
@@ -294,7 +297,9 @@ def run_worker(args):
     tracker = PeakRSS()
     with tracker:
         load_start = time.perf_counter()
-        if args.model == "multilingual_628M":
+        if args.model == "multilingual_628M_matmul_int8":
+            transcribe, disk_mib, source = build_multilingual(MULTILINGUAL_INT8_DIR)
+        elif args.model == "multilingual_628M":
             transcribe, disk_mib, source = build_multilingual()
         elif args.model == "monolingual_120M_nemo":
             transcribe, disk_mib, source = build_monolingual(args.language, args.decoder)

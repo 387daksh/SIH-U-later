@@ -1,0 +1,206 @@
+{
+  "task": "iTantra PS-26173 device-tier model decision: monolingual 120M vs multilingual 628M",
+  "generated": "2026-09-28T01:32:00",
+  "dataset": {
+    "name": "google/fleurs test split (local pinned copy)",
+    "path": "evaluation\\fleurs_test_100",
+    "revision": "70bb2e84b976b7e960aa89f1c648e09c59f894dd",
+    "samples_per_language": 30,
+    "selection": "manifest.csv rows for the language, sorted by audio_path, first N (deterministic)",
+    "note": "Read speech. Kathbath/IndicVoices audio is not present in this project, so FLEURS was used."
+  },
+  "normalization": "Unicode NFC, casefold (lowercase), every Unicode punctuation (P*) and symbol (S*) character replaced with a space, then whitespace collapsed and stripped. Indic combining marks are preserved. WER computed with jiwer.wer() on whitespace-separated tokens of the normalized strings.",
+  "metrics": {
+    "WER": "percent, jiwer.wer() over normalized whitespace tokens, corpus-level",
+    "RTF": "sum(per-sample inference seconds) / sum(audio seconds); excludes model load and audio decode",
+    "peak_RAM_MB": "peak process RSS sampled at 50 ms across model load + inference, one model per process",
+    "disk_MB": "on-disk size of the weights actually loaded"
+  },
+  "caveats": [
+    "RTF is not a pure architecture comparison: the multilingual model runs as ONNX Runtime graphs (operator-fused, release-optimized) while the monolingual model runs as eager PyTorch/NeMo. WER is unaffected by this; RTF favours the multilingual runtime.",
+    "Decoders differ: multilingual is CTC with a per-language vocabulary mask (the only path this project ships); the monolingual hybrid is decoded with its own head.",
+    "CPU-only, 4 threads, to approximate phone-class compute rather than the dev GPU."
+  ],
+  "results": {
+    "hi": {
+      "multilingual_628M_matmul_int8": {
+        "WER": 11.04,
+        "WER_fraction": 0.11042,
+        "RTF": 0.0222,
+        "peak_RAM_MB": 1656.8,
+        "baseline_RAM_MB": 32.0,
+        "incremental_RAM_MB": 1624.8,
+        "disk_MB": 864.1,
+        "samples": 30,
+        "scored_samples": 30,
+        "empty_hypotheses": 0,
+        "audio_seconds": 372.48,
+        "infer_seconds": 8.27,
+        "model_load_seconds": 6.13,
+        "decoder": "ctc",
+        "source": "E:\\SIH\\deployment_models\\indic\\matmul_int8",
+        "device": "cpu (4 threads)"
+      }
+    },
+    "gu": {
+      "multilingual_628M_matmul_int8": {
+        "WER": 15.06,
+        "WER_fraction": 0.15062,
+        "RTF": 0.0224,
+        "peak_RAM_MB": 1624.9,
+        "baseline_RAM_MB": 32.0,
+        "incremental_RAM_MB": 1592.9,
+        "disk_MB": 864.1,
+        "samples": 30,
+        "scored_samples": 30,
+        "empty_hypotheses": 0,
+        "audio_seconds": 312.84,
+        "infer_seconds": 7.0,
+        "model_load_seconds": 4.35,
+        "decoder": "ctc",
+        "source": "E:\\SIH\\deployment_models\\indic\\matmul_int8",
+        "device": "cpu (4 threads)"
+      }
+    },
+    "mr": {
+      "multilingual_628M_matmul_int8": {
+        "WER": 18.27,
+        "WER_fraction": 0.18272,
+        "RTF": 0.0256,
+        "peak_RAM_MB": 1642.7,
+        "baseline_RAM_MB": 32.3,
+        "incremental_RAM_MB": 1610.4,
+        "disk_MB": 864.1,
+        "samples": 30,
+        "scored_samples": 30,
+        "empty_hypotheses": 0,
+        "audio_seconds": 426.36,
+        "infer_seconds": 10.92,
+        "model_load_seconds": 4.36,
+        "decoder": "ctc",
+        "source": "E:\\SIH\\deployment_models\\indic\\matmul_int8",
+        "device": "cpu (4 threads)"
+      }
+    },
+    "kn": {
+      "multilingual_628M_matmul_int8": {
+        "WER": 16.9,
+        "WER_fraction": 0.16896,
+        "RTF": 0.0225,
+        "peak_RAM_MB": 1647.9,
+        "baseline_RAM_MB": 31.9,
+        "incremental_RAM_MB": 1616.0,
+        "disk_MB": 864.1,
+        "samples": 30,
+        "scored_samples": 30,
+        "empty_hypotheses": 0,
+        "audio_seconds": 405.66,
+        "infer_seconds": 9.14,
+        "model_load_seconds": 4.3,
+        "decoder": "ctc",
+        "source": "E:\\SIH\\deployment_models\\indic\\matmul_int8",
+        "device": "cpu (4 threads)"
+      }
+    },
+    "ml": {
+      "multilingual_628M_matmul_int8": {
+        "WER": 18.12,
+        "WER_fraction": 0.18125,
+        "RTF": 0.0224,
+        "peak_RAM_MB": 1737.1,
+        "baseline_RAM_MB": 31.9,
+        "incremental_RAM_MB": 1705.2,
+        "disk_MB": 864.1,
+        "samples": 30,
+        "scored_samples": 30,
+        "empty_hypotheses": 0,
+        "audio_seconds": 500.58,
+        "infer_seconds": 11.19,
+        "model_load_seconds": 4.52,
+        "decoder": "ctc",
+        "source": "E:\\SIH\\deployment_models\\indic\\matmul_int8",
+        "device": "cpu (4 threads)"
+      }
+    },
+    "ta": {
+      "multilingual_628M_matmul_int8": {
+        "WER": 34.24,
+        "WER_fraction": 0.34244,
+        "RTF": 0.0231,
+        "peak_RAM_MB": 1853.4,
+        "baseline_RAM_MB": 32.0,
+        "incremental_RAM_MB": 1821.4,
+        "disk_MB": 864.1,
+        "samples": 30,
+        "scored_samples": 30,
+        "empty_hypotheses": 0,
+        "audio_seconds": 437.64,
+        "infer_seconds": 10.13,
+        "model_load_seconds": 4.32,
+        "decoder": "ctc",
+        "source": "E:\\SIH\\deployment_models\\indic\\matmul_int8",
+        "device": "cpu (4 threads)"
+      }
+    },
+    "te": {
+      "multilingual_628M_matmul_int8": {
+        "WER": 22.26,
+        "WER_fraction": 0.22263,
+        "RTF": 0.0222,
+        "peak_RAM_MB": 1632.0,
+        "baseline_RAM_MB": 32.1,
+        "incremental_RAM_MB": 1599.9,
+        "disk_MB": 864.1,
+        "samples": 30,
+        "scored_samples": 30,
+        "empty_hypotheses": 0,
+        "audio_seconds": 330.0,
+        "infer_seconds": 7.32,
+        "model_load_seconds": 4.46,
+        "decoder": "ctc",
+        "source": "E:\\SIH\\deployment_models\\indic\\matmul_int8",
+        "device": "cpu (4 threads)"
+      }
+    },
+    "or": {
+      "multilingual_628M_matmul_int8": {
+        "WER": 17.21,
+        "WER_fraction": 0.17215,
+        "RTF": 0.0224,
+        "peak_RAM_MB": 1630.0,
+        "baseline_RAM_MB": 32.2,
+        "incremental_RAM_MB": 1597.8,
+        "disk_MB": 864.1,
+        "samples": 30,
+        "scored_samples": 30,
+        "empty_hypotheses": 0,
+        "audio_seconds": 330.54,
+        "infer_seconds": 7.4,
+        "model_load_seconds": 4.48,
+        "decoder": "ctc",
+        "source": "E:\\SIH\\deployment_models\\indic\\matmul_int8",
+        "device": "cpu (4 threads)"
+      }
+    },
+    "bn": {
+      "multilingual_628M_matmul_int8": {
+        "WER": 15.98,
+        "WER_fraction": 0.15975,
+        "RTF": 0.0223,
+        "peak_RAM_MB": 1654.4,
+        "baseline_RAM_MB": 32.1,
+        "incremental_RAM_MB": 1622.3,
+        "disk_MB": 864.1,
+        "samples": 30,
+        "scored_samples": 30,
+        "empty_hypotheses": 0,
+        "audio_seconds": 356.22,
+        "infer_seconds": 7.96,
+        "model_load_seconds": 4.46,
+        "decoder": "ctc",
+        "source": "E:\\SIH\\deployment_models\\indic\\matmul_int8",
+        "device": "cpu (4 threads)"
+      }
+    }
+  }
+}
