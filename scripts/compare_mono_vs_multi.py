@@ -29,6 +29,9 @@ DATASET = ROOT / "evaluation" / "fleurs_test_100"
 MULTILINGUAL_DIR = ROOT / "deployment_models" / "indic" / "fp32"
 # Same shared model, MatMul-only dynamic INT8 (see docs/competitor-itantra-teardown.md §10).
 MULTILINGUAL_INT8_DIR = ROOT / "deployment_models" / "indic" / "matmul_int8"
+# Pre-existing INT8 exports in this repo. Same op graph as matmul_int8 (217 MatMulInteger,
+# 0 ConvInteger) but ~219 MB smaller, so worth measuring before shipping a larger one.
+MULTILINGUAL_HYBRID_INT8_DIR = ROOT / "deployment_models" / "indic" / "hybrid_int8"
 MONOLINGUAL_REPO = "ai4bharat/indicconformer_stt_{lang}_hybrid_rnnt_large"
 MONOLINGUAL_ONNX_REPO = "OpenVoiceOS/ai4bharat-indicconformer-{lang}-onnx"
 HF_CACHE = ROOT / ".hfcache" / "hub"
@@ -297,7 +300,9 @@ def run_worker(args):
     tracker = PeakRSS()
     with tracker:
         load_start = time.perf_counter()
-        if args.model == "multilingual_628M_matmul_int8":
+        if args.model == "multilingual_628M_hybrid_int8":
+            transcribe, disk_mib, source = build_multilingual(MULTILINGUAL_HYBRID_INT8_DIR)
+        elif args.model == "multilingual_628M_matmul_int8":
             transcribe, disk_mib, source = build_multilingual(MULTILINGUAL_INT8_DIR)
         elif args.model == "multilingual_628M":
             transcribe, disk_mib, source = build_multilingual()

@@ -37,6 +37,30 @@ the compute onto integer kernels and leaves the conv front-end in FP32. Result: 
 It also beats weight-only INT8, which dequantises before compute: that shrinks the file but leaves
 weights FP32-sized in RAM, so it does not help a memory-constrained device.
 
+## Do not ship `deployment_models/indic/hybrid_int8`
+
+This repo already contained two INT8 exports predating the work above — `hybrid_int8` (646.5 MB) and
+`aggressive_int8` (631.8 MB). Both have the **identical op graph** to the new `matmul_int8` (217
+MatMulInteger, 0 ConvInteger, 72 MatMul, 77 Conv) and both load, so they look like strictly better
+versions of it: same scheme, 218 MB smaller. Measured, they are not.
+
+| | mean WER | Odia WER | mean RTF | peak RAM | disk |
+| --- | --- | --- | --- | --- | --- |
+| `matmul_int8` (new, per-channel) | **18.79%** | **17.21%** | **0.0228** | **1676 MB** | 864.1 MB |
+| `hybrid_int8` (pre-existing) | 20.53% | **25.34%** | 0.0565 | 2116 MB | **646.5 MB** |
+
+`hybrid_int8` is **1.74 points worse on average and 8.13 points worse on Odia**, plus 2.5× slower and
+440 MB heavier in RAM. The only axis it wins is disk. Trading 8 points of Odia — the language the
+problem statement makes hardest and our strongest differentiator — for 218 MB is not a trade worth
+making, so `matmul_int8` is the artifact to ship and host.
+
+The difference is scale granularity: the new export uses `per_channel=True`, the old one did not. The
+219 MB size gap is larger than per-channel scale vectors alone account for and is not fully
+explained; the WER, RTF and RAM differences are measured either way.
+
+`aggressive_int8` was not benchmarked. It has the same op graph and a near-identical size to
+`hybrid_int8`, so it is likely in the same family, but that is an assumption, not a measurement.
+
 ## The tier rule
 
 Both tiers are our own models, both MatMul-INT8. Selection is by **how many languages this unit needs
