@@ -40,3 +40,11 @@ evaluation/mucs_hinglish_source/
 evaluation/results_smoke_*/
 evaluation/**/samples.jsonl
 evaluation/**/samples.csv
+
+# Benchmark model cache (NeMo/HF downloads for WER comparison)
+.hfcache/
+
+# Competitor source, cloned for analysis only (no licence - do not copy code)
+competitor-itantra/
+# Gradle task cache (1.1 GB of build state)
+.task-gradle/

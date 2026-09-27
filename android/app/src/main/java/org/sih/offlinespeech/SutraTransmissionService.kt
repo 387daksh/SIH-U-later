@@ -82,6 +82,12 @@ class SutraTransmissionService : Service(), PeerTransportListener {
     @Volatile private var sharedFix: TeamFix? = null
     private val ttsWorker = Executors.newSingleThreadExecutor()
     private val sentAt = ConcurrentHashMap<String, Long>()
+    /** Wall-clock send time per message id — t0 of the NTP-style exchange (see [SutraTelemetry]). */
+    private val sentAtEpoch = ConcurrentHashMap<String, Long>()
+    /** Wall-clock speech-end per message id, reported by the capture side, for metric 4. */
+    private val speechEndEpoch = ConcurrentHashMap<String, Long>()
+    /** Monotonic receive time per inbound message id — start of metric 2 (received -> playing). */
+    private val receivedAt = ConcurrentHashMap<String, Long>()
     private val pendingSpeech = ConcurrentHashMap<String, SutraMessage>()
     private val speechQueue = ArrayDeque<SutraMessage>()
     private lateinit var wifi: TcpPeerTransport
@@ -130,6 +136,9 @@ class SutraTransmissionService : Service(), PeerTransportListener {
         bluetooth = BluetoothPeerTransport(this, this) { peers, scanning ->
             listener?.onBluetoothPeers(peers, scanning)
         }
+        // Bluetooth is the fallback, so it stands down only while Wi-Fi genuinely carries data --
+        // not merely because a Wi-Fi Direct group exists but its TCP link failed to come up.
+        bluetooth.wifiPrimaryActive = { wifi.isConnected }
         wifiDirect = runCatching {
             WifiDirectController(this, object : WifiDirectListener {
                 override fun onWifiDirectStatus(status: String) = this@SutraTransmissionService.status(status)
@@ -139,17 +148,17 @@ class SutraTransmissionService : Service(), PeerTransportListener {
                 }
                 override fun onWifiDirectGroup(isOwner: Boolean, ownerAddress: String?) {
                     if (isOwner) wifi.host() else ownerAddress?.let(wifi::connect)
-                    // Wi-Fi Direct is the primary transport; stop Bluetooth from chasing new links while it's up.
-                    bluetooth.wifiDirectGrouped = true
                 }
                 override fun onWifiDirectGroupLost() {
-                    bluetooth.wifiDirectGrouped = false
                     wifi.disconnect()
+                    // Wi-Fi is gone; bring the Bluetooth fallback up now rather than waiting out the 45s cycle.
+                    if (automaticConnections) bluetooth.startAutomatic()
                 }
             }, java.lang.Long.toUnsignedString(sourceId, 16).padStart(16, '0')).also { it.startAutomatic() }
         }.onFailure { status("Wi-Fi Direct unavailable; Bluetooth discovery remains active") }.getOrNull()
         bluetooth.startAutomatic()
         initialiseTts()
+        warmTts()
         store.metric(null, "service_started")
         io.scheduleWithFixedDelay({ runCatching { publishTeamPosition() } }, 2, 10, TimeUnit.SECONDS)
     }
@@ -248,6 +257,9 @@ class SutraTransmissionService : Service(), PeerTransportListener {
                 listener?.onConversationChanged()
             }
             sentAt.putIfAbsent(message.id.toString(), System.nanoTime())
+            // Epoch copy of the same instant: the NTP-style exchange needs t0 on the wall clock,
+            // because the peer can only report its own wall clock back to us.
+            sentAtEpoch.putIfAbsent(message.id.toString(), System.currentTimeMillis())
             store.metric(message.id.toString(), "tx_queued", "bytes=${plain.size},type=${message.type}")
         }
         flushOutbox()
@@ -330,6 +342,8 @@ class SutraTransmissionService : Service(), PeerTransportListener {
             store.metric(id, "rx_validated", "type=${message.type},bytes=${bytes.size}")
             when (message.type) {
                 SutraMessageType.TEXT_FINAL -> {
+                    // Start of metric 2 (text received -> audio playing), on the monotonic clock.
+                    receivedAt.putIfAbsent(id, System.nanoTime())
                     sendAck(message, SutraMessageType.RECEIVED_ACK)
                     val fresh = store.recordReceipt(id)
                     if (fresh) {
@@ -358,8 +372,11 @@ class SutraTransmissionService : Service(), PeerTransportListener {
                 SutraMessageType.PLAYBACK_FINISHED, SutraMessageType.REPAIR_REQUEST -> {
                     val elapsed = sentAt[id]?.let { (System.nanoTime() - it) / 1_000_000 }
                     if (message.type == SutraMessageType.RECEIVED_ACK) store.acknowledge(id)
-                    if (message.type == SutraMessageType.PLAYBACK_FINISHED) sentAt.remove(id)
+                    if (message.type == SutraMessageType.PLAYBACK_FINISHED) {
+                        sentAt.remove(id); sentAtEpoch.remove(id); speechEndEpoch.remove(id)
+                    }
                     store.metric(id, message.type.name.lowercase(), "sender_elapsed_ms=$elapsed")
+                    recordPeerClock(id, message)
                     val progress = when (message.type) {
                         SutraMessageType.RECEIVED_ACK -> MessageProgress.RECEIVED
                         SutraMessageType.PLAYBACK_STARTED -> MessageProgress.PLAYING
@@ -417,6 +434,44 @@ class SutraTransmissionService : Service(), PeerTransportListener {
         check(delivered) { "No peer is connected" }
     }
 
+    /**
+     * Folds a peer's clock reading out of an acknowledgement payload into the latency record.
+     *
+     * A RECEIVED_ACK gives the NTP-style exchange (t0 = our send, t1 = the peer's stamp,
+     * t2 = now) and so the clock offset. A PLAYBACK_STARTED gives metric 4 once that offset is
+     * known: our speech-end converted onto the peer's clock, subtracted from when the peer's first
+     * audio frame actually played. Peers on older builds send an empty payload, so every step here
+     * is a no-op for them rather than an error.
+     */
+    private fun recordPeerClock(id: String, message: SutraMessage) {
+        val peerEpoch = SutraTelemetry.decodeEpoch(message.payload) ?: return
+        when (message.type) {
+            SutraMessageType.RECEIVED_ACK -> {
+                val sent = sentAtEpoch[id] ?: return
+                val measured = SutraTelemetry.observeExchange(sent, peerEpoch, System.currentTimeMillis()) ?: return
+                store.metric(id, "peer_clock_sync", "offset_ms=${measured.first},rtt_ms=${measured.second}")
+            }
+            SutraMessageType.PLAYBACK_STARTED -> {
+                val speechEnd = speechEndEpoch[id] ?: sentAtEpoch[id] ?: return
+                val latency = SutraTelemetry.peerPlaybackLatencyMs(speechEnd, peerEpoch)
+                if (latency == null) {
+                    store.metric(id, "peer_playback_unsynced", "no clock exchange yet; cross-device latency not reported")
+                } else {
+                    store.metric(id, "peer_playback_latency", "ms=$latency,offset_ms=${SutraTelemetry.clockOffsetMs},rtt_ms=${SutraTelemetry.roundTripMs}")
+                }
+            }
+            else -> Unit
+        }
+    }
+
+    /**
+     * Records when a phrase was cut, on the wall clock, so metric 4 can be expressed against the
+     * peer's playback stamp. Called by the capture side before [send].
+     */
+    fun noteSpeechEnd(messageId: String, epochMs: Long = System.currentTimeMillis()) {
+        speechEndEpoch[messageId] = epochMs
+    }
+
     private fun sendAck(original: SutraMessage, type: SutraMessageType) {
         val progress = when (type) {
             SutraMessageType.PLAYBACK_STARTED -> MessageProgress.PLAYING
@@ -424,7 +479,15 @@ class SutraTransmissionService : Service(), PeerTransportListener {
             else -> null
         }
         if (progress != null && conversation.advance(original.id.toString(), false, progress)) listener?.onConversationChanged()
-        val ack = SutraSemanticEncoder.acknowledgement(original, type, sourceId)
+        // Carry our clock in the two acknowledgements the sender times against: RECEIVED_ACK drives
+        // the offset estimate, PLAYBACK_STARTED is the receive-side event for metric 4. Older peers
+        // send an empty payload and simply get no cross-device number.
+        val stamp = when (type) {
+            SutraMessageType.RECEIVED_ACK, SutraMessageType.PLAYBACK_STARTED ->
+                SutraTelemetry.encodeEpoch(System.currentTimeMillis())
+            else -> ByteArray(0)
+        }
+        val ack = SutraSemanticEncoder.acknowledgement(original, type, sourceId, stamp)
         runCatching { sendFrame(security?.seal(SutraCodec.encode(ack)) ?: SutraCodec.encode(ack)) }
             .onFailure { store.metric(original.id.toString(), "ack_failed", type.name) }
     }
@@ -523,6 +586,22 @@ class SutraTransmissionService : Service(), PeerTransportListener {
             File(root, "meta.json").isFile
     }
 
+    /**
+     * Loads the Indic-TTS session during startup instead of on the first received message.
+     *
+     * Runs on [ttsWorker] — the same single thread that later synthesises — so it can never race a
+     * real playback, and never touches the main thread. Failure is already handled inside
+     * [loadOnnxTts] (it records a metric and falls back to the system voice), so a missing or
+     * broken model bundle leaves behaviour exactly as it was before warming existed.
+     */
+    private fun warmTts() {
+        ttsWorker.execute {
+            val started = System.nanoTime()
+            val runtime = runCatching { loadOnnxTts() }.getOrNull()
+            store.metric(null, "tts_warm", "loaded=${runtime != null},ms=${(System.nanoTime() - started) / 1_000_000}")
+        }
+    }
+
     @Synchronized
     private fun loadOnnxTts(): IndicOnnxTts? {
         onnxTts?.let { return it }
@@ -592,6 +671,10 @@ class SutraTransmissionService : Service(), PeerTransportListener {
                 track.play()
                 message?.let {
                     store.metric(it.id.toString(), "playback_started", "backend=indic-tts")
+                    // Metric 2: received -> first audio frame actually written, one clock, no sync needed.
+                    receivedAt.remove(it.id.toString())?.let { rx ->
+                        store.metric(it.id.toString(), "rx_to_first_audio", "ms=${(System.nanoTime() - rx) / 1_000_000}")
+                    }
                     sendAck(it, SutraMessageType.PLAYBACK_STARTED)
                 }
                 store.metric(message?.id?.toString(), "tts_first_audio", "ms=${(System.nanoTime() - started) / 1_000_000}")

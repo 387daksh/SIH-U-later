@@ -33,7 +33,9 @@ class BluetoothPeerTransport(context: Context, private val listener: PeerTranspo
     private val peers = ConcurrentHashMap<String, BluetoothPeer>()
     private val rssiFilters = ConcurrentHashMap<String, BluetoothDistanceEstimator.RssiFilter>()
     private val candidates = LinkedHashMap<String, BluetoothDevice>()
-    private val confirmed = mutableSetOf<String>()
+    // Read from socket threads via publish()/sutraSnapshot(), written from the handler thread.
+    private val confirmed = ConcurrentHashMap.newKeySet<String>()
+    private val bonded = ConcurrentHashMap.newKeySet<String>()
     private val connecting = ConcurrentHashMap<String, BluetoothSocket>()
     private val queued = ConcurrentHashMap.newKeySet<String>()
     private val listening = AtomicBoolean()
@@ -42,8 +44,13 @@ class BluetoothPeerTransport(context: Context, private val listener: PeerTranspo
     @Volatile private var closed = false
     private var automatic = false
     private var scanning = false
-    /** Wi-Fi Direct is the primary transport; Bluetooth only actively seeks new links when it has no active group. */
-    @Volatile var wifiDirectGrouped = false
+    /**
+     * Wi-Fi Direct is the primary transport, so Bluetooth only chases new links when Wi-Fi is not
+     * actually carrying data. Asked live rather than latched at group formation: a group whose TCP
+     * link never came up must not keep the Bluetooth fallback stood down.
+     */
+    @Volatile var wifiPrimaryActive: () -> Boolean = { false }
+    private fun wifiCarrying() = runCatching { wifiPrimaryActive() }.getOrDefault(false)
     private var queryAddress: String? = null
     private val queried = mutableSetOf<String>()
     private var queryCallback: ((List<BluetoothPeer>) -> Unit)? = null
@@ -62,9 +69,9 @@ class BluetoothPeerTransport(context: Context, private val listener: PeerTranspo
             if (!automatic || closed) return
             runCatching {
                 if (permitted() && adapter?.isEnabled == true) {
+                    // Always accept inbound links; only outbound discovery stands down for Wi-Fi.
                     listen()
-                    // Wi-Fi Direct already has a working group; don't spend radio/battery chasing new BT links.
-                    if (!wifiDirectGrouped) scan()
+                    if (!wifiCarrying()) scan()
                 }
             }.onFailure { listener.onTransportStatus("Bluetooth discovery paused: ${it.message}") }
             handler.postDelayed(this, 45_000L + Random.nextLong(8_000))
@@ -132,11 +139,11 @@ class BluetoothPeerTransport(context: Context, private val listener: PeerTranspo
                         confirmed.add(device.address)
                         peers.putIfAbsent(device.address, BluetoothPeer(device.name ?: "SUTRA phone", device.address))
                         // Wi-Fi Direct is the primary transport; only fall back to an automatic BT connect without it.
-                        if (automatic && !wifiDirectGrouped) {
+                        if (automatic && !wifiCarrying()) {
                             val epoch = generation.get()
                             // Random backoff resolves simultaneous inbound/outbound duplicate attempts.
                             handler.postDelayed({
-                                if (automatic && !wifiDirectGrouped && epoch == generation.get() && !closed) connect(device.address)
+                                if (automatic && !wifiCarrying() && epoch == generation.get() && !closed) connect(device.address)
                             }, Random.nextLong(500, 3_000))
                         }
                     }
@@ -163,6 +170,7 @@ class BluetoothPeerTransport(context: Context, private val listener: PeerTranspo
     fun bondedPeers(): List<BluetoothPeer> {
         if (!permitted()) return emptyList()
         runCatching { adapter?.bondedDevices?.forEach { device ->
+            bonded.add(device.address)
             val old = peers[device.address]
             peers[device.address] = BluetoothPeer(device.name ?: "Bluetooth phone", device.address,
                 old?.rssi, old?.distanceMetres, links.contains(device.address))
@@ -172,7 +180,7 @@ class BluetoothPeerTransport(context: Context, private val listener: PeerTranspo
     fun fetchSutraPeers(onResult: (List<BluetoothPeer>) -> Unit) {
         if (!permitted()) { onResult(emptyList()); return }
         queryCallback = onResult
-        adapter?.bondedDevices?.forEach { candidates[it.address] = it }
+        adapter?.bondedDevices?.forEach { candidates[it.address] = it; bonded.add(it.address) }
         queried.clear()
         queryNext()
     }
@@ -181,7 +189,7 @@ class BluetoothPeerTransport(context: Context, private val listener: PeerTranspo
         if (!permitted() || closed || !currentAdapter.isEnabled) return
         if (currentAdapter.isDiscovering || queryAddress != null || queued.isNotEmpty()) return
         candidates.clear()
-        currentAdapter.bondedDevices.forEach { candidates[it.address] = it }
+        currentAdapter.bondedDevices.forEach { candidates[it.address] = it; bonded.add(it.address) }
         queried.clear()
         if (!runCatching { currentAdapter.startDiscovery() }.getOrDefault(false)) queryNext()
     }
@@ -263,8 +271,13 @@ class BluetoothPeerTransport(context: Context, private val listener: PeerTranspo
     fun send(bytes: ByteArray) = links.send(bytes)
     private fun snapshot() = peers.values.map { it.copy(connected = links.contains(it.address)) }
         .sortedWith(compareByDescending<BluetoothPeer> { it.connected }.thenBy { it.name })
-    /** Only devices confirmed (by SDP UUID) or already linked are actually running SUTRA; drop everything else. */
-    private fun sutraSnapshot() = snapshot().filter { it.address in confirmed || it.connected }
+    /**
+     * Drop the headphones and car stereos that merely answered a scan: keep devices confirmed by SDP
+     * UUID, already linked, or explicitly paired. Paired-but-unconfirmed phones have to stay listed,
+     * because the manual "BT connect" button can only offer what this returns.
+     */
+    private fun sutraSnapshot() =
+        snapshot().filter { it.address in confirmed || it.connected || it.address in bonded }
     private fun publish() = peerListener(sutraSnapshot(), scanning)
     fun disconnect() {
         stopAutomatic()

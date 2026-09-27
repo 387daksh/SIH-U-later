@@ -3,6 +3,7 @@ package org.sih.offlinespeech
 import android.Manifest
 import android.animation.ValueAnimator
 import android.app.Activity
+import android.app.ActivityManager
 import android.app.AlertDialog
 import android.app.NotificationManager
 import android.bluetooth.BluetoothAdapter
@@ -61,6 +62,8 @@ class MainActivity : Activity(), SutraTransmissionListener {
     private val mint by lazy { theme.mint }
     private val divider by lazy { theme.line }
     private val sttWorker = Executors.newSingleThreadExecutor()
+    /** Warm-up timing recorded before the service bound, flushed in [serviceConnection]. */
+    private val pendingWarmMetric = java.util.concurrent.atomic.AtomicReference<String?>(null)
     private val pendingSegments = AtomicInteger()
 
     private lateinit var status: TextView
@@ -146,6 +149,11 @@ class MainActivity : Activity(), SutraTransmissionListener {
                 it.setListener(this@MainActivity)
             }
             serviceBound = true
+            // Warm-up finishes before the service binds, so its timing is buffered until there is
+            // a metrics store to put it in; without this the row never reaches the exported CSV.
+            pendingWarmMetric.getAndSet(null)?.let { detail ->
+                transmission?.recordMetric(null, "stt_warm", detail)
+            }
             wifiDirect = transmission?.wifiDirect
             refreshBluetoothPeers()
             val active = transmission?.isSecurityActive() == true
@@ -160,6 +168,41 @@ class MainActivity : Activity(), SutraTransmissionListener {
             serviceBound = false
             transmission = null
             updateConnectionLine("Connection service stopped")
+        }
+    }
+
+    /**
+     * Builds the ONNX speech sessions during startup rather than on the first utterance.
+     *
+     * Runs on [sttWorker] — the same single thread that later transcribes — so warming can never
+     * overlap a real transcription, and the UI thread is untouched. Everything is wrapped: a missing
+     * or invalid model bundle leaves [pipeline] null and the first transcription takes the original
+     * cold path, exactly as before, so this cannot turn a working install into a broken one.
+     */
+    private fun warmSpeechPipeline() {
+        val mode = routingMode
+        val target = modelDir
+        // Only pre-load the large Indic session where there is memory for it. On a low-RAM device
+        // AUTO keeps reaching it lazily, as it did before warming existed, so warming can never be
+        // the reason a small phone runs out of memory.
+        val activityManager = getSystemService(ActivityManager::class.java)
+        val roomForIndic = activityManager?.let { manager ->
+            val info = ActivityManager.MemoryInfo().also(manager::getMemoryInfo)
+            !manager.isLowRamDevice && info.totalMem >= 3L * 1024 * 1024 * 1024
+        } ?: false
+        sttWorker.execute {
+            runCatching {
+                val engine = pipeline ?: OfflineSpeechPipeline(target).also { pipeline = it }
+                engine.warmUp(mode, includeIndic = roomForIndic)
+            }.onSuccess { millis ->
+                val detail = "ms=$millis,mode=$mode,indic=$roomForIndic"
+                val store = transmission
+                if (store != null) store.recordMetric(null, "stt_warm", detail) else pendingWarmMetric.set(detail)
+                Log.i("SIH_METRIC", "stt_warm ms=$millis mode=$mode indic=$roomForIndic")
+            }.onFailure {
+                // Not fatal: the first transcription will retry and surface a real error there.
+                Log.w("SIH_METRIC", "stt_warm skipped: ${it.message}")
+            }
         }
     }
 
@@ -189,6 +232,7 @@ class MainActivity : Activity(), SutraTransmissionListener {
             .getString("routing_mode", RoutingMode.AUTO.name)
             ?.let { saved -> RoutingMode.entries.firstOrNull { it.name == saved } }
             ?: RoutingMode.AUTO
+        warmSpeechPipeline()
         val vadModelFile = File(modelDir, "vad/silero_vad.onnx")
         val vadInstallError = runCatching { installVadIfMissing(vadModelFile) }.exceptionOrNull()
 
@@ -1644,29 +1688,31 @@ class MainActivity : Activity(), SutraTransmissionListener {
             pushToTalkHint.text = "Detecting language on device"
             vadIndicator.text = "${"%.1f".format(audio.size / 16000.0)} second message"
         }
+        val speechEndNanos = System.nanoTime()
         transmission?.recordMetric(transmissionId.toString(), "speech_end", "segment=$segId,capture=$captureMode")
+        // Stamp the cut on the wall clock too, so the peer's playback stamp can be compared to it.
+        transmission?.noteSpeechEnd(transmissionId.toString(), SutraTelemetry.nsToEpochMs(speechEndNanos))
         sttWorker.execute {
             try {
                 transmission?.recordMetric(transmissionId.toString(), "asr_start", "segment=$segId,audio_samples=${audio.size}")
                 val sttEngine = pipeline ?: OfflineSpeechPipeline(modelDir).also { pipeline = it }
                 val answer = sttEngine.transcribe(audio, mode)
-                transmission?.recordMetric(transmissionId.toString(), "asr_final", "inference_ms=${answer.milliseconds},language=${answer.language}")
+                val audioMs = audio.size * 1000L / 16000
+                val loadMs = sttEngine.lastModelLoadMillis
+                // Metric 1 is speech end -> STT complete, which includes any queue wait; metric 3
+                // (RTF) must not, so it comes from processing time alone.
+                val sttLatencyMs = (System.nanoTime() - speechEndNanos) / 1_000_000
+                val rtf = SutraTelemetry.realTimeFactor(answer.milliseconds, audioMs)
+                transmission?.recordMetric(transmissionId.toString(), "asr_final",
+                    "inference_ms=${answer.milliseconds},language=${answer.language}," +
+                        "audio_ms=$audioMs,rtf=${"%.4f".format(rtf)},model_load_ms=$loadMs,stt_latency_ms=$sttLatencyMs")
 
-                // Verify alert criteria: ONLY evaluated if Emergency Alert mode was actively pressed
-                var finalAlert = isAlert
+                // Alerts are never rate-limited or downgraded: arming Emergency mode always sends an alert.
+                val finalAlert = isAlert
                 val coords = mapController.getCurrentCoordinates()
                 if (finalAlert) {
-                    val monthlyCount = transmission?.monthlyAlertCount() ?: 0
-                    val hasEmergencyKeyword = CriticalFieldDetector.containsEmergencyKeyword(answer.text)
-                    if (monthlyCount >= 3 && !hasEmergencyKeyword) {
-                        finalAlert = false
-                        runOnUiThread {
-                            Toast.makeText(this@MainActivity, "Alert limit reached & no emergency keywords detected. Sent as normal message.", Toast.LENGTH_LONG).show()
-                        }
-                    } else {
-                        transmission?.recordAlert(transmissionId.toString(), category ?: "EMERGENCY")
-                        mapController.addAlertPin(category ?: "EMERGENCY", answer.text, coords?.first, coords?.second, sourceId)
-                    }
+                    transmission?.recordAlert(transmissionId.toString(), category ?: "EMERGENCY")
+                    mapController.addAlertPin(category ?: "EMERGENCY", answer.text, coords?.first, coords?.second, sourceId)
                 }
 
                 val layers = SutraSemanticEncoder.build(
