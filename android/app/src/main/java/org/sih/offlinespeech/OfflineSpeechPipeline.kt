@@ -83,8 +83,45 @@ class OfflineSpeechPipeline(private val root: File) : Closeable {
     private var whisper: WhisperRuntime? = null
     private var indic: IndicRuntime? = null
 
+    /**
+     * Milliseconds the most recent [transcribe] spent constructing ONNX sessions. Zero once warm.
+     *
+     * Kept separate because a cold session load is seconds, not milliseconds, and folding it into
+     * [SpeechResult.milliseconds] made the first utterance of a process look an order of magnitude
+     * slower than every later one — a property of startup, not of the model's speed.
+     */
+    @Volatile
+    var lastModelLoadMillis: Long = 0
+        private set
+
+    /** Session-construction time accumulated by [whisper]/[indic] during the current transcribe. */
+    private var loadNanos = 0L
+
+    /**
+     * Builds the ONNX sessions this [mode] will need, so the first real utterance does not pay for
+     * them. Safe to call repeatedly and safe to call off the main thread; returns the milliseconds
+     * spent, or throws if the model bundle is unusable.
+     *
+     * In [RoutingMode.AUTO], Whisper is always warmed because every AUTO transcription tries it
+     * first. The much larger Indic session is warmed only when [includeIndic] is set: AUTO reaches it
+     * lazily today, so an English-only user currently never pays for it, and warming it
+     * unconditionally would raise resident memory on exactly the low-end devices this app targets.
+     * Callers that know the device has headroom should opt in; for an Indic-first deployment that is
+     * the common case and removes the largest first-message stall.
+     */
+    fun warmUp(mode: RoutingMode = RoutingMode.AUTO, includeIndic: Boolean = false): Long {
+        val started = System.nanoTime()
+        when (mode) {
+            RoutingMode.AUTO -> { whisper(); if (includeIndic) indic() }
+            RoutingMode.ENGLISH -> whisper()
+            RoutingMode.INDIC -> indic()
+        }
+        return (System.nanoTime() - started) / 1_000_000
+    }
+
     fun transcribe(audio: FloatArray, mode: RoutingMode = RoutingMode.AUTO): SpeechResult {
         require(audio.size >= 1_600) { "Recording is shorter than 0.1 seconds" }
+        loadNanos = 0L
         val started = System.nanoTime()
         val answer = when (mode) {
             RoutingMode.AUTO -> whisper().transcribeEnglish(audio, verifyLanguage = true) ?: indic().transcribe(audio)
@@ -97,11 +134,29 @@ class OfflineSpeechPipeline(private val root: File) : Closeable {
                 indic().transcribe(audio)
             }
         }
-        return answer.copy(milliseconds = (System.nanoTime() - started) / 1_000_000)
+        val elapsedNanos = System.nanoTime() - started
+        lastModelLoadMillis = loadNanos / 1_000_000
+        // Processing only: any session load that happened inside this call is reported separately.
+        return answer.copy(milliseconds = (elapsedNanos - loadNanos).coerceAtLeast(0) / 1_000_000)
     }
 
-    private fun whisper() = whisper ?: WhisperRuntime(environment, File(root, "whisper")).also { whisper = it }
-    private fun indic() = indic ?: IndicRuntime(environment, File(root, "indic")).also { indic = it }
+    private fun whisper(): WhisperRuntime = whisper ?: timedLoad {
+        WhisperRuntime(environment, File(root, "whisper")).also { whisper = it }
+    }
+
+    private fun indic(): IndicRuntime = indic ?: timedLoad {
+        IndicRuntime(environment, File(root, "indic")).also { indic = it }
+    }
+
+    /** Runs a lazy session construction, accumulating its cost into [loadNanos]. */
+    private fun <T> timedLoad(build: () -> T): T {
+        val started = System.nanoTime()
+        try {
+            return build()
+        } finally {
+            loadNanos += System.nanoTime() - started
+        }
+    }
 
     override fun close() { indic?.close(); whisper?.close() }
 }

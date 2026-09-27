@@ -299,10 +299,22 @@ object SutraSemanticEncoder {
         return SutraLayerSet(id, fields, messages)
     }
 
-    fun acknowledgement(original: SutraMessage, type: SutraMessageType, sourceId: Long): SutraMessage {
+    /**
+     * @param payload optional acknowledgement body. Used to carry this device's clock reading for
+     *   cross-device latency (see [SutraTelemetry]); defaults to empty, which is what every earlier
+     *   build sent. The envelope already carries an explicit payload length, so a peer running an
+     *   older build decodes the frame normally and ignores the extra bytes — no version bump, and
+     *   no header change.
+     */
+    fun acknowledgement(
+        original: SutraMessage,
+        type: SutraMessageType,
+        sourceId: Long,
+        payload: ByteArray = ByteArray(0),
+    ): SutraMessage {
         require(type in setOf(SutraMessageType.RECEIVED_ACK, SutraMessageType.PLAYBACK_STARTED,
             SutraMessageType.PLAYBACK_FINISHED, SutraMessageType.REPAIR_REQUEST))
-        return SutraMessage(type, original.language, ByteArray(0), original.id,
+        return SutraMessage(type, original.language, payload, original.id,
             sourceId, original.sourceId, SutraFlags.FINAL)
     }
 }
