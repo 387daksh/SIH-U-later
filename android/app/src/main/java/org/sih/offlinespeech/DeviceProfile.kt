@@ -75,7 +75,12 @@ data class DeviceProfile(
                 else -> DeviceTier.HIGH
             }
 
-            return DeviceProfile(tier, totalRamGb, cpuCores)
+            // Activation memory scales with utterance length: measured on the quantised Indic
+            // encoder, a 30 s utterance costs 214 MB of activations against 52 MB for 8 s. Capping
+            // the segment bounds the worst case on the devices that cannot absorb it, at the cost
+            // of splitting a very long monologue into two messages.
+            val vad = if (tier == DeviceTier.LOW) VadConfig(maxSegmentDurationMs = 8_000) else VadConfig()
+            return DeviceProfile(tier, totalRamGb, cpuCores, vad)
         }
     }
 }

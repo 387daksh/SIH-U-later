@@ -214,7 +214,7 @@ class MainActivity : Activity(), SutraTransmissionListener {
         } ?: false
         sttWorker.execute {
             runCatching {
-                val engine = pipeline ?: OfflineSpeechPipeline(target).also { pipeline = it }
+                val engine = pipeline ?: OfflineSpeechPipeline(target, conserveMemory = deviceProfile.tier == DeviceTier.LOW).also { pipeline = it }
                 engine.warmUp(mode, includeIndic = roomForIndic)
             }.onSuccess { millis ->
                 val detail = "ms=$millis,mode=$mode,indic=$roomForIndic"
@@ -2189,7 +2189,7 @@ class MainActivity : Activity(), SutraTransmissionListener {
         sttWorker.execute {
             try {
                 transmission?.recordMetric(transmissionId.toString(), "asr_start", "segment=$segId,audio_samples=${audio.size}")
-                val sttEngine = pipeline ?: OfflineSpeechPipeline(modelDir).also { pipeline = it }
+                val sttEngine = pipeline ?: OfflineSpeechPipeline(modelDir, conserveMemory = deviceProfile.tier == DeviceTier.LOW).also { pipeline = it }
                 val answer = sttEngine.transcribe(audio, mode)
                 val audioMs = audio.size * 1000L / 16000
                 val loadMs = sttEngine.lastModelLoadMillis
