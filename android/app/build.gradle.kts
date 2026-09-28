@@ -1,6 +1,12 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
+}
+
+val localBuildProperties = Properties().apply {
+    rootProject.file("local.properties").takeIf { it.isFile }?.inputStream()?.use { load(it) }
 }
 
 android {
@@ -9,6 +15,7 @@ android {
 
     defaultConfig {
         applicationId = "org.sih.offlinespeech"
+        manifestPlaceholders["appLabel"] = "SUTRA"
         minSdk = 26
         targetSdk = 35
         versionCode = 17
@@ -28,7 +35,10 @@ android {
 
     signingConfigs {
         getByName("debug") {
-            storeFile = file("debug.keystore")
+            storeFile = localBuildProperties.getProperty("sutra.debugKeystore")
+                ?.takeIf(String::isNotBlank)
+                ?.let(::file)
+                ?: file("debug.keystore")
             storePassword = "android"
             keyAlias = "androiddebugkey"
             keyPassword = "android"
