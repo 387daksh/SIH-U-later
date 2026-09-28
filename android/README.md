@@ -71,29 +71,35 @@ do not substitute for a three-phone radio test.
 From the repository root:
 
 ```powershell
-# Download the notebook output and extract it once:
-Expand-Archive .\onnx_en+hi.zip .\models\tts\en-hi -Force
+# Replace the old ~171 MB-per-language TTS exports with the supplied INT8 bundle:
+.\tools\stage_tts_int8_bundle.ps1 `
+  -ZipPath "C:\Users\Sarthak\Downloads\indic_tts_int8_bundle.zip" `
+  -Output ".\models\tts" `
+  -Languages en-hi,bn,gu,kn,ml,mr,or,ta,te
 
 .\.venv\Scripts\python.exe .\scripts\stage_android_models.py
 ```
 
-The generated bundle remains untracked under `artifacts/android_models`. It is 771.70 MiB without TTS and roughly 856.5 MiB with the selected `en+hi` pair. It includes:
+The generated bundle remains untracked under `artifacts/android_models`. The new
+TTS source is about 591.4 MiB for all 10 supported languages because `en-hi`
+covers both English and Hindi and the vocoder is shared. It includes:
 - **Silero VAD ONNX v6.2.1**: Pinned by SHA-256 and used for real-time pause segmentation.
 - **Whisper (English)**: Hybrid FP32 encoder + INT8 decoder.
 - **IndicConformer (9 Indian Languages)**: Hybrid INT8 model with 9-language CTC decoding.
-- **Indic-TTS `en+hi`**: `fastpitch_en+hi.prosody.onnx` + `hifigan_en+hi.minmax.onnx`, staged under stable `tts/en-hi` names with `meta.json`.
+- **Indic-TTS (10 languages)**: INT8 FastPitch models under `tts/<language>` plus shared `tts/shared/hifigan.onnx` and per-language `meta.json`.
 
-Only those two selected ONNX graphs are staged; the 422 MB notebook export also contains fp32 and rejected/alternative quantizations that the app does not need. The selected pair is about 88.9 MB. If `models/tts/en-hi` is absent, staging prints a warning and the APK keeps the system-voice fallback.
+The app loads one FastPitch language session at a time and reuses the shared
+vocoder. If a language folder is absent, that language falls back to the
+installed Android voice.
 
-To add TTS to a phone that already has the 800 MB model installation, push only the selected files into the same external model directory:
+To add the replacement TTS files to a phone that already has the model
+installation, push the complete staged `tts` directory:
 
 ```powershell
 $adb = ".\.android-sdk\platform-tools\adb.exe"
-$remote = "/sdcard/Android/data/org.sih.offlinespeech/files/models/tts/en-hi"
+$remote = "/sdcard/Android/data/org.sih.offlinespeech/files/models/tts"
 & $adb shell mkdir -p $remote
-& $adb push ".\models\tts\en-hi\fastpitch_en+hi.prosody.onnx" "$remote/fastpitch.onnx"
-& $adb push ".\models\tts\en-hi\hifigan_en+hi.minmax.onnx" "$remote/hifigan.onnx"
-& $adb push ".\models\tts\en-hi\meta.json" "$remote/meta.json"
+& $adb push ".\models\tts\." $remote
 ```
 
 Restart the app after copying. No STT model is downloaded or copied again.
