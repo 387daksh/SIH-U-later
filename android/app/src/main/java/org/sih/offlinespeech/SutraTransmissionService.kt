@@ -20,6 +20,7 @@ import android.os.VibrationEffect
 import android.os.Vibrator
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
+import android.speech.tts.Voice
 import android.util.Log
 import java.io.File
 import java.security.SecureRandom
@@ -550,6 +551,12 @@ class SutraTransmissionService : Service(), PeerTransportListener {
             pendingSpeech.remove(utteranceId)
             conversation.playbackFailed(message.id.toString())
             listener?.onConversationChanged()
+            store.metric(message.id.toString(), "tts_no_voice",
+                "language=$language,onnx=false,system=false")
+            Log.e("SUTRA_TTS", "No TTS voice available for language='$language'. " +
+                "Install Indic-TTS ONNX models (run scripts/download_indic_tts.py) or " +
+                "install a '$language' offline voice in Android Settings → Text-to-Speech.")
+            status("⚠ No offline voice for $language — install Indic-TTS ONNX models")
         }
     }
 
@@ -561,14 +568,50 @@ class SutraTransmissionService : Service(), PeerTransportListener {
             "tamil" to "ta-IN", "telugu" to "te-IN", "odia" to "or-IN", "bengali" to "bn-IN",
         )[language] ?: "en-IN"
         val locale = Locale.forLanguageTag(tag)
-        val voice = engine.voices.filter { !it.isNetworkConnectionRequired && it.locale.language == locale.language }
-            .maxByOrNull { if (it.locale.country == locale.country) 1 else 0 }
-        if (voice == null || engine.setVoice(voice) != TextToSpeech.SUCCESS) {
-            status("No installed offline TTS voice for $language")
-            return false
+
+        val availableVoices = runCatching { engine.voices }.getOrNull().orEmpty()
+        Log.i("SUTRA_TTS", "speakSystem: language=$language tag=$tag availableVoices=${availableVoices.size}")
+
+        // Match on 2-letter (e.g. kn) or 3-letter (e.g. kan) ISO language code
+        val langCode2 = locale.language.lowercase(Locale.ROOT)
+        val langCode3 = runCatching { locale.isO3Language.lowercase(Locale.ROOT) }.getOrDefault("")
+        // Select the highest quality offline voice available for this locale
+        val voice = availableVoices.filter { v ->
+            val vLang = v.locale.language.lowercase(Locale.ROOT)
+            val vIso3 = runCatching { v.locale.isO3Language.lowercase(Locale.ROOT) }.getOrDefault("")
+            val langMatch = vLang == langCode2 || (langCode3.isNotEmpty() && vLang == langCode3) ||
+                (vIso3.isNotEmpty() && (vIso3 == langCode3 || vIso3 == langCode2))
+            langMatch && (!v.isNetworkConnectionRequired || engine.isLanguageAvailable(locale) >= TextToSpeech.LANG_AVAILABLE)
+        }.sortedWith(
+            compareByDescending<Voice> { if (it.locale.country.equals(locale.country, ignoreCase = true)) 1 else 0 }
+                .thenByDescending { if (!it.isNetworkConnectionRequired) 1 else 0 }
+                .thenByDescending { it.quality }
+        ).firstOrNull()
+
+        val voiceConfigured = if (voice != null) {
+            val res = engine.setVoice(voice)
+            Log.i("SUTRA_TTS", "Selected voice: ${voice.name} (quality=${voice.quality}, latency=${voice.latency}) result=$res")
+            res == TextToSpeech.SUCCESS
+        } else false
+
+        if (!voiceConfigured) {
+            val langRes = engine.setLanguage(locale)
+            Log.i("SUTRA_TTS", "setLanguage($locale) result=$langRes")
+            if (langRes < TextToSpeech.LANG_AVAILABLE) {
+                val reason = when (langRes) {
+                    TextToSpeech.LANG_MISSING_DATA -> "voice pack missing"
+                    TextToSpeech.LANG_NOT_SUPPORTED -> "not supported by TTS engine"
+                    else -> "unavailable (code $langRes)"
+                }
+                status("No offline voice for $language ($reason). Install voice in Android TTS settings.")
+                return false
+            }
         }
+
         val usage = if (alert) AudioAttributes.USAGE_ALARM else AudioAttributes.USAGE_ASSISTANCE_ACCESSIBILITY
         engine.setAudioAttributes(AudioAttributes.Builder().setUsage(usage).setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build())
+        engine.setSpeechRate(0.95f)
+        engine.setPitch(if (alert) 1.08f else 1.0f)
         requestAudioFocus(alert)
         AudioDuplexGate.beginPlayback()
         val accepted = engine.speak(text, TextToSpeech.QUEUE_ADD, null, utteranceId) == TextToSpeech.SUCCESS
@@ -580,10 +623,12 @@ class SutraTransmissionService : Service(), PeerTransportListener {
     }
 
     private fun hasOnnxTts(language: String): Boolean {
-        if (language != "english" && language != "hindi") return false
-        val root = File(resolveModelDir(this), "tts/en-hi")
-        return File(root, "fastpitch.onnx").isFile && File(root, "hifigan.onnx").isFile &&
-            File(root, "meta.json").isFile
+        val modelDir = resolveModelDir(this)
+        val multiDir = File(modelDir, "tts")
+        val legacyDir = File(modelDir, "tts/en-hi")
+        if (!multiDir.isDirectory && !legacyDir.isDirectory) return false
+        val tts = loadOnnxTts() ?: return false
+        return tts.supportsLanguage(language)
     }
 
     /**
@@ -605,17 +650,43 @@ class SutraTransmissionService : Service(), PeerTransportListener {
     @Synchronized
     private fun loadOnnxTts(): IndicOnnxTts? {
         onnxTts?.let { return it }
-        if (onnxTtsAttempted) return null
-        onnxTtsAttempted = true
-        val root = File(resolveModelDir(this), "tts/en-hi")
+        val modelDir = resolveModelDir(this)
+        val multiDir = File(modelDir, "tts")
+        val legacyDir = File(modelDir, "tts/en-hi")
+        Log.i("SUTRA_TTS", "TTS model root=${modelDir.path}, multi=${multiDir.path}, exists=${multiDir.isDirectory}")
+        // Only permanently skip if neither directory is present.
+        // If models were pushed mid-session, allow a retry.
+        val dirPresent = multiDir.isDirectory || legacyDir.isDirectory
+        if (!dirPresent) {
+            if (!onnxTtsAttempted) {
+                onnxTtsAttempted = true
+                Log.w("SUTRA_TTS", "TTS model directory not found at ${multiDir.path}. " +
+                    "Run scripts/download_indic_tts.py then scripts/stage_android_models.py " +
+                    "and push models to device.")
+            }
+            return null
+        }
+        // Directory exists — attempt load (don't lock out retries on transient failures)
+
+        val root = when {
+            multiDir.isDirectory && (File(multiDir, "shared/hifigan.onnx").isFile || File(multiDir, "hifigan.onnx").isFile) -> multiDir
+            legacyDir.isDirectory -> legacyDir
+            else -> multiDir
+        }
         return runCatching { IndicOnnxTts(root) }
             .onSuccess {
                 onnxTts = it
-                store.metric(null, "tts_model_loaded", "ai4bharat-indic-tts-en+hi-int8,prosody=${it.supportsPitchConditioning}")
-                status("AI4Bharat Indic-TTS ready${if (it.supportsPitchConditioning) " with pitch control" else ""}")
+                val count = it.supportedLanguages().size
+                // Loading a voice session can fail later than the vocoder session (for example
+                // when a model uses an operator unavailable in the installed ONNX Runtime).
+                // Keep that diagnostic from escaping the Result callback and crashing the UI.
+                val pitch = runCatching { it.supportsPitchConditioning }.getOrDefault(false)
+                store.metric(null, "tts_model_loaded", "ai4bharat-indic-tts-multilang,voices=$count,prosody=$pitch")
+                status("AI4Bharat Indic-TTS ready (${count} voices${if (pitch) ", pitch control" else ""})")
             }
             .onFailure {
                 store.metric(null, "tts_model_failed", it.message.orEmpty())
+                Log.e("SUTRA_TTS", "Indic-TTS ONNX load failed", it)
                 status("Indic-TTS failed; using installed system voice")
             }
             .getOrNull()
@@ -644,9 +715,9 @@ class SutraTransmissionService : Service(), PeerTransportListener {
             val started = System.nanoTime()
             var track: AudioTrack? = null
             try {
-                val chunks = runtime.chunks(text)
+                val chunks = runtime.chunks(text, language)
                 require(chunks.isNotEmpty()) { "TTS text has no supported characters" }
-                val first = runtime.synthesize(chunks.first(), emphasizedWord)
+                val first = runtime.synthesize(chunks.first(), emphasizedWord, language)
                 val format = AudioFormat.Builder()
                     .setSampleRate(runtime.sampleRate)
                     .setEncoding(AudioFormat.ENCODING_PCM_FLOAT)
@@ -683,7 +754,7 @@ class SutraTransmissionService : Service(), PeerTransportListener {
                 val gap = FloatArray(runtime.chunkGapFrames)
                 chunks.drop(1).forEach { chunk ->
                     writeAll(track, gap, 0, gap.size)
-                    val audio = runtime.synthesize(chunk, emphasizedWord)
+                    val audio = runtime.synthesize(chunk, emphasizedWord, language)
                     writeAll(track, audio, 0, audio.size)
                     frames += gap.size + audio.size
                 }
