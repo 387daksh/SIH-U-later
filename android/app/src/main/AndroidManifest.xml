@@ -29,7 +29,7 @@
         </intent>
     </queries>
     <application android:theme="@android:style/Theme.Material.Light.NoActionBar"
-        android:label="SUTRA" android:icon="@drawable/ic_launcher"
+        android:label="${appLabel}" android:icon="@drawable/ic_launcher"
         android:allowBackup="false" android:largeHeap="true">
         <service android:name=".SutraTransmissionService"
             android:exported="false"

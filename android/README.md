@@ -112,7 +112,7 @@ If the 800 MB self-contained APK has already completed its first-run model extra
 .\.android-sdk\platform-tools\adb.exe install -r .\android\app\build\outputs\apk\debug\app-debug.apk
 ```
 
-Both variants use application ID `org.sih.offlinespeech`. The thin app first checks the original bundle path, `getExternalFilesDir(null)/models`, so the existing models are reused. It also accepts the internal `files/models` path used by the USB staging workflow below.
+The app uses application ID `org.sih.offlinespeech`. The thin app first checks the original bundle path, `getExternalFilesDir(null)/models`, so the existing models are reused. It also accepts the internal `files/models` path used by the USB staging workflow below.
 
 From the repository root, with USB debugging enabled:
 

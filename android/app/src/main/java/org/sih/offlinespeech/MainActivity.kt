@@ -15,6 +15,7 @@ import android.content.Intent
 import android.content.ServiceConnection
 import android.content.res.ColorStateList
 import android.content.pm.PackageManager
+import android.location.Geocoder
 import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
@@ -42,8 +43,16 @@ import android.widget.ScrollView
 import android.widget.Spinner
 import android.widget.TextView
 import android.widget.Toast
+import android.net.Uri
+import android.webkit.JavascriptInterface
+import android.webkit.WebChromeClient
+import android.webkit.WebView
+import android.webkit.WebViewClient
+import org.json.JSONArray
+import org.json.JSONObject
 import java.io.File
 import java.security.SecureRandom
+import java.util.Locale
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -64,7 +73,16 @@ class MainActivity : Activity(), SutraTransmissionListener {
     private val sttWorker = Executors.newSingleThreadExecutor()
     /** Warm-up timing recorded before the service bound, flushed in [serviceConnection]. */
     private val pendingWarmMetric = java.util.concurrent.atomic.AtomicReference<String?>(null)
+    private val areaLookupWorker = Executors.newSingleThreadExecutor()
     private val pendingSegments = AtomicInteger()
+    private var areaLookupRequested = false
+    private var areaLookupPendingFix = false
+    private var areaLookupStatus = "idle"
+    private var areaDistrict: String? = null
+    private var areaState: String? = null
+    private var advancedConnectionPanel: LinearLayout? = null
+    private var liveMapPage: View? = null
+    private var liveMapDialog: AlertDialog? = null
 
     private lateinit var status: TextView
     private lateinit var discoveryStatus: TextView
@@ -116,6 +134,8 @@ class MainActivity : Activity(), SutraTransmissionListener {
     private lateinit var proximityMap: ProximityMapView
     private lateinit var proximityStatus: TextView
     private lateinit var pairingPhrase: EditText
+    private var designWebView: WebView? = null
+    private var currentTeam = emptyList<TeamPeer>()
 
     private lateinit var deviceProfile: DeviceProfile
     private lateinit var modelDir: File
@@ -138,6 +158,7 @@ class MainActivity : Activity(), SutraTransmissionListener {
     private var bluetoothSetupRequested = false
     private var alertMode = false
     private var alertCategory: String? = null
+    private var speechModelsReady = false
     private var pushToTalkStartedAt = 0L
     @Volatile private var listening = false
     @Volatile private var pushToTalkRecording = false
@@ -162,6 +183,7 @@ class MainActivity : Activity(), SutraTransmissionListener {
             onConversationChanged()
             prepareAutomaticConnections()
             mapController.syncSharing()
+            updateDesignState()
         }
 
         override fun onServiceDisconnected(name: ComponentName) {
@@ -220,7 +242,14 @@ class MainActivity : Activity(), SutraTransmissionListener {
 
         deviceProfile = DeviceProfile.detect(this)
         preferredLanguage = getSharedPreferences("sutra", MODE_PRIVATE).getString("preferred_language", "english") ?: "english"
-        mapController = MapPageController(this) { fix -> transmission?.updateSharedFix(fix) }
+        mapController = MapPageController(
+            this,
+            { fix -> transmission?.updateSharedFix(fix) },
+            { fix ->
+                if (areaLookupPendingFix) resolveEmergencyArea(fix)
+                updateDesignState()
+            },
+        )
         sourceId = getSharedPreferences("sutra", MODE_PRIVATE).let { preferences ->
             if (preferences.contains("terminal_id")) preferences.getLong("terminal_id", 0)
             else SecureRandom().nextLong().let { generated ->
@@ -270,7 +299,9 @@ class MainActivity : Activity(), SutraTransmissionListener {
         }
 
         latestTranscript = TextView(this).apply {
-            text = "Speak in your language.\nStart a conversation with your nearby team."
+            val displayName = getSharedPreferences("sutra", MODE_PRIVATE).getString("display_name", "").orEmpty()
+            text = if (displayName.isBlank()) "Speak in your language.\nStart a conversation with your nearby team."
+                else "Welcome, $displayName.\nSpeak in your language to start a conversation."
             textSize = 16f
             gravity = Gravity.CENTER
             setLineSpacing(0f, 1.25f)
@@ -566,6 +597,14 @@ class MainActivity : Activity(), SutraTransmissionListener {
             addView(alertButton, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { marginStart = dp(4) })
         }
 
+        val emergencyCallButton = Button(this).apply {
+            text = "Call emergency services · 112"
+            contentDescription = "Open phone dialer with India's emergency number 112"
+            textSize = 14f
+            stylePrimaryButton(Color.rgb(183, 55, 43), 16)
+            setOnClickListener { openDialer(HelplineDirectory.emergencyNumber) }
+        }
+
         val talkCard = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER_HORIZONTAL
@@ -805,6 +844,7 @@ class MainActivity : Activity(), SutraTransmissionListener {
             addView(networkButtons)
             addView(status)
         }
+        advancedConnectionPanel = advancedPanel
         val advancedToggle = Button(this).apply {
             text = "Show advanced connection tools"
             styleSecondaryButton()
@@ -850,6 +890,9 @@ class MainActivity : Activity(), SutraTransmissionListener {
                 setPadding(dp(14), dp(12), dp(14), dp(4))
                 background = roundedBackground(surface, 28)
                 elevation = dp(3).toFloat()
+                addView(emergencyCallButton, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(48)).apply {
+                    bottomMargin = dp(8)
+                })
                 addView(messageTypeSelector)
                 addView(talkCard)
                 addView(handsFreeRow)
@@ -874,6 +917,7 @@ class MainActivity : Activity(), SutraTransmissionListener {
             transcriptCard,
         )
         val mapPage = mapController.createPageView()
+        liveMapPage = mapPage
         val pages = arrayOf(talkPage, devicesPage, historyPage, mapPage)
         val content = FrameLayout(this).apply {
             pages.forEach { addView(it, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)) }
@@ -963,6 +1007,23 @@ class MainActivity : Activity(), SutraTransmissionListener {
                     setPadding(dp(10), dp(6), dp(10), dp(6))
                 })
                 addView(Button(this@MainActivity).apply {
+                    text = "New UI"
+                    textSize = 10f
+                    contentDescription = "Return to the redesigned SUTRA interface"
+                    styleTextButton(Color.WHITE)
+                    setPadding(dp(6), paddingTop, dp(6), paddingBottom)
+                    setOnClickListener { showDesignInterface() }
+                }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+                addView(Button(this@MainActivity).apply {
+                    text = "Help"
+                    textSize = 11f
+                    contentDescription = "How to use SUTRA"
+                    styleTextButton(Color.WHITE)
+                    minWidth = dp(42)
+                    setPadding(dp(8), paddingTop, dp(8), paddingBottom)
+                    setOnClickListener { showHowToUse() }
+                }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { marginStart = dp(2) })
+                addView(Button(this@MainActivity).apply {
                     text = "Settings"
                     textSize = 11f
                     contentDescription = "Open Settings"
@@ -993,16 +1054,17 @@ class MainActivity : Activity(), SutraTransmissionListener {
                 WindowInsets.CONSUMED
             }
         }
-        setContentView(root)
-        if (Build.VERSION.SDK_INT >= 30) root.post {
+        showDesignInterface()
+        if (Build.VERSION.SDK_INT >= 30) designWebView?.post {
             // The window's decor does not exist on every device until content is attached.
-            root.windowInsetsController?.setSystemBarsAppearance(
-                WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS,
+            designWebView?.windowInsetsController?.setSystemBarsAppearance(
+                WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS or
+                    WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS,
                 WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS or
                     WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS,
             )
         }
-        root.requestApplyInsets()
+        designWebView?.requestApplyInsets()
         showPage(0)
 
         val serviceIntent = Intent(this, SutraTransmissionService::class.java)
@@ -1010,6 +1072,7 @@ class MainActivity : Activity(), SutraTransmissionListener {
         else startService(serviceIntent)
 
         val modelError = runCatching { validateModelBundle(modelDir) }.exceptionOrNull()
+        speechModelsReady = modelError == null && vadInstallError == null && vadModelFile.isFile
         if (modelError != null || vadInstallError != null || !vadModelFile.isFile) {
             startStopButton.setEnabledAlpha(false)
             tapRecordButton.setEnabledAlpha(false)
@@ -1029,6 +1092,414 @@ class MainActivity : Activity(), SutraTransmissionListener {
     }
 
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
+
+    private fun showDesignInterface() {
+        val webView = designWebView ?: WebView(this).apply {
+            settings.javaScriptEnabled = true
+            settings.domStorageEnabled = true
+            settings.allowFileAccess = true
+            settings.allowContentAccess = false
+            settings.javaScriptCanOpenWindowsAutomatically = false
+            settings.setSupportMultipleWindows(false)
+            webChromeClient = WebChromeClient()
+            webViewClient = object : WebViewClient() {
+                override fun shouldOverrideUrlLoading(view: WebView, url: String): Boolean =
+                    !url.startsWith("file:///android_asset/sutra-ui/") && !url.startsWith("about:")
+
+                override fun onPageFinished(view: WebView, url: String) { updateDesignState() }
+            }
+            addJavascriptInterface(DesignBridge(), "SutraAndroid")
+            setBackgroundColor(Color.rgb(247, 242, 233))
+            isVerticalScrollBarEnabled = false
+            isHorizontalScrollBarEnabled = false
+            setOnApplyWindowInsetsListener { view, insets ->
+                if (Build.VERSION.SDK_INT >= 30) {
+                    val bars = insets.getInsets(WindowInsets.Type.systemBars() or WindowInsets.Type.displayCutout())
+                    val ime = insets.getInsets(WindowInsets.Type.ime()).bottom
+                    view.setPadding(bars.left, bars.top, bars.right, maxOf(bars.bottom, ime))
+                }
+                insets
+            }
+            loadUrl("file:///android_asset/sutra-ui/index.html")
+        }.also { designWebView = it }
+        setContentView(webView)
+        webView.requestApplyInsets()
+        updateDesignState()
+    }
+
+    private inner class DesignBridge {
+        @JavascriptInterface fun state(): String = designState().toString()
+
+        @JavascriptInterface fun finishOnboarding(name: String, languageKey: String) {
+            val language = IndicTranslator.supportedLanguages.firstOrNull { it.key == languageKey } ?: return
+            getSharedPreferences("sutra", MODE_PRIVATE).edit()
+                .putString("display_name", name.trim().take(28))
+                .putString("preferred_language", language.key)
+                .putBoolean("onboarding_complete", true)
+                .apply()
+            runOnUiThread {
+                preferredLanguage = language.key
+                designWebView?.evaluateJavascript("window.sutraOnboardingFinished?.()", null)
+                prepareAutomaticConnections()
+                updateDesignState()
+            }
+        }
+
+        @JavascriptInterface fun beginTalk() = runOnUiThread { beginPushToTalk() }
+        @JavascriptInterface fun endTalk() = runOnUiThread { endPushToTalk() }
+        @JavascriptInterface fun toggleHandsFree() = runOnUiThread { toggleListening(); updateDesignState() }
+        @JavascriptInterface fun toggleEmergency() = runOnUiThread { confirmAlertMode() }
+        @JavascriptInterface fun call112() = runOnUiThread { openDialer(HelplineDirectory.emergencyNumber) }
+        @JavascriptInterface fun dialHelpline(number: String) = runOnUiThread {
+            if (HelplineDirectory.contacts.any { it.number == number }) openDialer(number)
+        }
+        @JavascriptInterface fun openSettings() = runOnUiThread { designWebView?.evaluateJavascript("window.sutraShowView?.('more')", null) }
+        @JavascriptInterface fun openLanguageSettings() = runOnUiThread { designWebView?.evaluateJavascript("window.sutraShowLanguagePicker?.()", null) }
+        @JavascriptInterface fun setPreferredLanguage(key: String) = runOnUiThread {
+            val language = IndicTranslator.supportedLanguages.firstOrNull { it.key == key } ?: return@runOnUiThread
+            getSharedPreferences("sutra", MODE_PRIVATE).edit().putString("preferred_language", language.key).apply()
+            preferredLanguage = language.key
+            updateDesignState()
+        }
+        @JavascriptInterface fun openHelp() = runOnUiThread { designWebView?.evaluateJavascript("window.sutraShowHelp?.()", null) }
+        @JavascriptInterface fun replayOnboarding() {
+            getSharedPreferences("sutra", MODE_PRIVATE).edit().putBoolean("onboarding_complete", false).apply()
+            runOnUiThread { designWebView?.evaluateJavascript("window.sutraShowOnboarding?.()", null) }
+        }
+        @JavascriptInterface fun openHelplines() = runOnUiThread { designWebView?.evaluateJavascript("window.sutraShowView?.('helplines')", null) }
+        @JavascriptInterface fun openFullMap() = runOnUiThread { showLiveMap() }
+        @JavascriptInterface fun openConnectionTools() = runOnUiThread { showConnectionTools() }
+        @JavascriptInterface fun openHistory() = runOnUiThread { designWebView?.evaluateJavascript("window.sutraShowView?.('history')", null) }
+        @JavascriptInterface fun openDevices() = runOnUiThread {
+            transmission?.refreshAutomaticConnections()
+            prepareAutomaticConnections()
+            designWebView?.evaluateJavascript("window.sutraShowView?.('nearby')", null)
+        }
+        @JavascriptInterface fun setLocationSharing(enabled: Boolean) = runOnUiThread {
+            if (!::mapController.isInitialized) return@runOnUiThread
+            mapController.setLocationSharing(enabled)
+            if (enabled && checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED &&
+                checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+                requestPermissions(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION), 51)
+            }
+            updateDesignState()
+        }
+        @JavascriptInterface fun locateEmergencyArea() = runOnUiThread { beginEmergencyAreaLookup() }
+        @JavascriptInterface fun replayMessage(text: String, languageKey: String) = runOnUiThread {
+            val language = SutraLanguage.fromPipeline(languageKey).pipelineName
+            if (transmission?.speakLocal(text, language) != true) {
+                Toast.makeText(this@MainActivity, "Offline voice is not ready", Toast.LENGTH_SHORT).show()
+            }
+        }
+        @JavascriptInterface fun copyMessage(text: String) = runOnUiThread {
+            val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+            clipboard.setPrimaryClip(ClipData.newPlainText("SUTRA message", text))
+            Toast.makeText(this@MainActivity, "Message copied", Toast.LENGTH_SHORT).show()
+        }
+        @JavascriptInterface fun clearHistory() = runOnUiThread {
+            transmission?.conversation?.clear()
+            updateDesignState()
+        }
+    }
+
+    private fun designState(): JSONObject {
+        val preferences = getSharedPreferences("sutra", MODE_PRIVATE)
+        val languageKey = preferences.getString("preferred_language", "english") ?: "english"
+        val language = IndicTranslator.supportedLanguages.firstOrNull { it.key == languageKey }
+        val now = android.os.SystemClock.elapsedRealtime()
+        val localFix = if (::mapController.isInitialized) mapController.getLocalFixForAreaLookup() else null
+        val peers = JSONArray().apply {
+            currentTeam.forEach { peer ->
+                val ageMs = (now - peer.receivedMs).coerceAtLeast(0)
+                val range = teamRange(localFix, peer.beacon.fix, now)
+                put(JSONObject().apply {
+                    put("name", peer.beacon.name)
+                    put("fresh", peer.recent(now))
+                    put("ageSeconds", ageMs / 1000)
+                    put("distance", range?.label ?: "Location not shared")
+                    put("hasLocation", range?.fresh == true)
+                    peer.beacon.fix?.takeIf { it.fresh(now) }?.let { fix ->
+                        put("latitude", fix.lat)
+                        put("longitude", fix.lon)
+                    }
+                })
+            }
+        }
+        val messages = JSONArray().apply {
+            transmission?.conversation?.snapshot()?.forEach { entry ->
+                put(JSONObject().apply {
+                    put("text", entry.text)
+                    put("language", IndicTranslator.supportedLanguages.firstOrNull { it.key == entry.language }?.englishName ?: entry.language)
+                    put("languageKey", entry.language)
+                    put("outgoing", entry.outgoing)
+                    put("alert", entry.alert)
+                    put("status", entry.status)
+                })
+            }
+        }
+        val languages = JSONArray().apply {
+            IndicTranslator.supportedLanguages.forEach { info ->
+                put(JSONObject().apply {
+                    put("key", info.key)
+                    put("nativeName", info.nativeName)
+                    put("englishName", info.englishName)
+                })
+            }
+        }
+        val connected = (transmission?.wifiLinkCount ?: 0) + (transmission?.bluetoothLinkCount ?: 0)
+        val helplines = JSONArray().apply {
+            HelplineDirectory.contacts.forEach { contact ->
+                put(JSONObject().apply {
+                    put("name", contact.name)
+                    put("category", contact.category)
+                    put("number", contact.number)
+                    put("scope", contact.scope)
+                })
+            }
+        }
+        val areaHelplines = JSONArray().apply {
+            areaDistrict?.let { district ->
+                put(JSONObject().apply {
+                    put("name", "District Collector / Magistrate control room")
+                    put("number", "1077")
+                    put("area", district)
+                })
+            }
+            areaState?.let { state ->
+                put(JSONObject().apply {
+                    put("name", "State relief commissioner control room")
+                    put("number", "1070")
+                    put("area", state)
+                })
+            }
+        }
+        return JSONObject().apply {
+            put("displayName", preferences.getString("display_name", "") ?: "")
+            put("languageKey", languageKey)
+            put("language", language?.englishName ?: "English")
+            put("nativeLanguage", language?.nativeName ?: "English")
+            put("needsOnboarding", !preferences.getBoolean("onboarding_complete", false))
+            put("handsFree", listening)
+            put("recording", pushToTalkRecording)
+            put("alertMode", alertMode)
+            put("connectionCount", currentTeam.count { it.recent(now) })
+            put("connectionText", if (connected == 0) "Looking for your team" else "$connected nearby connection${if (connected == 1) "" else "s"}")
+            put("peers", peers)
+            put("messages", messages)
+            put("speechReady", speechModelsReady)
+            put("speechIssue", if (speechModelsReady) "" else "On-device speech models need attention. Check the model files in Settings.")
+            put("languages", languages)
+            put("helplines", helplines)
+            put("helplineSource", HelplineDirectory.sourceUrl)
+            put("helplineChecked", HelplineDirectory.lastChecked)
+            put("areaHelplines", areaHelplines)
+            put("areaLookupStatus", areaLookupStatus)
+            put("areaDistrict", areaDistrict)
+            put("areaState", areaState)
+            put("locationSharing", ::mapController.isInitialized && mapController.isLocationSharingEnabled())
+            localFix?.let { put("latitude", it.lat); put("longitude", it.lon); put("locationAccuracy", it.accuracy) }
+        }
+    }
+
+    private fun beginEmergencyAreaLookup() {
+        areaLookupRequested = true
+        areaDistrict = null
+        areaState = null
+        if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED &&
+            checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            areaLookupStatus = "permission"
+            updateDesignState()
+            requestPermissions(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION), 52)
+            return
+        }
+        val fix = mapController.getLocalFixForAreaLookup()
+        if (fix == null) {
+            areaLookupStatus = "locating"
+            areaLookupPendingFix = true
+            mapController.startLocationUpdates()
+            updateDesignState()
+            return
+        }
+        resolveEmergencyArea(fix)
+    }
+
+    @Suppress("DEPRECATION")
+    private fun resolveEmergencyArea(fix: TeamFix) {
+        if (!areaLookupRequested || areaLookupWorker.isShutdown) return
+        areaLookupPendingFix = false
+        areaLookupStatus = "resolving"
+        updateDesignState()
+        if (!Geocoder.isPresent()) {
+            areaLookupStatus = "error"
+            areaLookupRequested = false
+            updateDesignState()
+            return
+        }
+        areaLookupWorker.execute {
+            val result = runCatching {
+                Geocoder(this, Locale.ENGLISH).getFromLocation(fix.lat, fix.lon, 1)
+                    ?.firstOrNull()
+                    ?.takeIf { it.countryCode.equals("IN", ignoreCase = true) }
+                    ?.let { address -> address.subAdminArea?.trim()?.takeIf(String::isNotEmpty) to
+                        address.adminArea?.trim()?.takeIf(String::isNotEmpty) }
+            }.getOrNull()
+            runOnUiThread {
+                if (!areaLookupRequested) return@runOnUiThread
+                areaDistrict = result?.first
+                areaState = result?.second
+                areaLookupStatus = if (areaDistrict != null || areaState != null) "ready" else "error"
+                areaLookupRequested = false
+                updateDesignState()
+            }
+        }
+    }
+
+    private fun updateDesignState() {
+        val webView = designWebView ?: return
+        if (webView.url?.startsWith("file:///android_asset/sutra-ui/") != true) return
+        val payload = designState().toString()
+        webView.evaluateJavascript("window.sutraRenderState?.($payload)", null)
+    }
+
+    private fun showLiveMap() {
+        val page = liveMapPage ?: return
+        if (liveMapDialog?.isShowing == true) return
+        val originalParent = page.parent as? ViewGroup ?: return
+        val originalIndex = originalParent.indexOfChild(page)
+        val originalParams = page.layoutParams
+        val originalVisibility = page.visibility
+        originalParent.removeView(page)
+        page.visibility = View.VISIBLE
+        val shell = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setBackgroundColor(SutraPalette.chromeBackground)
+        }
+        val toolbar = LinearLayout(this).apply {
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(12), dp(8), dp(16), dp(8))
+        }
+        toolbar.addView(Button(this).apply {
+            text = "‹  SUTRA"
+            contentDescription = "Back to SUTRA"
+            setTextColor(Color.WHITE)
+            setBackgroundColor(Color.TRANSPARENT)
+            setOnClickListener { liveMapDialog?.dismiss() }
+        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(48)))
+        toolbar.addView(TextView(this).apply {
+            text = "Live GPS map"
+            textSize = 17f
+            typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+            setTextColor(Color.WHITE)
+            gravity = Gravity.CENTER_VERTICAL
+        }, LinearLayout.LayoutParams(0, dp(48), 1f))
+        shell.addView(toolbar)
+        shell.addView(page, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
+        val dialog = AlertDialog.Builder(this).setView(shell).create()
+        liveMapDialog = dialog
+        dialog.setOnDismissListener {
+            (page.parent as? ViewGroup)?.removeView(page)
+            page.visibility = originalVisibility
+            originalParent.addView(page, originalIndex.coerceAtMost(originalParent.childCount), originalParams)
+            liveMapDialog = null
+            mapController.onPause()
+            updateDesignState()
+        }
+        dialog.show()
+        dialog.window?.setLayout((resources.displayMetrics.widthPixels * .94f).toInt(), (resources.displayMetrics.heightPixels * .82f).toInt())
+        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+        mapController.onResume()
+        if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED &&
+            checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION), 53)
+        } else {
+            mapController.startLocationUpdates()
+        }
+    }
+
+    private fun showConnectionTools() {
+        val panel = advancedConnectionPanel ?: return
+        val parent = panel.parent as? ViewGroup ?: return
+        val index = parent.indexOfChild(panel)
+        val originalParams = panel.layoutParams
+        parent.removeView(panel)
+        panel.visibility = View.VISIBLE
+        val scroll = ScrollView(this).apply {
+            isFillViewport = false
+            addView(panel, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        }
+        val dialog = AlertDialog.Builder(this).setTitle("Direct connection tools")
+            .setView(scroll).setPositiveButton("Done", null).create()
+        dialog.setOnDismissListener {
+            (panel.parent as? ViewGroup)?.removeView(panel)
+            panel.visibility = View.GONE
+            parent.addView(panel, index.coerceAtMost(parent.childCount), originalParams)
+        }
+        dialog.show()
+    }
+
+    private fun openDialer(number: String) {
+        runCatching { startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:$number"))) }
+            .onFailure { Toast.makeText(this, "Phone dialer is not available", Toast.LENGTH_SHORT).show() }
+    }
+
+    private fun showHowToUse() {
+        val steps = listOf(
+            "Choose your language" to "Your preferred language guides speech recognition and translated messages. Change it any time in Settings.",
+            "Speak to your team" to "Hold the large talk button and release to send. You can also tap to start and tap again to send.",
+            "Use hands-free" to "Tap Hands-free to listen continuously. SUTRA sends a segment after you pause; tap Stop hands-free to finish.",
+            "Get urgent help" to "Emergency alert marks your next SUTRA message as an alert for connected teammates. For emergency services in India, use 112.",
+            "Find your team" to "Nearby shows SUTRA devices. Map shows shared teammate locations when location sharing is enabled. Helpline numbers are listed in Map.",
+        )
+        val heading = TextView(this).apply {
+            textSize = 20f
+            setTextColor(ink)
+            setTypeface(null, Typeface.BOLD)
+        }
+        val detail = TextView(this).apply {
+            textSize = 15f
+            setTextColor(mutedInk)
+            setLineSpacing(0f, 1.25f)
+            setPadding(0, dp(12), 0, dp(8))
+        }
+        val progress = TextView(this).apply { textSize = 12f; setTextColor(success) }
+        val panel = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(22), dp(8), dp(22), dp(8))
+            addView(progress)
+            addView(heading)
+            addView(detail)
+        }
+        var current = 0
+        fun render() {
+            progress.text = "STEP ${current + 1} OF ${steps.size}"
+            heading.text = steps[current].first
+            detail.text = steps[current].second
+        }
+        render()
+        val dialog = AlertDialog.Builder(this)
+            .setTitle("How to use SUTRA")
+            .setView(panel)
+            .setNegativeButton("Close", null)
+            .setNeutralButton("Back", null)
+            .setPositiveButton("Next", null)
+            .create()
+        dialog.setOnShowListener {
+            val next = dialog.getButton(AlertDialog.BUTTON_POSITIVE)
+            val back = dialog.getButton(AlertDialog.BUTTON_NEUTRAL)
+            fun update() {
+                render()
+                back.isEnabled = current > 0
+                next.text = if (current == steps.lastIndex) "Done" else "Next"
+            }
+            back.setOnClickListener { if (current > 0) { current--; update() } }
+            next.setOnClickListener {
+                if (current < steps.lastIndex) current++ else dialog.dismiss()
+                update()
+            }
+            update()
+        }
+        dialog.show()
+    }
 
     private fun securityStatusLabel(active: Boolean) =
         if (active) "Secured (AES-GCM)" else "Unsecured (demo mode)"
@@ -1175,6 +1646,7 @@ class MainActivity : Activity(), SutraTransmissionListener {
         if (enabled && !getSystemService(NotificationManager::class.java).isNotificationPolicyAccessGranted) {
             Toast.makeText(this, "Alert playback may be limited by Do Not Disturb", Toast.LENGTH_LONG).show()
         }
+        updateDesignState()
     }
 
     private fun confirmAlertMode() {
@@ -1277,6 +1749,7 @@ class MainActivity : Activity(), SutraTransmissionListener {
         }
         disconnectButton.visibility = if (automatic || total > 0) View.VISIBLE else View.GONE
         renderNearbyPeers()
+        updateDesignState()
     }
 
     private fun renderNearbyPeers() {
@@ -1374,6 +1847,7 @@ class MainActivity : Activity(), SutraTransmissionListener {
     }
 
     private fun prepareAutomaticConnections() {
+        if (!getSharedPreferences("sutra", MODE_PRIVATE).getBoolean("onboarding_complete", false)) return
         val permissions = mutableListOf<String>()
         if (Build.VERSION.SDK_INT >= 33) permissions.add(Manifest.permission.NEARBY_WIFI_DEVICES)
         else permissions.add(Manifest.permission.ACCESS_FINE_LOCATION)
@@ -1413,6 +1887,18 @@ class MainActivity : Activity(), SutraTransmissionListener {
         if (requestCode == 51) {
             mapController.startLocationUpdates()
             mapController.syncSharing()
+        }
+        if (requestCode == 52) {
+            if (grantResults.any { it == PackageManager.PERMISSION_GRANTED }) beginEmergencyAreaLookup()
+            else {
+                areaLookupRequested = false
+                areaLookupStatus = "error"
+                updateDesignState()
+            }
+        }
+        if (requestCode == 53 && grantResults.any { it == PackageManager.PERMISSION_GRANTED }) {
+            mapController.startLocationUpdates()
+            updateDesignState()
         }
         if (requestCode in listOf(2, 3, 40)) {
             transmission?.refreshAutomaticConnections()
@@ -1535,8 +2021,10 @@ class MainActivity : Activity(), SutraTransmissionListener {
                 pushToTalkButton.alpha = 0.45f
                 pushToTalkButton.text = "Hands-free"
                 pushToTalkHint.text = "Messages send after a pause · no button needed"
+                updateDesignState()
             } catch (error: Exception) {
                 vadIndicator.text = "Failed to start: ${error.message}"
+                updateDesignState()
             }
         } else {
             // Stop continuous listening
@@ -1557,6 +2045,7 @@ class MainActivity : Activity(), SutraTransmissionListener {
             pushToTalkButton.alpha = 1f
             pushToTalkButton.text = "Hold to talk"
             pushToTalkHint.text = "Recording starts the instant you touch"
+            updateDesignState()
         }
     }
 
@@ -1596,6 +2085,7 @@ class MainActivity : Activity(), SutraTransmissionListener {
             alertButton.isEnabled = false
             vadIndicator.text = "Recording"
             vadIndicator.announceForAccessibility("Recording started")
+            updateDesignState()
         } catch (error: Exception) {
             pushToTalkRecording = false
             vadEngine?.pushToTalkHeld = false
@@ -1614,6 +2104,7 @@ class MainActivity : Activity(), SutraTransmissionListener {
             pushToTalkButton.styleTalkButton(if (alertMode) accent else ink)
             pushToTalkHint.text = if (alertMode) "Alert armed · ${alertCategory.orEmpty()}" else "Recording starts the instant you touch"
             vadIndicator.text = "Could not record: ${error.message}"
+            updateDesignState()
         }
     }
 
@@ -1924,6 +2415,7 @@ class MainActivity : Activity(), SutraTransmissionListener {
             conversationHeading.visibility = if (entries.isEmpty()) View.GONE else View.VISIBLE
             conversationStack.gravity = if (entries.isEmpty()) Gravity.CENTER_VERTICAL else Gravity.TOP
             conversationView.render(entries, preferredLanguage)
+            updateDesignState()
             if (entries.lastOrNull()?.key != lastConversationKey && atBottom) {
                 conversationScroll.post { conversationScroll.fullScroll(View.FOCUS_DOWN) }
             }
@@ -1939,7 +2431,11 @@ class MainActivity : Activity(), SutraTransmissionListener {
     }
 
     override fun onTeamChanged(peers: List<TeamPeer>) {
-        runOnUiThread { if (::mapController.isInitialized) mapController.updateTeam(peers) }
+        runOnUiThread {
+            currentTeam = peers
+            if (::mapController.isInitialized) mapController.updateTeam(peers)
+            updateDesignState()
+        }
     }
 
     override fun onWifiPeers(peers: List<WifiDirectPeer>) {
@@ -1992,6 +2488,14 @@ class MainActivity : Activity(), SutraTransmissionListener {
         if (::mapController.isInitialized) mapController.onDestroy()
         sttWorker.execute { pipeline?.close(); pipeline = null }
         sttWorker.shutdown()
+        areaLookupRequested = false
+        areaLookupWorker.shutdownNow()
         super.onDestroy()
+    }
+
+    @Deprecated("Uses platform back navigation")
+    override fun onBackPressed() {
+        if (liveMapDialog?.isShowing == true) liveMapDialog?.dismiss()
+        else super.onBackPressed()
     }
 }

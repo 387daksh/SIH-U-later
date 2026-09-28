@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <title>SUTRA</title>
+    <link rel="stylesheet" href="preview.css?rev=7">
+  </head>
+  <body>
+    <main class="preview-shell">
+      <section class="brand-bar" aria-label="SUTRA preview header">
+        <a class="brand" href="#top" aria-label="SUTRA home">
+          <span class="brand-mark" aria-hidden="true">S</span>
+          <span>SUTRA</span>
+        </a>
+        <span class="preview-badge">SUTRA · offline voice for teams</span>
+      </section>
+
+      <section class="onboarding" id="top">
+        <div class="copy-column">
+          <div class="eyebrow"><span class="eyebrow-dot"></span> offline voice for teams</div>
+          <div class="step-copy" data-step-copy="0">
+            <p class="step-count">01 <span>/ 03</span></p>
+            <h1>Let’s make your voice feel at home.</h1>
+            <p class="lede">SUTRA keeps conversations moving between people, languages, and places, even when the signal disappears.</p>
+            <label class="field-label" for="name-input">What should we call you?</label>
+            <input id="name-input" class="name-input" type="text" autocomplete="name" placeholder="Your name" maxlength="28">
+          </div>
+
+          <div class="step-copy is-hidden" data-step-copy="1">
+            <p class="step-count">02 <span>/ 03</span></p>
+            <h1>Choose the voice that feels like yours.</h1>
+            <p class="lede">Your choice guides translation and speech. You can change it any time from settings.</p>
+            <div class="language-grid" id="language-grid" role="radiogroup" aria-label="Preferred language"></div>
+          </div>
+
+          <div class="step-copy is-hidden" data-step-copy="2">
+            <p class="step-count">03 <span>/ 03</span></p>
+            <h1>Close the distance between voices.</h1>
+            <p class="lede">Speak naturally. SUTRA listens on-device, translates nearby, and keeps your team in sync without a cloud handoff.</p>
+            <div class="promise-list">
+              <div class="promise"><span class="promise-icon">⌁</span><span><strong>Speak</strong><small>Hold to talk, release to send.</small></span></div>
+              <div class="promise"><span class="promise-icon">◌</span><span><strong>Translate</strong><small>Keep your preferred language close.</small></span></div>
+              <div class="promise"><span class="promise-icon">↗</span><span><strong>Stay connected</strong><small>Find nearby teammates automatically.</small></span></div>
+            </div>
+          </div>
+
+          <div class="navigation-row">
+            <button class="back-button" type="button" aria-label="Go to previous step" disabled><span aria-hidden="true">←</span></button>
+            <div class="progress-dots" aria-label="Onboarding progress"><span class="progress-dot is-active"></span><span class="progress-dot"></span><span class="progress-dot"></span></div>
+            <button class="primary-button" type="button" id="next-button">Continue <span aria-hidden="true">→</span></button>
+          </div>
+          <p class="fine-print">No account needed. No cloud required.</p>
+        </div>
+
+        <div class="visual-column">
+          <div class="orb orb-one"></div><div class="orb orb-two"></div>
+          <div class="visual-caption"><span class="signal-dot"></span><span id="visual-caption-text">Your voice, your way</span></div>
+          <div class="phone-stage" id="phone-stage">
+            <div class="phone-shadow"></div>
+            <div class="phone" id="phone">
+              <div class="phone-topbar"><span class="phone-time">9:41</span><span class="phone-status">● ● ▰</span></div>
+              <div class="phone-screen">
+                <div class="phone-brand-row"><span class="mini-mark">S</span><span>SUTRA</span><span class="mini-menu">•••</span></div>
+                <div class="speech-art" aria-hidden="true">
+                  <svg viewBox="0 0 320 190" role="img" aria-label="Speech waveform and nearby connection illustration">
+                    <path class="bubble-back" d="M47 32h146a25 25 0 0 1 25 25v50a25 25 0 0 1-25 25h-82l-26 20v-20H47a25 25 0 0 1-25-25V57a25 25 0 0 1 25-25Z"/>
+                    <path class="bubble-front" d="M149 16h117a22 22 0 0 1 22 22v45a22 22 0 0 1-22 22h-5v27l-31-27h-81a22 22 0 0 1-22-22V38a22 22 0 0 1 22-22Z"/>
+                    <path class="wave" d="M168 57v13m14-24v35m14-45v55m14-42v29m14-37v45m14-29v14"/>
+                    <path class="small-wave" d="M53 79h43m-43 16h31"/>
+                    <circle class="spark" cx="42" cy="24" r="5"/><circle class="spark spark-two" cx="281" cy="162" r="4"/>
+                  </svg>
+                </div>
+                <p class="phone-kicker">READY TO CONNECT</p>
+                <h2 id="phone-heading">Every voice.<br><em>Closer.</em></h2>
+                <p class="phone-subtitle" id="phone-subtitle">Speak in your language. Your nearby team will hear you clearly.</p>
+                <div class="phone-bottom-card"><span class="mic-button">⌁</span><span><strong id="phone-name">Say hello</strong><small>Hold to talk</small></span><span class="phone-arrow">→</span></div>
+              </div>
+            </div>
+          </div>
+          <div class="floating-chip chip-left"><span class="chip-icon">◌</span><span>on-device</span></div>
+          <div class="floating-chip chip-right"><span class="chip-icon">↗</span><span>nearby team</span></div>
+        </div>
+      </section>
+      <section class="app-shell is-hidden" id="app-view" aria-label="SUTRA app">
+        <div class="app-topbar">
+          <div class="app-brand"><span class="brand-mark">S</span><span>SUTRA</span></div>
+          <div class="app-top-actions"><span class="connection-pill"><span class="signal-dot"></span><span id="connection-label">Finding your team</span></span><button class="avatar-button" type="button" aria-label="Open profile" onclick="SutraAndroid.openSettings()">S</button></div>
+        </div>
+        <div class="app-layout" id="talk" data-view-panel="talk">
+          <div class="dashboard-column">
+            <div class="dashboard-heading"><div><p class="app-kicker">YOUR SUTRA TODAY</p><h2>Good morning, <span id="dashboard-name">there</span>.</h2></div><span class="weather-mark" aria-hidden="true">☼</span></div>
+            <div class="app-warning" id="speech-warning" hidden></div>
+            <div class="talk-panel">
+            <div class="talk-panel-copy"><span class="live-label"><span class="live-dot"></span> <span id="talk-status" data-ui="ready">READY TO TALK</span></span><h3><span data-ui="sayWhat">Say what you mean.</span><br><em data-ui="carryIt">We’ll carry it.</em></h3><p><span data-ui="preferredLanguage">Your preferred language is</span> <strong id="dashboard-language">English</strong>.</p></div>
+              <div class="talk-orbit"><span class="orbit orbit-a"></span><span class="orbit orbit-b"></span><button class="record-button" id="record-button" type="button" aria-label="Hold to talk"><span class="record-glyph">⌁</span></button><span class="record-caption">Hold to talk</span></div>
+            </div>
+            <div class="voice-actions"><button class="voice-action" id="handsfree-button" type="button" onclick="SutraAndroid.toggleHandsFree()">Hands-free</button><button class="voice-action emergency-action" id="emergency-button" type="button" onclick="SutraAndroid.toggleEmergency()">Emergency alert</button><button class="voice-action call-action" type="button" onclick="SutraAndroid.call112()">Call 112</button></div>
+            <div class="section-heading"><div><p class="app-kicker" data-ui="latestMessage">LATEST MESSAGE</p><h3 data-ui="conversationPulse">Conversation pulse</h3></div><button class="icon-action" type="button" aria-label="Open conversation history" onclick="SutraAndroid.openHistory()">↗</button></div>
+            <div class="message-stack pulse-scroll" id="latest-message"><div class="empty-state">Your sent and received messages will appear here.</div></div>
+          </div>
+          <aside class="insight-column">
+          <div class="insight-heading"><div><p class="app-kicker" data-ui="recentMessages">RECENT MESSAGES</p><h3 data-ui="conversationHistory">Conversation history</h3></div><button class="icon-action" type="button" aria-label="Open full conversation history" onclick="SutraAndroid.openHistory()">↗</button></div>
+            <div class="talk-pulse" id="talk-pulse" aria-label="Recent conversation history"><div class="empty-state">Recent messages appear here.</div></div>
+            <div class="insight-heading nearby-talk-heading"><div><p class="app-kicker" data-ui="teamAround">TEAM AROUND YOU</p><h3 data-ui="nearbyNow">Nearby now</h3></div><span class="nearby-count" id="talk-peer-count">0 online</span></div>
+            <div class="teammate-list" id="talk-peers-list"><div class="empty-state">Open SUTRA on another phone to find your team.</div><button class="outline-button" type="button" onclick="SutraAndroid.openFullMap()">Open team map <span aria-hidden="true">→</span></button></div>
+            <div class="privacy-note"><span class="privacy-icon">◌</span><span><strong>Stays on your device</strong><small>Nearby mode is private by default.</small></span></div>
+          </aside>
+        </div>
+        <section class="view-panel nearby-panel is-hidden" id="nearby" data-view-panel="nearby" aria-label="Nearby teammates">
+          <div class="panel-heading"><p class="app-kicker" data-ui="teamAround">TEAM AROUND YOU</p><h2 data-ui="nearbyNow">Nearby now</h2><p id="nearby-description">Nearby teammates appear when their SUTRA phones connect.</p></div>
+          <div class="nearby-summary"><span class="nearby-count" id="nearby-count">0 online</span></div>
+          <div class="nearby-actions"><button class="primary-button" type="button" onclick="SutraAndroid.openConnectionTools()" data-ui="connectionTools">Connection tools</button><button class="outline-button" type="button" onclick="SutraAndroid.openDevices()" data-ui="refreshDiscovery">Refresh discovery</button></div>
+          <div class="location-summary"><div class="location-summary-top"><span class="north-mark" aria-hidden="true">N ↑</span><span class="app-kicker" data-ui="privateGps">PRIVATE GPS FIX</span></div><strong id="nearby-map-label">Waiting for location</strong><small id="location-status">Your coordinates stay on this phone until you enable sharing.</small><button class="outline-button" type="button" onclick="SutraAndroid.openFullMap()" data-ui="openGpsMap">Open live GPS map <span aria-hidden="true">↗</span></button><button class="text-button" id="location-share-button" type="button" onclick="SutraAndroid.setLocationSharing(!window.sutraLocationSharing)">Share my location</button></div>
+          <div class="nearby-list" id="nearby-list"><div class="empty-state">No connected teammates yet.</div></div>
+        </section>
+        <section class="view-panel helplines-panel is-hidden" id="helplines" data-view-panel="helplines" aria-label="Emergency helplines">
+          <div class="panel-heading"><p class="app-kicker" data-ui="emergencySafety">EMERGENCY & SAFETY</p><h2 data-ui="helplines">Helplines</h2><p data-ui="helplineDescription">Official emergency contacts and area control-room codes.</p></div>
+          <section class="area-card" aria-label="Emergency contacts for your area"><div class="area-card-heading"><div class="area-card-copy"><p class="app-kicker">GPS AREA</p><h3 id="area-name">Find your state and district</h3><small id="area-detail">Location lookup is separate from teammate sharing.</small></div><button class="outline-button area-find-button" type="button" onclick="document.querySelector('#area-dialog').showModal()">Find area</button></div><div class="area-call-list" id="area-call-list"></div></section>
+          <div class="helpline-heading"><div><p class="app-kicker">NATIONAL DIRECTORY</p><h3>India helplines</h3></div><span id="directory-count">38 contacts · offline</span></div>
+          <p class="directory-note">Official portal contacts. Area control-room codes are shown separately above.</p>
+          <div class="helpline-list" id="helpline-list"></div><p class="directory-source" id="directory-source">National Portal of India</p>
+        </section>
+        <section class="view-panel history-panel is-hidden" id="history" data-view-panel="history" aria-label="Conversation history">
+          <div class="panel-heading"><p class="app-kicker" data-ui="voiceLog">YOUR VOICE LOG</p><h2 data-ui="conversationHistory">Conversation history</h2><p data-ui="historyDescription">Recent translated messages stay available on this device.</p></div>
+          <div class="history-list" id="history-list"><div class="empty-state">No messages yet.</div></div><button class="outline-button" type="button" onclick="SutraAndroid.clearHistory()">Clear conversation <span aria-hidden="true">×</span></button>
+        </section>
+        <section class="view-panel more-panel is-hidden" id="more" data-view-panel="more" aria-label="More settings">
+          <div class="panel-heading"><p class="app-kicker" data-ui="controlRoom">SUTRA CONTROL ROOM</p><h2 data-ui="more">More</h2><p data-ui="settingsDescription">Keep the essentials close and your preferences yours.</p></div>
+          <div class="profile-card"><span class="avatar-button" id="profile-avatar">S</span><span><strong id="more-name">SUTRA user</strong><small>Preferred language: <span id="more-language">English</span></small></span><span class="panel-arrow">→</span></div>
+          <div class="settings-list"><button class="setting-row" type="button" onclick="SutraAndroid.openLanguageSettings()"><span class="setting-icon">◉</span><span><strong data-ui="languageSetting">Language</strong><small data-ui="languageSettingDetail">Change your translation language</small></span><span>›</span></button><button class="setting-row" type="button" onclick="SutraAndroid.openConnectionTools()"><span class="setting-icon">◌</span><span><strong data-ui="directTools">Direct connection tools</strong><small data-ui="directToolsDetail">Wi-Fi Direct, Bluetooth, and manual IP</small></span><span>›</span></button><button class="setting-row" type="button" onclick="SutraAndroid.openFullMap()"><span class="setting-icon">⌖</span><span><strong data-ui="gpsSetting">Live GPS map</strong><small data-ui="gpsSettingDetail">Your fix, accuracy, and teammate positions</small></span><span>›</span></button><button class="setting-row" type="button" onclick="SutraAndroid.openHelplines()"><span class="setting-icon">✚</span><span><strong data-ui="emergencyContacts">Emergency helplines</strong><small data-ui="emergencyContactsDetail">National contacts and area control rooms</small></span><span>›</span></button><button class="setting-row" type="button" onclick="SutraAndroid.openHelp()"><span class="setting-icon">?</span><span><strong data-ui="howToUse">How to use SUTRA</strong><small data-ui="helpDetail">Speech, emergency alerts, and maps</small></span><span>›</span></button><button class="setting-row" type="button" onclick="SutraAndroid.replayOnboarding()"><span class="setting-icon">↺</span><span><strong data-ui="replayWelcome">Replay welcome</strong><small data-ui="replayWelcomeDetail">See the three-step introduction again</small></span><span>›</span></button></div>
+        </section>
+        <nav class="bottom-nav" aria-label="Primary navigation"><a class="nav-item is-active" data-view="talk" href="#talk"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M20 11.5a7.5 7.5 0 0 1-7.5 7.5H7l-3 2v-5A7.5 7.5 0 1 1 20 11.5Z"/><path d="M8 12h.01M12 12h.01M16 12h.01"/></svg></span><span data-ui="talk">Talk</span></a><a class="nav-item" data-view="nearby" href="#nearby"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M19 10c0 5-7 11-7 11S5 15 5 10a7 7 0 1 1 14 0Z"/><circle cx="12" cy="10" r="2.3"/></svg></span><span data-ui="nearby">Nearby</span></a><a class="nav-item" data-view="helplines" href="#helplines"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 4v16M4 12h16"/></svg></span><span data-ui="helplines">Helplines</span></a><a class="nav-item" data-view="history" href="#history"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span><span data-ui="history">History</span></a><a class="nav-item" data-view="more" href="#more"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg></span><span data-ui="more">More</span></a></nav>
+        <dialog class="app-dialog" id="language-dialog"><div class="dialog-heading"><div><p class="app-kicker" data-ui="yourPreference">YOUR PREFERENCE</p><h2 data-ui="chooseLanguage">Choose a language</h2></div><button class="dialog-close" type="button" onclick="document.querySelector('#language-dialog').close()" aria-label="Close">×</button></div><div class="dialog-language-list" id="dialog-language-list"></div></dialog>
+        <dialog class="app-dialog" id="help-dialog"><div class="dialog-heading"><div><p class="app-kicker" data-ui="quickWalkthrough">A QUICK WALKTHROUGH</p><h2 data-ui="howToUse">How to use SUTRA</h2></div><button class="dialog-close" type="button" onclick="document.querySelector('#help-dialog').close()" aria-label="Close">×</button></div><div class="demo-stage"><div class="demo-pulse">⌁</div><div><strong data-ui="holdSpeakRelease">Hold · speak · release</strong><small data-ui="translatedForTeam">Your message is translated for connected teammates.</small></div></div><div class="help-steps"><article><b>01</b><span><strong data-ui="talk">Talk</strong><small data-ui="holdRelease">Hold the large coral button. Release to send.</small></span></article><article><b>02</b><span><strong data-ui="handsFree">Hands-free</strong><small data-ui="continuousListening">Start continuous listening, then stop when you are done.</small></span></article><article><b>03</b><span><strong data-ui="urgentHelp">Urgent help</strong><small data-ui="emergencyFlags">Emergency alert flags your next team message. Call 112 for emergency services.</small></span></article><article><b>04</b><span><strong data-ui="nearby">Nearby</strong><small data-ui="locationChoice">Share location only when you choose. Helpline numbers work offline.</small></span></article></div><button class="primary-button dialog-done" type="button" onclick="document.querySelector('#help-dialog').close()" data-ui="gotIt">Got it</button></dialog>
+        <dialog class="app-dialog" id="area-dialog"><div class="dialog-heading"><div><p class="app-kicker" data-ui="areaHelp">AREA-BASED EMERGENCY HELP</p><h2 data-ui="findArea">Find your area</h2></div><button class="dialog-close" type="button" onclick="document.querySelector('#area-dialog').close()" aria-label="Close">×</button></div><p class="area-consent-copy" data-ui="areaConsent">SUTRA uses your current GPS fix to ask the device's address service for your state and district. That service may use the internet. SUTRA does not share this lookup with teammates; location sharing stays off unless you turn it on separately.</p><button class="primary-button dialog-done" type="button" onclick="document.querySelector('#area-dialog').close();SutraAndroid.locateEmergencyArea()" data-ui="useGps">Use GPS to find my area</button><button class="outline-button area-cancel" type="button" onclick="document.querySelector('#area-dialog').close()" data-ui="notNow">Not now</button></dialog>
+      </section>
+    </main>
+    <script src="preview.js?rev=4"></script>
+    <script>
+      (() => {
+        const navItems = [...document.querySelectorAll('.nav-item')];
+        const panels = [...document.querySelectorAll('[data-view-panel]')];
+        const showView = (view) => {
+          const target = panels.find(panel => panel.dataset.viewPanel === view);
+          if (!target) return;
+          panels.forEach(panel => panel.classList.toggle('is-hidden', panel !== target));
+          navItems.forEach(item => item.classList.toggle('is-active', item.dataset.view === view));
+          document.querySelector('#app-view')?.classList.remove('is-hidden');
+          document.querySelector('.onboarding')?.classList.add('is-hidden');
+          document.body.classList.add('app-active');
+          history.replaceState(null, '', `#${view}`);
+        };
+        window.sutraShowView = showView;
+        window.sutraShowHelp = () => document.querySelector('#help-dialog')?.showModal();
+        window.sutraShowLanguagePicker = () => {
+          const dialog = document.querySelector('#language-dialog');
+          const list = document.querySelector('#dialog-language-list');
+          const selected = document.querySelector('#more-language').textContent;
+          list.replaceChildren();
+          (window.sutraNativeState?.languages || []).forEach(language => {
+            const option = document.createElement('button'); option.type = 'button'; option.className = 'dialog-language-option';
+            option.classList.toggle('is-selected', language.englishName === selected);
+            const native = document.createElement('strong'); native.textContent = language.nativeName;
+            const english = document.createElement('small'); english.textContent = language.englishName;
+            option.append(native, english);
+            option.addEventListener('click', () => { window.SutraAndroid?.setPreferredLanguage(language.key); dialog.close(); });
+            list.append(option);
+          });
+          dialog.showModal();
+        };
+        navItems.forEach(item => item.addEventListener('click', () => showView(item.dataset.view)));
+        if (location.hash && ['talk', 'nearby', 'history', 'more'].includes(location.hash.slice(1))) showView(location.hash.slice(1));
+      })();
+    </script>
+  </body>
+</html>

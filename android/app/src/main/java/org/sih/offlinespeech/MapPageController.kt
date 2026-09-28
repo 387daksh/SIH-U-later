@@ -4,6 +4,7 @@ import android.Manifest
 import android.app.Activity
 import android.app.AlertDialog
 import android.content.Intent
+import android.net.Uri
 import android.content.pm.PackageManager
 import android.graphics.Color
 import android.graphics.Typeface
@@ -32,7 +33,11 @@ import java.io.File
 
 private data class TeamAlert(val key: String, val category: String, val text: String, val fix: TeamFix?)
 
-class MapPageController(private val context: Activity, private val onSharedFix: (TeamFix?) -> Unit) {
+class MapPageController(
+    private val context: Activity,
+    private val onSharedFix: (TeamFix?) -> Unit,
+    private val onLocalFix: (TeamFix) -> Unit = {},
+) {
     private val theme = SutraPalette.of(context)
     private val handler = Handler(Looper.getMainLooper())
     private val manager = context.getSystemService(LocationManager::class.java)
@@ -103,7 +108,7 @@ class MapPageController(private val context: Activity, private val onSharedFix: 
         status = label("Waiting for GPS", 11f, Color.rgb(221, 237, 229)).apply {
             setPadding(dp(12), dp(8), dp(12), dp(8)); background = background(Color.rgb(34, 61, 73))
             setOnClickListener { showMapOptions() }; contentDescription = "Location quality. Tap for settings"
-            minHeight = dp(48); gravity = android.view.Gravity.CENTER_VERTICAL
+            minHeight = dp(48); maxWidth = dp(286); gravity = android.view.Gravity.CENTER_VERTICAL
         }
         mapFrame.addView(status, FrameLayout.LayoutParams(-2, -2, android.view.Gravity.BOTTOM or android.view.Gravity.START).apply {
             marginStart = dp(16); bottomMargin = dp(12)
@@ -121,6 +126,10 @@ class MapPageController(private val context: Activity, private val onSharedFix: 
         heading.addView(button("Compare ↗") { chooseMeasurement() }.apply {
             setTextColor(theme.teal); background = background(theme.mint)
         }, LinearLayout.LayoutParams(dp(110), dp(48)))
+        heading.addView(button("Help") { showHelplines() }.apply {
+            setTextColor(theme.accent); background = background(Color.rgb(250, 233, 229))
+            contentDescription = "Open the offline helpline directory"
+        }, LinearLayout.LayoutParams(dp(72), dp(48)).apply { marginStart = dp(6) })
         sheet.addView(heading)
         summary = label("No teammates nearby yet", 12f)
         sheet.addView(summary)
@@ -165,6 +174,40 @@ class MapPageController(private val context: Activity, private val onSharedFix: 
             }.show()
     }
 
+    private fun showHelplines() {
+        val content = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(20), dp(4), dp(20), dp(12))
+        }
+        content.addView(label("India-wide contacts · available offline", 13f, theme.teal, true))
+        content.addView(label(
+            "Nearby station locations are not included in this directory yet. These are service numbers, not map pins. Use 112 for police, fire, or medical emergencies.",
+            13f,
+        ).apply { setPadding(0, dp(8), 0, dp(12)) })
+        HelplineDirectory.contacts.forEach { contact ->
+            val row = LinearLayout(context).apply {
+                gravity = android.view.Gravity.CENTER_VERTICAL
+                setPadding(dp(10), dp(8), dp(6), dp(8))
+                background = background(theme.surface)
+            }
+            val info = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
+            info.addView(label(contact.name, 14f, theme.ink, true))
+            info.addView(label("${contact.category} · ${contact.number}", 12f))
+            row.addView(info, LinearLayout.LayoutParams(0, -2, 1f))
+            row.addView(button("Call") {
+                runCatching { context.startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:${contact.number}"))) }
+            }.apply { setTextColor(Color.WHITE); background = background(theme.teal) },
+                LinearLayout.LayoutParams(dp(72), dp(44)))
+            content.addView(row, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(6) })
+        }
+        content.addView(label("Source: Government of India helpline directory", 11f).apply {
+            setPadding(0, dp(8), 0, 0)
+        })
+        val scroll = ScrollView(context).apply { addView(content) }
+        AlertDialog.Builder(context).setTitle("Helplines").setView(scroll)
+            .setPositiveButton("Done", null).show()
+    }
+
     private fun hasPermission() = context.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
         context.checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
 
@@ -192,6 +235,7 @@ class MapPageController(private val context: Activity, private val onSharedFix: 
         if (previous != null && (next.sampledMs < previous.sampledMs ||
             previous.fresh(now) && next.accuracy > previous.accuracy * 2 && next.sampledMs - previous.sampledMs < 15_000)) return
         local = next
+        onLocalFix(next)
         syncSharing(); refresh()
     }
 
@@ -209,6 +253,24 @@ class MapPageController(private val context: Activity, private val onSharedFix: 
     fun getCurrentCoordinates(): Pair<Double, Double>? = local?.takeIf {
         sharing && resumed && hasPermission() && it.fresh(SystemClock.elapsedRealtime())
     }?.let { it.lat to it.lon }
+
+    fun getCurrentFix(): TeamFix? = local?.takeIf {
+        sharing && resumed && hasPermission() && it.fresh(SystemClock.elapsedRealtime())
+    }
+
+    fun getLocalFixForAreaLookup(): TeamFix? = local?.takeIf {
+        resumed && hasPermission() && it.fresh(SystemClock.elapsedRealtime())
+    }
+
+    fun setLocationSharing(enabled: Boolean) {
+        sharing = enabled
+        preferences.edit().putBoolean("share_team_location", enabled).apply()
+        syncSharing()
+        if (enabled) startLocationUpdates()
+        refresh()
+    }
+
+    fun isLocationSharingEnabled() = sharing
 
     fun updateTeam(value: List<TeamPeer>) { peers = value; refresh() }
 
@@ -252,7 +314,8 @@ class MapPageController(private val context: Activity, private val onSharedFix: 
             !hasPermission() -> "◎  Location permission needed"
             !enabled -> "◎  Location is off"
             local == null -> "◎  Finding your location…"
-            else -> "◎  ±${MapDistanceCalculator.formatDistance(local!!.accuracy)}  ·  ${local!!.ageMs(now) / 1000}s ago"
+            else -> "◎  ±${MapDistanceCalculator.formatDistance(local!!.accuracy)}  ·  ${local!!.ageMs(now) / 1000}s ago\n" +
+                "${"%.5f".format(java.util.Locale.US, local!!.lat)}, ${"%.5f".format(java.util.Locale.US, local!!.lon)}"
         }
         val items = points(now)
         field.update(local, items, target, anchor)
