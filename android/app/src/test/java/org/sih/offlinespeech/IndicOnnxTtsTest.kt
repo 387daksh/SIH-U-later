@@ -49,4 +49,37 @@ class IndicOnnxTtsTest {
         AudioDuplexGate.endPlayback()
         assertEquals(false, AudioDuplexGate.isPlaybackActive)
     }
+
+    @Test
+    fun normalizesAll10SutraLanguagesCorrectly() {
+        assertEquals("en-hi", IndicOnnxTts.normalizeLanguage("english"))
+        assertEquals("en-hi", IndicOnnxTts.normalizeLanguage("hindi"))
+        assertEquals("en-hi", IndicOnnxTts.normalizeLanguage("en"))
+        assertEquals("en-hi", IndicOnnxTts.normalizeLanguage("hi"))
+        assertEquals("gu", IndicOnnxTts.normalizeLanguage("gujarati"))
+        assertEquals("mr", IndicOnnxTts.normalizeLanguage("marathi"))
+        assertEquals("kn", IndicOnnxTts.normalizeLanguage("kannada"))
+        assertEquals("ml", IndicOnnxTts.normalizeLanguage("malayalam"))
+        assertEquals("ta", IndicOnnxTts.normalizeLanguage("tamil"))
+        assertEquals("te", IndicOnnxTts.normalizeLanguage("telugu"))
+        assertEquals("or", IndicOnnxTts.normalizeLanguage("odia"))
+        assertEquals("bn", IndicOnnxTts.normalizeLanguage("bengali"))
+    }
+
+    @Test
+    fun processesDravidianAndIndicScriptsWithDistinctProcessors() {
+        // Tamil processor test
+        val tamilProc = IndicTtsTextProcessor(
+            listOf("<PAD>", " ", "உ", "த", "வ", "ி"),
+            maxChunkChars = 10,
+        )
+        assertArrayEquals(longArrayOf(2, 3, 4, 5), tamilProc.tokens("உதவி"))
+
+        // Bengali processor test
+        val bengaliProc = IndicTtsTextProcessor(
+            listOf("<PAD>", " ", "স", "া", "হ", "য", "্"),
+            maxChunkChars = 10,
+        )
+        assertArrayEquals(longArrayOf(2, 3, 4, 3, 5, 6, 5), bengaliProc.tokens("সাহায্য"))
+    }
 }

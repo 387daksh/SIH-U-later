@@ -4,8 +4,9 @@ param(
     [string]$Apk = ".\android\app\build\outputs\apk\debug\app-debug.apk"
 )
 
-$ErrorActionPreference = "Stop"
+$ErrorActionPreference = "Continue"
 if (-not (Test-Path $Adb)) { throw "adb not found: $Adb" }
+& $Adb start-server | Out-Null
 if ((& $Adb get-state 2>$null) -ne "device") { throw "No authorized Android device connected" }
 
 $stamp = Get-Date -Format "yyyyMMdd-HHmmss"

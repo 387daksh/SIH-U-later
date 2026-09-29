@@ -92,14 +92,14 @@ def check_english(bundle, audio_path):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--output", type=Path, default=ROOT / "artifacts/android_models")
-    indic_default = ROOT / "deployment_models/indic/aggressive_int8"
+    indic_default = ROOT / "deployment_models/indic/hybrid_int8"
     if not (indic_default / "assets" / "preprocessor.ts").exists():
         indic_default = ROOT / "models/indic"
     parser.add_argument("--indic-dir", type=Path, default=indic_default)
     parser.add_argument("--whisper-dir", type=Path, default=ROOT / "deployment_models/android/whisper")
     parser.add_argument("--vad-path", type=Path, default=ROOT / "models/vad/silero_vad.onnx")
-    parser.add_argument("--tts-dir", type=Path, default=ROOT / "models/tts/en-hi",
-                        help="Directory extracted from the notebook's onnx_en+hi.zip")
+    parser.add_argument("--tts-dir", type=Path, default=ROOT / "models/tts",
+                        help="Root directory for multi-language TTS models or single legacy en-hi dir")
     args = parser.parse_args()
 
     if not args.vad_path.is_file():
@@ -125,22 +125,37 @@ def main():
         args.whisper_dir / "tiny-tokens.txt": args.output / "whisper/tokens.txt",
         args.vad_path: args.output / "vad/silero_vad.onnx",
     }
-    for name in ("encoder.onnx.data", "ctc_decoder.onnx.data"):
-        source = args.indic_dir / "assets" / name
-        if source.is_file():
-            files[source] = args.output / "indic" / name
-    if args.tts_dir.is_dir():
-        selected_tts = {
-            args.tts_dir / "fastpitch_en+hi.prosody.onnx": args.output / "tts/en-hi/fastpitch.onnx",
-            args.tts_dir / "hifigan_en+hi.minmax.onnx": args.output / "tts/en-hi/hifigan.onnx",
-            args.tts_dir / "meta.json": args.output / "tts/en-hi/meta.json",
-        }
-        missing = [path for path in selected_tts if not path.is_file()]
-        if missing:
-            raise FileNotFoundError(f"Incomplete Indic-TTS export: {missing}")
-        files.update(selected_tts)
+    # Stage multi-language TTS structure if present
+    tts_root = args.tts_dir
+    if (tts_root / "shared/hifigan.onnx").is_file():
+        files[tts_root / "shared/hifigan.onnx"] = args.output / "tts/shared/hifigan.onnx"
+        for lang_dir in [d for d in tts_root.iterdir() if d.is_dir() and d.name != "shared"]:
+            fp_file = lang_dir / "fastpitch.onnx"
+            meta_file = lang_dir / "meta.json"
+            if fp_file.is_file() and meta_file.is_file():
+                files[fp_file] = args.output / f"tts/{lang_dir.name}/fastpitch.onnx"
+                files[meta_file] = args.output / f"tts/{lang_dir.name}/meta.json"
+    elif (tts_root / "en-hi").is_dir():
+        legacy_dir = tts_root / "en-hi"
+        fp_candidates = [legacy_dir / "fastpitch.onnx", legacy_dir / "fastpitch_en+hi.qdq-safe.onnx", legacy_dir / "fastpitch_en+hi.onnx"]
+        hg_candidates = [legacy_dir / "hifigan.onnx", legacy_dir / "hifigan_en+hi.minmax.onnx", legacy_dir / "hifigan_en+hi.onnx"]
+        fp_file = next((f for f in fp_candidates if f.is_file()), None)
+        hg_file = next((f for f in hg_candidates if f.is_file()), None)
+        meta_file = legacy_dir / "meta.json"
+        if fp_file and hg_file and meta_file.is_file():
+            files[fp_file] = args.output / "tts/en-hi/fastpitch.onnx"
+            files[hg_file] = args.output / "tts/en-hi/hifigan.onnx"
+            files[meta_file] = args.output / "tts/en-hi/meta.json"
+    elif tts_root.is_dir() and (tts_root / "meta.json").is_file():
+        # Single directory passed directly
+        fp_file = next((tts_root / name for name in ["fastpitch.onnx", "fastpitch_en+hi.qdq-safe.onnx"] if (tts_root / name).is_file()), None)
+        hg_file = next((tts_root / name for name in ["hifigan.onnx", "hifigan_en+hi.minmax.onnx"] if (tts_root / name).is_file()), None)
+        if fp_file and hg_file:
+            files[fp_file] = args.output / "tts/en-hi/fastpitch.onnx"
+            files[hg_file] = args.output / "tts/en-hi/hifigan.onnx"
+            files[tts_root / "meta.json"] = args.output / "tts/en-hi/meta.json"
     else:
-        print(f"Indic-TTS skipped; extract onnx_en+hi.zip to {args.tts_dir}")
+        print(f"Indic-TTS skipped; no model found at {args.tts_dir}")
     for source, target in files.items():
         copy(source, target)
 
@@ -165,7 +180,7 @@ def main():
     staged = sorted(path for path in args.output.rglob("*")
                     if path.is_file() and path.name != "manifest.json")
     manifest = {
-        "profile": "android-aggressive-int8",
+        "profile": "android-hybrid-int8",
         "bytes": sum(path.stat().st_size for path in staged),
         "files": {str(path.relative_to(args.output)).replace("\\", "/"): {
             "bytes": path.stat().st_size,

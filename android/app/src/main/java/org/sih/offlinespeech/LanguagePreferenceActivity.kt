@@ -15,6 +15,7 @@ import android.view.ViewGroup
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
+import android.widget.EditText
 import android.widget.Toast
 
 class LanguagePreferenceActivity : Activity() {
@@ -29,6 +30,7 @@ class LanguagePreferenceActivity : Activity() {
     private val blue by lazy { theme.blue }
     private val accentTeal = Color.rgb(143, 230, 214)
     private val tealDark = Color.rgb(22, 55, 70)
+    private lateinit var nameInput: EditText
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -40,8 +42,8 @@ class LanguagePreferenceActivity : Activity() {
         val forceChange = intent.getBooleanExtra("force_change", false)
         val existingLanguage = prefs.getString("preferred_language", null)
 
-        // If a language was already chosen and user didn't explicitly request to change it, skip straight to MainActivity
-        if (existingLanguage != null && !forceChange) {
+        // The redesigned first-run flow lives in MainActivity; this screen remains for language changes.
+        if (!forceChange) {
             startMainActivity()
             return
         }
@@ -118,6 +120,27 @@ class LanguagePreferenceActivity : Activity() {
                 setPadding(0, dp(4), 0, dp(18))
             })
 
+            addView(TextView(this@LanguagePreferenceActivity).apply {
+                text = "What should we call you?"
+                textSize = 16f
+                setTextColor(ink)
+                setTypeface(null, Typeface.BOLD)
+                setPadding(0, 0, 0, dp(6))
+            })
+            nameInput = EditText(this@LanguagePreferenceActivity).apply {
+                hint = "Your name (optional)"
+                textSize = 16f
+                setSingleLine()
+                setTextColor(ink)
+                setHintTextColor(mutedInk)
+                setPadding(dp(14), dp(10), dp(14), dp(10))
+                background = roundedBackground(surface, 14).apply { setStroke(dp(1), divider) }
+                prefs.getString("display_name", null)?.let(::setText)
+            }
+            addView(nameInput, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(54)).apply {
+                bottomMargin = dp(18)
+            })
+
             // Language cards
             IndicTranslator.supportedLanguages.forEach { lang ->
                 val isSelected = lang.key == existingLanguage
@@ -185,7 +208,10 @@ class LanguagePreferenceActivity : Activity() {
 
     private fun selectLanguage(lang: IndicTranslator.LanguageInfo) {
         val prefs = getSharedPreferences("sutra", Context.MODE_PRIVATE)
-        prefs.edit().putString("preferred_language", lang.key).apply()
+        prefs.edit()
+            .putString("preferred_language", lang.key)
+            .putString("display_name", nameInput.text.toString().trim().take(28))
+            .apply()
 
         Toast.makeText(this, "Language set to ${lang.nativeName} (${lang.englishName})", Toast.LENGTH_SHORT).show()
         startMainActivity()
